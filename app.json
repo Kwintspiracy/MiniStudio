@@ -1,0 +1,76 @@
+{
+  "expo": {
+    "name": "MiniStudio",
+    "slug": "ministudio",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "ministudio",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0D1117"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ministudio.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "MiniStudio needs camera access to capture photos of your miniatures.",
+        "NSPhotoLibraryUsageDescription": "MiniStudio needs photo library access to import miniature images.",
+        "NSPhotoLibraryAddUsageDescription": "MiniStudio needs permission to save generated images to your photo library."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0D1117"
+      },
+      "package": "com.ministudio.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow MiniStudio to access your camera to capture miniature photos."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow MiniStudio to access your photos to import miniature images."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow MiniStudio to save generated images to your photo library.",
+          "savePhotosPermission": "Allow MiniStudio to save photos to your library.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    }
+  }
+}
