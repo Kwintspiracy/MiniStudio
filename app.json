@@ -17,7 +17,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "MiniStudio needs camera access to capture photos of your miniatures.",
         "NSPhotoLibraryUsageDescription": "MiniStudio needs photo library access to import miniature images.",
-        "NSPhotoLibraryAddUsageDescription": "MiniStudio needs permission to save generated images to your photo library."
+        "NSPhotoLibraryAddUsageDescription": "MiniStudio needs permission to save generated images to your photo library.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
