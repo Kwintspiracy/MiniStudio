@@ -102,6 +102,7 @@ export async function isSessionActive(): Promise<boolean> {
  * Usage Stats Storage
  */
 const USAGE_STATS_KEY = 'ministudio_usage_stats';
+export const GALLERY_INDEX_KEY = 'ministudio_gallery_index';
 
 export async function getUsageStats(): Promise<string | null> {
   if (isWeb) {

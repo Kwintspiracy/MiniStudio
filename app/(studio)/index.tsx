@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, Image, TextInput,
   ActivityIndicator, Alert, Modal
@@ -18,6 +18,9 @@ import { useImagePicker } from '../../src/hooks/useImagePicker';
 import { useMediaSave } from '../../src/hooks/useMediaSave';
 import { sanitizePrompt } from '../../src/utils/promptSanitizer';
 import { useImageContext } from '../../src/context/ImageContext';
+import { saveImageToGallery } from '../../src/services/fileSystemService';
+import { getData, storeData, GALLERY_INDEX_KEY } from '../../src/services/storageService';
+import { randomUUID } from 'expo-crypto';
 
 export default function StudioScreen() {
   // Mode state
@@ -56,6 +59,21 @@ export default function StudioScreen() {
   const { pickImage, pickMultipleImages } = useImagePicker();
   const { saveImage, shareImage } = useMediaSave();
   const { capturedImage, clearCapturedImage } = useImageContext();
+
+  // Load history from storage on mount
+  useEffect(() => {
+    const loadHistory = async () => {
+      const storedHistory = await getData<HistoryItem[]>(GALLERY_INDEX_KEY);
+      if (storedHistory) {
+        setGenerationHistory(storedHistory);
+        if (storedHistory.length > 0) {
+          // Optionally set the most recent one as active, or leave blank
+          setActivePreviewImage(storedHistory[0].url);
+        }
+      }
+    };
+    loadHistory();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -127,14 +145,25 @@ export default function StudioScreen() {
         setLoadingStage('Finalizing...');
 
         const resultUrl = images[0];
-        setActivePreviewImage(resultUrl);
-        setGenerationHistory(prev => [{
-          url: resultUrl,
+
+        // Save to local filesystem
+        const fileUri = await saveImageToGallery(resultUrl);
+
+        const newItem: HistoryItem = {
+          id: randomUUID(),
+          url: fileUri,
           isPro: useProModel,
           isMaster: false,
           modelName: model,
-          timestamp: Date.now()
-        }, ...prev]);
+          timestamp: Date.now(),
+          prompt: activeTab === 'painter' ? painterPrompt : designerPrompt
+        };
+
+        const newHistory = [newItem, ...generationHistory];
+        setGenerationHistory(newHistory);
+        await storeData(GALLERY_INDEX_KEY, newHistory);
+
+        setActivePreviewImage(fileUri);
         setIsResultsDrawerOpen(true);
       }
     } catch (err: any) {
@@ -168,10 +197,20 @@ export default function StudioScreen() {
     try {
       const base64Data = activePreviewImage.split(',')[1];
       const upscaled = await upscaleImage({ base64: activePreviewImage, mimeType: 'image/png' }, model);
-      setActivePreviewImage(upscaled);
-      setGenerationHistory(prev =>
-        prev.map(item => item.url === activePreviewImage ? { ...item, url: upscaled, isMaster: true } : item)
+
+      // Save upscaled version
+      const fileUri = await saveImageToGallery(upscaled);
+
+      const newHistory = generationHistory.map(item =>
+        item.url === activePreviewImage
+          ? { ...item, url: fileUri, isMaster: true, isPro: useProModel } // Update the existing item with new high-res file
+          : item
       );
+
+      setGenerationHistory(newHistory);
+      await storeData(GALLERY_INDEX_KEY, newHistory);
+
+      setActivePreviewImage(fileUri);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -487,7 +526,7 @@ export default function StudioScreen() {
               <View className="flex-row gap-2">
                 {generationHistory.slice(0, 5).map((item, i) => (
                   <TouchableOpacity
-                    key={i}
+                    key={item.id}
                     onPress={() => {
                       setActivePreviewImage(item.url);
                       setIsResultsDrawerOpen(true);

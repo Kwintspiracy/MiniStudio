@@ -11,11 +11,13 @@ export interface ImageFile {
 }
 
 export interface HistoryItem {
-  url: string;
+  id: string;
+  url: string; // file:// URI or base64 (temporary)
   isPro: boolean;
   isMaster: boolean;
   timestamp: number;
   modelName: string;
+  prompt?: string;
 }
 
 export type ToolMode = 'designer' | 'painter';
