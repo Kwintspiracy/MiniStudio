@@ -7,12 +7,32 @@ const SESSION_ACTIVE_KEY = 'ministudio_session_active';
 // For web platform, we'll use localStorage as fallback
 const isWeb = Platform.OS === 'web';
 
+// Simple obfuscation for web storage (not production-grade encryption)
+const OBFUSCATION_KEY = 'ministudio_2026';
+
+function obfuscate(value: string): string {
+  return btoa(value.split('').map((c, i) =>
+    String.fromCharCode(c.charCodeAt(0) ^ OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length))
+  ).join(''));
+}
+
+function deobfuscate(value: string): string {
+  try {
+    const decoded = atob(value);
+    return decoded.split('').map((c, i) =>
+      String.fromCharCode(c.charCodeAt(0) ^ OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length))
+    ).join('');
+  } catch (e) {
+    return value; // Fallback for plain text legacy keys
+  }
+}
+
 /**
  * Store API key securely
  */
 export async function setApiKey(apiKey: string): Promise<void> {
   if (isWeb) {
-    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+    localStorage.setItem(API_KEY_STORAGE_KEY, obfuscate(apiKey));
   } else {
     await SecureStore.setItemAsync(API_KEY_STORAGE_KEY, apiKey);
   }
@@ -23,7 +43,8 @@ export async function setApiKey(apiKey: string): Promise<void> {
  */
 export async function getApiKey(): Promise<string | null> {
   if (isWeb) {
-    return localStorage.getItem(API_KEY_STORAGE_KEY);
+    const value = localStorage.getItem(API_KEY_STORAGE_KEY);
+    return value ? deobfuscate(value) : null;
   }
   return await SecureStore.getItemAsync(API_KEY_STORAGE_KEY);
 }
@@ -78,6 +99,26 @@ export async function isSessionActive(): Promise<boolean> {
 }
 
 /**
+ * Usage Stats Storage
+ */
+const USAGE_STATS_KEY = 'ministudio_usage_stats';
+
+export async function getUsageStats(): Promise<string | null> {
+  if (isWeb) {
+    return localStorage.getItem(USAGE_STATS_KEY);
+  }
+  return await SecureStore.getItemAsync(USAGE_STATS_KEY);
+}
+
+export async function setUsageStats(stats: string): Promise<void> {
+  if (isWeb) {
+    localStorage.setItem(USAGE_STATS_KEY, stats);
+  } else {
+    await SecureStore.setItemAsync(USAGE_STATS_KEY, stats);
+  }
+}
+
+/**
  * Store generic data (JSON serializable)
  */
 export async function storeData<T>(key: string, data: T): Promise<void> {
@@ -99,9 +140,9 @@ export async function getData<T>(key: string): Promise<T | null> {
   } else {
     jsonValue = await SecureStore.getItemAsync(key);
   }
-  
+
   if (jsonValue === null) return null;
-  
+
   try {
     return JSON.parse(jsonValue) as T;
   } catch {

@@ -70,6 +70,8 @@
       "router": {
         "origin": false
       },
+      "supabaseUrl": "https://cqaidrebxzjctacuobln.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxYWlkcmVieHpqY3RhY3VvYmxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczMzgyNzgsImV4cCI6MjA4MjkxNDI3OH0.tUS5V7MStGWACbfxVdUu8HcB5A1m2MbgHu-6dJEXp3I",
       "eas": {
         "projectId": "3b98bcbb-2ca8-4586-a4ea-35dadf760c76"
       }

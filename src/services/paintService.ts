@@ -14,8 +14,14 @@ export interface PaletteColor {
   b: number | null;
 }
 
-const SUPABASE_URL = 'https://gmbhkvpcebnwnzygcedi.supabase.co/rest/v1/paints';
-const SUPABASE_KEY = 'sb_publishable_U7OfeMgOJ0KQiRqdpnB3Jw_yWGecCo5';
+import Constants from 'expo-constants';
+
+const SUPABASE_URL = Constants.expoConfig?.extra?.supabaseUrl;
+const SUPABASE_KEY = Constants.expoConfig?.extra?.supabaseAnonKey;
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.warn('Supabase configuration missing in app.json extra');
+}
 
 export async function fetchAllPaints(): Promise<PaletteColor[]> {
   let allPaints: PaletteColor[] = [];

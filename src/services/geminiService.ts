@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import type { ImageFile } from '../types';
 import { getApiKey } from './storageService';
+import { checkRateLimit, incrementUsage } from './rateLimiter';
 
 /**
  * Creates a fresh AI client using the stored API key.
@@ -15,10 +16,10 @@ const createAiClient = async () => {
 
 const dataUrlToGeminiPart = (image: ImageFile) => {
   // Handle both data URL format and raw base64
-  const base64Data = image.base64.includes(',') 
-    ? image.base64.split(',')[1] 
+  const base64Data = image.base64.includes(',')
+    ? image.base64.split(',')[1]
     : image.base64;
-  
+
   return {
     inlineData: {
       mimeType: image.mimeType,
@@ -37,6 +38,9 @@ export async function generatePaintedMiniature(
   const imagesToProcess = Array.isArray(baseImages) ? baseImages : (baseImages ? [baseImages] : []);
   const isPro = model === 'gemini-3-pro-image-preview';
 
+  await checkRateLimit();
+
+
   if (model === 'imagen-4.0-generate-001') {
     const response = await ai.models.generateImages({
       model: model,
@@ -47,23 +51,23 @@ export async function generatePaintedMiniature(
   }
 
   const imageParts = imagesToProcess.map(img => dataUrlToGeminiPart(img));
-  
+
   const response = await ai.models.generateContent({
     model: model,
-    contents: { 
+    contents: {
       parts: [
-        ...imageParts, 
+        ...imageParts,
         { text: isPro ? `[ADVANCED REASONING MODE] Focus on technical precision and material accuracy for this miniature: ${prompt}` : prompt }
-      ] 
+      ]
     },
     config: {
       imageConfig: {
         aspectRatio: "1:1",
         ...(isPro ? { imageSize: "1K" } : {})
       },
-      ...(isPro ? { 
+      ...(isPro ? {
         tools: [{ googleSearch: {} }],
-        thinkingConfig: { thinkingBudget: 32768 } 
+        thinkingConfig: { thinkingBudget: 32768 }
       } : {})
     }
   });
@@ -77,6 +81,7 @@ export async function generatePaintedMiniature(
       }
     }
   }
+  await incrementUsage();
   return generatedImages;
 }
 
@@ -90,20 +95,22 @@ export async function generateImageFromImage(
   const imageParts = imagesToProcess.map(img => dataUrlToGeminiPart(img));
   const isPro = model === 'gemini-3-pro-image-preview';
 
+  await checkRateLimit();
+
   const response = await ai.models.generateContent({
     model: model,
-    contents: { 
+    contents: {
       parts: [
-        ...imageParts, 
+        ...imageParts,
         { text: isPro ? `[DESIGN SYNTHESIS MODE] Analyze these references and generate a new high-detail concept: ${prompt}` : prompt }
-      ] 
+      ]
     },
     config: {
       imageConfig: {
         aspectRatio: "1:1",
         ...(isPro ? { imageSize: "1K" } : {})
       },
-      ...(isPro ? { 
+      ...(isPro ? {
         tools: [{ googleSearch: {} }],
         thinkingConfig: { thinkingBudget: 32768 }
       } : {})
@@ -114,6 +121,7 @@ export async function generateImageFromImage(
   if (parts) {
     for (const part of parts) {
       if (part.inlineData) {
+        await incrementUsage();
         return [`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`];
       }
     }
@@ -122,20 +130,22 @@ export async function generateImageFromImage(
 }
 
 export async function upscaleImage(
-  baseImage: ImageFile, 
+  baseImage: ImageFile,
   model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview' = 'gemini-2.5-flash-image'
 ): Promise<string> {
   const ai = await createAiClient();
   const imagePart = dataUrlToGeminiPart(baseImage);
   const isPro = model === 'gemini-3-pro-image-preview';
 
+  await checkRateLimit();
+
   const response = await ai.models.generateContent({
     model: model,
-    contents: { 
+    contents: {
       parts: [
-        imagePart, 
+        imagePart,
         { text: isPro ? "Enhance and upscale this miniature image to 4K resolution. Use ultra-high-definition rendering to refine every texture and sharpen every edge." : "Refine and enhance the details of this miniature image, improving clarity and texture definitions." }
-      ] 
+      ]
     },
     config: {
       imageConfig: {
@@ -148,6 +158,7 @@ export async function upscaleImage(
 
   const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
   if (part?.inlineData) {
+    await incrementUsage();
     return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
   }
   throw new Error("Upscale process failed to return image data.");

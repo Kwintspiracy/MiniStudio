@@ -5,12 +5,13 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { XMarkIcon, CameraIcon, RefreshIcon } from '../src/components/Icons';
 import type { ImageFile } from '../src/types';
-import * as FileSystem from 'expo-file-system';
+import { useImageContext } from '../src/context/ImageContext';
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [isCapturing, setIsCapturing] = useState(false);
+  const { setCapturedImage } = useImageContext();
   const cameraRef = useRef<CameraView>(null);
 
   useEffect(() => {
@@ -35,11 +36,9 @@ export default function CameraScreen() {
           mimeType: 'image/jpeg',
           uri: photo.uri,
         };
-        
-        // Store the captured image in a global state or pass it back
-        // For now, we'll use router params (simplified approach)
+
+        setCapturedImage(imageFile);
         router.back();
-        // In production, you'd use a state management solution like Zustand or Context
       }
     } catch (error) {
       console.error('Failed to capture photo:', error);
@@ -104,17 +103,21 @@ export default function CameraScreen() {
             <TouchableOpacity
               onPress={() => router.back()}
               className="w-10 h-10 bg-black/50 rounded-full items-center justify-center"
+              accessibilityLabel="Close camera"
+              accessibilityRole="button"
             >
               <XMarkIcon size={20} color="#ffffff" />
             </TouchableOpacity>
-            
+
             <Text className="text-white text-xs font-bold uppercase tracking-widest">
               Capture Miniature
             </Text>
-            
+
             <TouchableOpacity
               onPress={toggleFacing}
               className="w-10 h-10 bg-black/50 rounded-full items-center justify-center"
+              accessibilityLabel="Flip camera"
+              accessibilityRole="button"
             >
               <RefreshIcon size={20} color="#ffffff" />
             </TouchableOpacity>
@@ -129,6 +132,9 @@ export default function CameraScreen() {
               onPress={handleCapture}
               disabled={isCapturing}
               className="w-20 h-20 rounded-full border-4 border-white items-center justify-center"
+              accessibilityLabel="Take picture"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isCapturing, busy: isCapturing }}
             >
               {isCapturing ? (
                 <ActivityIndicator size="large" color="#ffffff" />
@@ -136,7 +142,7 @@ export default function CameraScreen() {
                 <View className="w-16 h-16 bg-white rounded-full" />
               )}
             </TouchableOpacity>
-            
+
             <Text className="text-white/60 text-[10px] font-bold uppercase tracking-widest mt-4">
               Tap to capture
             </Text>

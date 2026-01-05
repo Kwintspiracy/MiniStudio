@@ -1,12 +1,12 @@
-import React, { useState, useCallback } from 'react';
-import { 
-  View, Text, TouchableOpacity, ScrollView, Image, TextInput, 
-  ActivityIndicator, Alert, Modal 
+import React, { useState, useCallback, useRef } from 'react';
+import {
+  View, Text, TouchableOpacity, ScrollView, Image, TextInput,
+  ActivityIndicator, Alert, Modal
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { 
-  SparklesIcon, CameraIcon, LibraryIcon, PencilIcon, 
+import {
+  SparklesIcon, CameraIcon, LibraryIcon, PencilIcon,
   UserIcon, DownloadIcon, ArrowsPointingOutIcon, RefreshIcon,
   GlobeIcon, DocumentTextIcon, XMarkIcon
 } from '../../src/components/Icons';
@@ -16,40 +16,55 @@ import { generatePaintedMiniature, generateImageFromImage, upscaleImage } from '
 import { setSessionActive } from '../../src/services/storageService';
 import { useImagePicker } from '../../src/hooks/useImagePicker';
 import { useMediaSave } from '../../src/hooks/useMediaSave';
+import { sanitizePrompt } from '../../src/utils/promptSanitizer';
+import { useImageContext } from '../../src/context/ImageContext';
 
 export default function StudioScreen() {
   // Mode state
   const [activeTab, setActiveTab] = useState<ToolMode>('designer');
   const [useProModel, setUseProModel] = useState(false);
-  
+
   // Image state
   const [sourceImages, setSourceImages] = useState<ImageFile[]>([]);
   const [activePreviewImage, setActivePreviewImage] = useState<string | null>(null);
   const [generationHistory, setGenerationHistory] = useState<HistoryItem[]>([]);
-  
+
   // Loading state
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState('');
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
+  const generationRef = useRef<number>(0);
+
   // Designer state
   const [designerPrompt, setDesignerPrompt] = useState('');
   const [designerType, setDesignerType] = useState<DesignerType>('sketch');
-  
+
   // Painter state
   const [painterPrompt, setPainterPrompt] = useState('');
   const [selectedStyle, setSelectedStyle] = useState<StyleOption>(PAINTING_STYLES[0]);
   const [backgroundTheme, setBackgroundTheme] = useState('None');
   const [backgroundPrompt, setBackgroundPrompt] = useState('');
   const [textPrompt, setTextPrompt] = useState('');
-  
+
   // UI state
   const [isResultsDrawerOpen, setIsResultsDrawerOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  
+
   // Hooks
   const { pickImage, pickMultipleImages } = useImagePicker();
   const { saveImage, shareImage } = useMediaSave();
+  const { capturedImage, clearCapturedImage } = useImageContext();
+
+  useFocusEffect(
+    useCallback(() => {
+      if (capturedImage) {
+        setSourceImages(prev => [...prev, capturedImage]);
+        clearCapturedImage();
+      }
+    }, [capturedImage])
+  );
 
   const handlePickImage = useCallback(async () => {
     const images = await pickMultipleImages();
@@ -73,35 +88,44 @@ export default function StudioScreen() {
     }
 
     setIsLoading(true);
+    setLoadingStage('Initializing...');
     setError(null);
+
+    const currentGenId = Date.now();
+    generationRef.current = currentGenId;
 
     const model = useProModel ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
 
     try {
       let images: string[] = [];
-      
+
       if (activeTab === 'painter' && sourceImages.length >= 1) {
-        const stylePrompt = selectedStyle.id === 'none' 
-          ? "A professionally hand painted miniature." 
+        const stylePrompt = selectedStyle.id === 'none'
+          ? "A professionally hand painted miniature."
           : selectedStyle.prompt;
-        
+
         const promptParts = [
           stylePrompt,
-          painterPrompt,
-          backgroundTheme !== 'None' ? `Placed in a ${backgroundTheme} environment. ${backgroundPrompt}` : 'Preserve original background.',
-          textPrompt ? `Add text: "${textPrompt}" on the surface.` : ''
+          sanitizePrompt(painterPrompt),
+          backgroundTheme !== 'None' ? `Placed in a ${backgroundTheme} environment. ${sanitizePrompt(backgroundPrompt)}` : 'Preserve original background.',
+          textPrompt ? `Add text: "${sanitizePrompt(textPrompt)}" on the surface.` : ''
         ].filter(Boolean);
-        
+
+        setLoadingStage('Synthesizing details...');
         images = await generatePaintedMiniature(sourceImages, promptParts.join(' '), 1, model);
       } else if (activeTab === 'designer') {
-        const characterDesc = designerPrompt.trim() || 'character';
+        const characterDesc = sanitizePrompt(designerPrompt.trim()) || 'character';
         const typeToUse = sourceImages.length > 1 ? 'combined' : designerType;
         const template = DEFAULT_DESIGNER_TEMPLATES[typeToUse];
         const prompt = template.replace(/{input}/g, characterDesc);
+        setLoadingStage('Designing concept...');
         images = await generateImageFromImage(sourceImages, prompt, model);
       }
 
       if (images.length > 0) {
+        if (generationRef.current !== currentGenId) return;
+        setLoadingStage('Finalizing...');
+
         const resultUrl = images[0];
         setActivePreviewImage(resultUrl);
         setGenerationHistory(prev => [{
@@ -114,23 +138,38 @@ export default function StudioScreen() {
         setIsResultsDrawerOpen(true);
       }
     } catch (err: any) {
-      setError(err.message || "An unknown error occurred.");
+      if (generationRef.current !== currentGenId) return;
+      const msg = err.message || "An unknown error occurred.";
+
+      if (msg.includes("Hourly limit") || msg.includes("429")) {
+        setError("Rate limit reached. Please try again later.");
+      } else if (msg.includes("Daily limit")) {
+        setError("Daily quota exceeded. Come back tomorrow!");
+      } else if (msg.includes("SAFETY") || msg.includes("blocked")) {
+        setError("Creation blocked by safety guidelines. Please refine your prompt.");
+      } else if (msg.includes("API_KEY")) {
+        setError("API Key missing. Please check Settings.");
+      } else {
+        setError(msg);
+      }
     } finally {
-      setIsLoading(false);
+      if (generationRef.current === currentGenId) {
+        setIsLoading(false);
+      }
     }
   }, [sourceImages, activeTab, selectedStyle, painterPrompt, backgroundTheme, backgroundPrompt, textPrompt, designerPrompt, designerType, useProModel]);
 
   const handleUpscale = useCallback(async () => {
     if (!activePreviewImage) return;
-    
+
     setIsUpscaling(true);
     const model = useProModel ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-    
+
     try {
       const base64Data = activePreviewImage.split(',')[1];
       const upscaled = await upscaleImage({ base64: activePreviewImage, mimeType: 'image/png' }, model);
       setActivePreviewImage(upscaled);
-      setGenerationHistory(prev => 
+      setGenerationHistory(prev =>
         prev.map(item => item.url === activePreviewImage ? { ...item, url: upscaled, isMaster: true } : item)
       );
     } catch (err: any) {
@@ -170,21 +209,19 @@ export default function StudioScreen() {
           </Text>
           <Text className="text-[8px] text-zinc-600 font-bold uppercase tracking-widest">Atelier</Text>
         </View>
-        
+
         <View className="flex-row items-center gap-2">
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => setUseProModel(!useProModel)}
-            className={`flex-row items-center px-3 py-2 rounded-lg border ${
-              useProModel ? 'bg-indigo-600 border-indigo-500' : 'bg-zinc-800 border-zinc-700'
-            }`}
+            className={`flex-row items-center px-3 py-2 rounded-lg border ${useProModel ? 'bg-indigo-600 border-indigo-500' : 'bg-zinc-800 border-zinc-700'
+              }`}
           >
             <SparklesIcon size={12} color={useProModel ? '#ffffff' : '#71717a'} />
-            <Text className={`text-[8px] font-bold uppercase tracking-widest ml-1.5 ${
-              useProModel ? 'text-white' : 'text-zinc-500'
-            }`}>PRO</Text>
+            <Text className={`text-[8px] font-bold uppercase tracking-widest ml-1.5 ${useProModel ? 'text-white' : 'text-zinc-500'
+              }`}>PRO</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             onPress={() => setIsUserMenuOpen(true)}
             className="w-8 h-8 rounded-lg bg-zinc-800/40 border border-zinc-700/60 items-center justify-center"
           >
@@ -200,33 +237,38 @@ export default function StudioScreen() {
             { id: 'designer' as ToolMode, label: 'Design', Icon: PencilIcon },
             { id: 'painter' as ToolMode, label: 'Paint', Icon: SparklesIcon }
           ].map(tab => (
-            <TouchableOpacity 
+            <TouchableOpacity
               key={tab.id}
               onPress={() => setActiveTab(tab.id)}
-              className={`flex-1 flex-row items-center justify-center py-3 rounded-lg ${
-                activeTab === tab.id ? 'bg-indigo-600' : ''
-              }`}
+              className={`flex-1 flex-row items-center justify-center py-3 rounded-lg ${activeTab === tab.id ? 'bg-indigo-600' : ''
+                }`}
+              accessibilityLabel={`Switch to ${tab.label} mode`}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: activeTab === tab.id }}
             >
               <tab.Icon size={12} color={activeTab === tab.id ? '#ffffff' : '#71717a'} />
-              <Text className={`text-[9px] font-bold uppercase tracking-widest ml-2 ${
-                activeTab === tab.id ? 'text-white' : 'text-zinc-600'
-              }`}>{tab.label}</Text>
+              <Text className={`text-[9px] font-bold uppercase tracking-widest ml-2 ${activeTab === tab.id ? 'text-white' : 'text-zinc-600'
+                }`}>{tab.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Image Source Buttons */}
         <View className="flex-row gap-3 mb-4">
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={handleOpenCamera}
             className="flex-1 flex-row items-center justify-center p-3 bg-indigo-600 rounded-xl"
+            accessibilityLabel="Take a photo"
+            accessibilityRole="button"
           >
             <CameraIcon size={14} color="#ffffff" />
             <Text className="text-white font-bold uppercase text-[9px] tracking-widest ml-2">Photo</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={handlePickImage}
             className="flex-1 flex-row items-center justify-center p-3 bg-zinc-800 border border-zinc-700 rounded-xl"
+            accessibilityLabel="Choose from library"
+            accessibilityRole="button"
           >
             <LibraryIcon size={14} color="#ffffff" />
             <Text className="text-white font-bold uppercase text-[9px] tracking-widest ml-2">Library</Text>
@@ -234,22 +276,37 @@ export default function StudioScreen() {
         </View>
 
         {/* Source Images Preview */}
-        {sourceImages.length > 0 && (
+        {sourceImages.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
             <View className="flex-row gap-2">
               {sourceImages.map((img, i) => (
                 <View key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-zinc-800">
                   <Image source={{ uri: img.base64 }} className="w-full h-full" resizeMode="cover" />
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     onPress={() => handleRemoveImage(i)}
-                    className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-600 rounded-full items-center justify-center"
+                    className="absolute top-0.5 right-0.5 w-6 h-6 bg-red-600 rounded-full items-center justify-center"
+                    accessibilityLabel="Remove image"
+                    accessibilityRole="button"
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Text className="text-white text-[10px]">×</Text>
+                    <Text className="text-white text-[12px] font-bold">×</Text>
                   </TouchableOpacity>
                 </View>
               ))}
             </View>
           </ScrollView>
+        ) : (
+          <View className="mb-6 p-6 border-2 border-dashed border-zinc-800 rounded-2xl items-center justify-center bg-zinc-900/20">
+            <View className="w-12 h-12 rounded-full bg-zinc-800 items-center justify-center mb-3">
+              <CameraIcon size={20} color="#52525b" />
+            </View>
+            <Text className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest text-center mb-1">
+              Start Your Creation
+            </Text>
+            <Text className="text-zinc-600 text-[10px] text-center max-w-[200px]">
+              Take a photo or choose existing miniatures to synthesize new designs.
+            </Text>
+          </View>
         )}
 
         {/* Designer Mode */}
@@ -262,16 +319,17 @@ export default function StudioScreen() {
                 </View>
               ) : (
                 ['sketch', 'miniature', 'pro-shot'].map((t) => (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     key={t}
                     onPress={() => setDesignerType(t as DesignerType)}
-                    className={`flex-1 py-3 rounded-xl border ${
-                      designerType === t ? 'bg-indigo-600 border-indigo-400' : 'bg-zinc-800/40 border-zinc-700'
-                    }`}
+                    className={`flex-1 py-3 rounded-xl border ${designerType === t ? 'bg-indigo-600 border-indigo-400' : 'bg-zinc-800/40 border-zinc-700'
+                      }`}
+                    accessibilityLabel={`Select ${t} mode`}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: designerType === t }}
                   >
-                    <Text className={`text-center text-[8px] font-bold uppercase tracking-widest ${
-                      designerType === t ? 'text-white' : 'text-zinc-500'
-                    }`}>
+                    <Text className={`text-center text-[8px] font-bold uppercase tracking-widest ${designerType === t ? 'text-white' : 'text-zinc-500'
+                      }`}>
                       {t === 'pro-shot' ? 'Studio' : t === 'miniature' ? '3D' : 'Sketch'}
                     </Text>
                   </TouchableOpacity>
@@ -285,8 +343,9 @@ export default function StudioScreen() {
                 value={designerPrompt}
                 onChangeText={setDesignerPrompt}
                 placeholder="Describe character..."
-                placeholderTextColor="#27272a"
+                placeholderTextColor="#71717a"
                 multiline
+                maxLength={1000}
                 className="text-gray-300 text-[11px] min-h-[60px]"
               />
             </View>
@@ -304,13 +363,14 @@ export default function StudioScreen() {
                   <TouchableOpacity
                     key={style.id}
                     onPress={() => setSelectedStyle(style)}
-                    className={`px-3 py-2.5 rounded-xl border ${
-                      selectedStyle.id === style.id ? 'bg-indigo-600 border-indigo-500' : 'bg-[#161B22] border-zinc-800'
-                    }`}
+                    className={`px-3 py-2.5 rounded-xl border ${selectedStyle.id === style.id ? 'bg-indigo-600 border-indigo-500' : 'bg-[#161B22] border-zinc-800'
+                      }`}
+                    accessibilityLabel={`Select technique: ${style.name}`}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selectedStyle.id === style.id }}
                   >
-                    <Text className={`text-[8px] font-bold uppercase tracking-widest ${
-                      selectedStyle.id === style.id ? 'text-white' : 'text-zinc-500'
-                    }`}>{style.name}</Text>
+                    <Text className={`text-[8px] font-bold uppercase tracking-widest ${selectedStyle.id === style.id ? 'text-white' : 'text-zinc-500'
+                      }`}>{style.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -323,8 +383,9 @@ export default function StudioScreen() {
                 value={painterPrompt}
                 onChangeText={setPainterPrompt}
                 placeholder="Add materials/colors..."
-                placeholderTextColor="#27272a"
+                placeholderTextColor="#71717a"
                 multiline
+                maxLength={1000}
                 className="text-gray-300 text-[11px] min-h-[60px]"
               />
             </View>
@@ -340,13 +401,14 @@ export default function StudioScreen() {
                   <TouchableOpacity
                     key={theme}
                     onPress={() => setBackgroundTheme(theme)}
-                    className={`px-3 py-2 rounded-lg border ${
-                      backgroundTheme === theme ? 'bg-indigo-600/20 border-indigo-500/50' : 'bg-zinc-900/40 border-zinc-800'
-                    }`}
+                    className={`px-3 py-2 rounded-lg border ${backgroundTheme === theme ? 'bg-indigo-600/20 border-indigo-500/50' : 'bg-zinc-900/40 border-zinc-800'
+                      }`}
+                    accessibilityLabel={`Select atmosphere: ${theme}`}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: backgroundTheme === theme }}
                   >
-                    <Text className={`text-[8px] font-bold uppercase tracking-widest ${
-                      backgroundTheme === theme ? 'text-indigo-400' : 'text-zinc-500'
-                    }`}>{theme}</Text>
+                    <Text className={`text-[8px] font-bold uppercase tracking-widest ${backgroundTheme === theme ? 'text-indigo-400' : 'text-zinc-500'
+                      }`}>{theme}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -355,7 +417,8 @@ export default function StudioScreen() {
                   value={backgroundPrompt}
                   onChangeText={setBackgroundPrompt}
                   placeholder="Environment details..."
-                  placeholderTextColor="#27272a"
+                  placeholderTextColor="#71717a"
+                  maxLength={1000}
                   className="text-gray-300 text-[11px] mt-2 border border-zinc-800 rounded-lg p-3"
                 />
               )}
@@ -371,7 +434,8 @@ export default function StudioScreen() {
                 value={textPrompt}
                 onChangeText={setTextPrompt}
                 placeholder="e.g. 'Vae Victis' on shield..."
-                placeholderTextColor="#27272a"
+                placeholderTextColor="#71717a"
+                maxLength={1000}
                 className="text-gray-300 text-[11px] border border-zinc-800 rounded-lg p-3"
               />
             </View>
@@ -381,17 +445,25 @@ export default function StudioScreen() {
         {/* Generate Button */}
         <View className="mt-6 mb-6">
           {isLoading ? (
-            <TouchableOpacity 
-              onPress={() => setIsLoading(false)}
+            <TouchableOpacity
+              onPress={() => {
+                setIsLoading(false);
+                generationRef.current = 0;
+              }}
               className="h-14 bg-red-600/20 border border-red-600/40 rounded-2xl items-center justify-center flex-row"
             >
               <ActivityIndicator color="#ef4444" size="small" />
-              <Text className="text-red-500 font-bold uppercase text-[10px] tracking-widest ml-2">Generating...</Text>
+              <Text className="text-red-500 font-bold uppercase text-[10px] tracking-widest ml-2">
+                {loadingStage || 'Generating...'} (Tap to Cancel)
+              </Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={handleGenerate}
               className="h-14 bg-emerald-600 rounded-2xl items-center justify-center flex-row shadow-lg"
+              accessibilityLabel="Generate image"
+              accessibilityRole="button"
+              accessibilityState={{ busy: isLoading }}
             >
               <SparklesIcon size={16} color="#ffffff" />
               <Text className="text-white font-bold uppercase text-[11px] tracking-widest ml-2">Craft Engine</Text>
@@ -414,13 +486,15 @@ export default function StudioScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View className="flex-row gap-2">
                 {generationHistory.slice(0, 5).map((item, i) => (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     key={i}
                     onPress={() => {
                       setActivePreviewImage(item.url);
                       setIsResultsDrawerOpen(true);
                     }}
                     className="w-16 h-16 rounded-lg overflow-hidden border border-zinc-800"
+                    accessibilityLabel={`View generated image ${i + 1}`}
+                    accessibilityRole="button"
                   >
                     <Image source={{ uri: item.url }} className="w-full h-full" resizeMode="cover" />
                   </TouchableOpacity>
@@ -455,14 +529,14 @@ export default function StudioScreen() {
 
             {activePreviewImage && (
               <View className="flex-row gap-2 mb-6">
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={handleDownload}
                   className="flex-1 h-12 bg-white rounded-xl flex-row items-center justify-center"
                 >
                   <DownloadIcon size={16} color="#000000" />
                   <Text className="text-black font-bold uppercase text-[9px] tracking-widest ml-2">Save</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={handleUpscale}
                   disabled={isUpscaling}
                   className="w-12 h-12 bg-black/60 border border-white/10 rounded-xl items-center justify-center"
@@ -473,7 +547,7 @@ export default function StudioScreen() {
                     <ArrowsPointingOutIcon size={16} color="#ffffff" />
                   )}
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={handleUseAsSource}
                   className="w-12 h-12 bg-black/60 border border-white/10 rounded-xl items-center justify-center"
                 >
@@ -487,12 +561,11 @@ export default function StudioScreen() {
                 <Text className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mb-3">History</Text>
                 <View className="flex-row flex-wrap gap-2">
                   {generationHistory.map((item, i) => (
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       key={i}
                       onPress={() => setActivePreviewImage(item.url)}
-                      className={`w-16 h-16 rounded-lg overflow-hidden border ${
-                        activePreviewImage === item.url ? 'border-indigo-500' : 'border-zinc-800'
-                      }`}
+                      className={`w-16 h-16 rounded-lg overflow-hidden border ${activePreviewImage === item.url ? 'border-indigo-500' : 'border-zinc-800'
+                        }`}
                     >
                       <Image source={{ uri: item.url }} className="w-full h-full" resizeMode="cover" />
                     </TouchableOpacity>
@@ -511,13 +584,13 @@ export default function StudioScreen() {
         transparent
         onRequestClose={() => setIsUserMenuOpen(false)}
       >
-        <TouchableOpacity 
-          className="flex-1 bg-black/60" 
-          activeOpacity={1} 
+        <TouchableOpacity
+          className="flex-1 bg-black/60"
+          activeOpacity={1}
           onPress={() => setIsUserMenuOpen(false)}
         >
           <View className="absolute top-20 right-4 w-40 bg-[#161B22] border border-zinc-800 rounded-xl overflow-hidden">
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => {
                 setIsUserMenuOpen(false);
                 router.push('/settings');
@@ -526,7 +599,7 @@ export default function StudioScreen() {
             >
               <Text className="text-white text-[10px] font-bold uppercase tracking-widest">Settings</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => {
                 setIsUserMenuOpen(false);
                 handleLogout();
