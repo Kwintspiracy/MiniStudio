@@ -68,6 +68,11 @@
       "router": {
         "origin": false
       },
+<<<<<<< Updated upstream
+=======
+      "supabaseUrl": "https://gmbhkvpcebnwnzygcedi.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtYmhrdnBjZWJud256eWdjZWRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzNzE1NjksImV4cCI6MjA4MTk0NzU2OX0.vIokR84ICXfhCY40Hd0OLq4IsTr7HnGZ0ZJnGQjEH08",
+>>>>>>> Stashed changes
       "eas": {
         "projectId": "your-project-id"
       }

@@ -16,6 +16,19 @@ import { generatePaintedMiniature, generateImageFromImage, upscaleImage } from '
 import { setSessionActive } from '../../src/services/storageService';
 import { useImagePicker } from '../../src/hooks/useImagePicker';
 import { useMediaSave } from '../../src/hooks/useMediaSave';
+<<<<<<< Updated upstream
+=======
+import { sanitizePrompt } from '../../src/utils/promptSanitizer';
+import { useImageContext } from '../../src/context/ImageContext';
+import { saveImageToGallery } from '../../src/services/fileSystemService';
+import { getData, storeData, GALLERY_INDEX_KEY } from '../../src/services/storageService';
+import { randomUUID } from 'expo-crypto';
+import { useHaptics } from '../../src/hooks/useHaptics';
+import * as Haptics from 'expo-haptics';
+import { OnboardingOverlay } from '../../src/components/OnboardingOverlay';
+import { HAS_SEEN_ONBOARDING_KEY } from '../../src/services/storageService';
+import { PaletteManager } from '../../src/components/PaletteManager';
+>>>>>>> Stashed changes
 
 export default function StudioScreen() {
   // Mode state
@@ -42,7 +55,25 @@ export default function StudioScreen() {
   const [backgroundTheme, setBackgroundTheme] = useState('None');
   const [backgroundPrompt, setBackgroundPrompt] = useState('');
   const [textPrompt, setTextPrompt] = useState('');
+<<<<<<< Updated upstream
   
+=======
+
+  // Palette State Management
+  const [isColorPaletteEnabled, setIsColorPaletteEnabled] = useState(false);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [allPaints, setAllPaints] = useState<any[]>([]); // Store full paint data locally
+
+  const togglePaletteBrand = (brand: string) => {
+    setSelectedBrands(prev => prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]);
+  };
+
+  const togglePaletteColor = (color: string) => {
+    setSelectedColors(prev => prev.includes(color) ? prev.filter(c => c !== color) : [...prev, color]);
+  };
+
+>>>>>>> Stashed changes
   // UI state
   const [isResultsDrawerOpen, setIsResultsDrawerOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -81,6 +112,7 @@ export default function StudioScreen() {
       let images: string[] = [];
       
       if (activeTab === 'painter' && sourceImages.length >= 1) {
+<<<<<<< Updated upstream
         const stylePrompt = selectedStyle.id === 'none' 
           ? "A professionally hand painted miniature." 
           : selectedStyle.prompt;
@@ -93,6 +125,63 @@ export default function StudioScreen() {
         ].filter(Boolean);
         
         images = await generatePaintedMiniature(sourceImages, promptParts.join(' '), 1, model);
+=======
+        const promptParts: string[] = [];
+
+        // 1. Strict Color Constraints (Highest Priority)
+        if (isColorPaletteEnabled) {
+          if (selectedColors.length > 0) {
+            // Map selected names to "Name (Hex)" strings for better AI accuracy
+            const colorDetails = selectedColors.map(name => {
+              const p = allPaints.find(x => x.name === name);
+              return p && p.hex ? `${name} (Hex: ${p.hex})` : name;
+            });
+
+            promptParts.push(`[CRITICAL SYSTEM INSTRUCTION]: You are a digital painting engine with a RESTRICTED PALETTE. You must ONLY use these specific paint colors: ${colorDetails.join(', ')}. VERIFICATION REQUIRED: Scan your final output. If any pixel contains a hue not derivable from this list (e.g. unlisted reds/blues), REPAINT it immediately using the allowed colors. Compliance is mandatory.`);
+          } else if (selectedBrands.length > 0) {
+            // Auto-expand Brand/Library to a concrete list of hex codes
+            // 1. Filter allPaints for matching brands OR user library
+            const brandPaints = allPaints.filter(p => {
+              if (selectedBrands.includes("User Library") && p._isUserPaint) return true;
+              return p.brand && selectedBrands.includes(p.brand.trim());
+            });
+
+            // 2. Take a large subset (e.g., up to 500) to cover most user libraries
+            // The model has a large context window, so we can afford this.
+            const paletteSubset = brandPaints.slice(0, 500).map(p => `${p.name} (Hex: ${p.hex})`);
+
+            if (paletteSubset.length > 0) {
+              promptParts.push(`[CRITICAL SYSTEM INSTRUCTION]: You are a digital painting engine using the "${selectedBrands.join(' + ')}" paint range. You must ONLY use these specific paint colors from the range: ${paletteSubset.join(', ')}. Do not introduce colors outside this list.`);
+            } else {
+              // Fallback if no paints found (shouldn't happen if loaded correctly)
+              promptParts.push(`[CRITICAL SYSTEM INSTRUCTION]: You are restricted to using paints from these brands ONLY: ${selectedBrands.join(', ')}.`);
+            }
+          }
+        }
+
+        // 2. Style & Concept
+        promptParts.push(selectedStyle.id === 'none' ? "A professionally hand painted miniature." : selectedStyle.prompt);
+        promptParts.push(sanitizePrompt(painterPrompt));
+
+        // 3. Environment & Extras
+        promptParts.push(backgroundTheme !== 'None' ? `Placed in a ${backgroundTheme} environment. ${sanitizePrompt(backgroundPrompt)}` : 'Preserve original background.');
+        if (textPrompt) promptParts.push(`Add text: "${sanitizePrompt(textPrompt)}" on the surface.`);
+
+        // Force image generation behavior
+        promptParts.push("GENERATE THE IMAGE NOW. Do not output conversational text.");
+
+        const finalPrompt = promptParts.filter(Boolean).join(' ');
+
+        console.log("--- GENERATING PROMPT ---");
+        console.log("Selected Colors Count:", selectedColors.length);
+        console.log("Selected Brands Count:", selectedBrands.length);
+        console.log("Is Palette Enabled:", isColorPaletteEnabled);
+        console.log("Final Prompt:", finalPrompt);
+        console.log("-------------------------");
+
+        setLoadingStage('Synthesizing details...');
+        images = await generatePaintedMiniature(sourceImages, finalPrompt, 1, model);
+>>>>>>> Stashed changes
       } else if (activeTab === 'designer') {
         const characterDesc = designerPrompt.trim() || 'character';
         const typeToUse = sourceImages.length > 1 ? 'combined' : designerType;
@@ -118,7 +207,7 @@ export default function StudioScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [sourceImages, activeTab, selectedStyle, painterPrompt, backgroundTheme, backgroundPrompt, textPrompt, designerPrompt, designerType, useProModel]);
+  }, [sourceImages, activeTab, selectedStyle, painterPrompt, backgroundTheme, backgroundPrompt, textPrompt, designerPrompt, designerType, useProModel, isColorPaletteEnabled, selectedBrands, selectedColors]);
 
   const handleUpscale = useCallback(async () => {
     if (!activePreviewImage) return;
@@ -328,6 +417,18 @@ export default function StudioScreen() {
                 className="text-gray-300 text-[11px] min-h-[60px]"
               />
             </View>
+
+            {/* Palette Manager */}
+            <PaletteManager
+              isEnabled={isColorPaletteEnabled}
+              onToggleEnabled={setIsColorPaletteEnabled}
+              selectedBrands={selectedBrands}
+              onToggleBrand={togglePaletteBrand}
+              selectedColors={selectedColors}
+              onToggleColor={togglePaletteColor}
+              onClearColors={() => setSelectedColors([])}
+              onPaintsLoaded={setAllPaints}
+            />
 
             {/* Background */}
             <View className="p-3 bg-black/20 border border-zinc-800/50 rounded-2xl">

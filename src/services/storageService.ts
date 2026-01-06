@@ -83,7 +83,12 @@ export async function isSessionActive(): Promise<boolean> {
 export async function storeData<T>(key: string, data: T): Promise<void> {
   const jsonValue = JSON.stringify(data);
   if (isWeb) {
-    localStorage.setItem(key, jsonValue);
+    try {
+      localStorage.setItem(key, jsonValue);
+    } catch (e) {
+      console.warn('Storage quota exceeded, data could not be saved:', e);
+      // Optional: Clear old data or handle cleanup here
+    }
   } else {
     await SecureStore.setItemAsync(key, jsonValue);
   }

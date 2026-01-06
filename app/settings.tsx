@@ -72,6 +72,7 @@ export default function SettingsScreen() {
   };
 
   const handleSignOut = async () => {
+<<<<<<< Updated upstream
     Alert.alert(
       'Sign Out',
       'Are you sure you want to sign out?',
@@ -87,6 +88,12 @@ export default function SettingsScreen() {
         },
       ]
     );
+=======
+    console.log("Sign Out Button Pressed");
+    // Bypass Alert for debugging - triggers direct sign out
+    await signOut();
+    router.replace('/');
+>>>>>>> Stashed changes
   };
 
   const handleOpenBillingDocs = () => {
