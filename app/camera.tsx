@@ -7,12 +7,16 @@ import { XMarkIcon, CameraIcon, RefreshIcon } from '../src/components/Icons';
 import type { ImageFile } from '../src/types';
 import { useImageContext } from '../src/context/ImageContext';
 
+import { useHaptics } from '../src/hooks/useHaptics';
+import * as Haptics from 'expo-haptics';
+
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [isCapturing, setIsCapturing] = useState(false);
   const { setCapturedImage } = useImageContext();
   const cameraRef = useRef<CameraView>(null);
+  const { triggerImpact } = useHaptics();
 
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) {
@@ -23,6 +27,7 @@ export default function CameraScreen() {
   const handleCapture = async () => {
     if (!cameraRef.current || isCapturing) return;
 
+    triggerImpact(Haptics.ImpactFeedbackStyle.Medium);
     setIsCapturing(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({

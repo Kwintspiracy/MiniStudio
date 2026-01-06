@@ -103,6 +103,7 @@ export async function isSessionActive(): Promise<boolean> {
  */
 const USAGE_STATS_KEY = 'ministudio_usage_stats';
 export const GALLERY_INDEX_KEY = 'ministudio_gallery_index';
+export const HAS_SEEN_ONBOARDING_KEY = 'ministudio_has_seen_onboarding';
 
 export async function getUsageStats(): Promise<string | null> {
   if (isWeb) {

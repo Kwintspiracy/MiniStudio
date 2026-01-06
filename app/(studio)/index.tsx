@@ -21,6 +21,10 @@ import { useImageContext } from '../../src/context/ImageContext';
 import { saveImageToGallery } from '../../src/services/fileSystemService';
 import { getData, storeData, GALLERY_INDEX_KEY } from '../../src/services/storageService';
 import { randomUUID } from 'expo-crypto';
+import { useHaptics } from '../../src/hooks/useHaptics';
+import * as Haptics from 'expo-haptics';
+import { OnboardingOverlay } from '../../src/components/OnboardingOverlay';
+import { HAS_SEEN_ONBOARDING_KEY } from '../../src/services/storageService';
 
 export default function StudioScreen() {
   // Mode state
@@ -37,6 +41,7 @@ export default function StudioScreen() {
   const [loadingStage, setLoadingStage] = useState('');
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const generationRef = useRef<number>(0);
 
@@ -59,6 +64,7 @@ export default function StudioScreen() {
   const { pickImage, pickMultipleImages } = useImagePicker();
   const { saveImage, shareImage } = useMediaSave();
   const { capturedImage, clearCapturedImage } = useImageContext();
+  const { triggerImpact, triggerSelection, triggerNotification } = useHaptics();
 
   // Load history from storage on mount
   useEffect(() => {
@@ -72,7 +78,16 @@ export default function StudioScreen() {
         }
       }
     };
+
     loadHistory();
+
+    const checkOnboarding = async () => {
+      const hasSeen = await getData<boolean>(HAS_SEEN_ONBOARDING_KEY);
+      if (!hasSeen) {
+        setShowOnboarding(true);
+      }
+    };
+    checkOnboarding();
   }, []);
 
   useFocusEffect(
@@ -96,8 +111,20 @@ export default function StudioScreen() {
   }, []);
 
   const handleRemoveImage = useCallback((index: number) => {
-    setSourceImages(prev => prev.filter((_, i) => i !== index));
-  }, []);
+    triggerSelection();
+    Alert.alert(
+      "Remove Image",
+      "Are you sure you want to remove this reference image?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => setSourceImages(prev => prev.filter((_, i) => i !== index))
+        }
+      ]
+    );
+  }, [triggerSelection]);
 
   const handleGenerate = useCallback(async () => {
     if (sourceImages.length === 0) {
@@ -105,6 +132,9 @@ export default function StudioScreen() {
       return;
     }
 
+
+
+    triggerImpact(Haptics.ImpactFeedbackStyle.Heavy);
     setIsLoading(true);
     setLoadingStage('Initializing...');
     setError(null);
@@ -164,6 +194,7 @@ export default function StudioScreen() {
         await storeData(GALLERY_INDEX_KEY, newHistory);
 
         setActivePreviewImage(fileUri);
+        triggerNotification(Haptics.NotificationFeedbackType.Success);
         setIsResultsDrawerOpen(true);
       }
     } catch (err: any) {
@@ -234,9 +265,23 @@ export default function StudioScreen() {
   }, [activePreviewImage]);
 
   const handleLogout = useCallback(async () => {
-    await setSessionActive(false);
-    router.replace('/');
-  }, []);
+    triggerSelection();
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            await setSessionActive(false);
+            router.replace('/');
+          }
+        }
+      ]
+    );
+  }, [triggerSelection]);
 
   return (
     <SafeAreaView className="flex-1 bg-[#0D1117]">
@@ -401,7 +446,10 @@ export default function StudioScreen() {
                 {PAINTING_STYLES.slice(0, 9).map(style => (
                   <TouchableOpacity
                     key={style.id}
-                    onPress={() => setSelectedStyle(style)}
+                    onPress={() => {
+                      triggerSelection();
+                      setSelectedStyle(style);
+                    }}
                     className={`px-3 py-2.5 rounded-xl border ${selectedStyle.id === style.id ? 'bg-indigo-600 border-indigo-500' : 'bg-[#161B22] border-zinc-800'
                       }`}
                     accessibilityLabel={`Select technique: ${style.name}`}
@@ -439,7 +487,10 @@ export default function StudioScreen() {
                 {BACKGROUND_THEMES.map(theme => (
                   <TouchableOpacity
                     key={theme}
-                    onPress={() => setBackgroundTheme(theme)}
+                    onPress={() => {
+                      triggerSelection();
+                      setBackgroundTheme(theme);
+                    }}
                     className={`px-3 py-2 rounded-lg border ${backgroundTheme === theme ? 'bg-indigo-600/20 border-indigo-500/50' : 'bg-zinc-900/40 border-zinc-800'
                       }`}
                     accessibilityLabel={`Select atmosphere: ${theme}`}
@@ -650,6 +701,13 @@ export default function StudioScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+      <OnboardingOverlay
+        visible={showOnboarding}
+        onDismiss={() => {
+          setShowOnboarding(false);
+          storeData(HAS_SEEN_ONBOARDING_KEY, true);
+        }}
+      />
     </SafeAreaView>
   );
 }

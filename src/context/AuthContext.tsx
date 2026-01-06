@@ -1,8 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
+
+// Ensure WebBrowser works correctly on the web
+WebBrowser.maybeCompleteAuthSession();
 
 interface AuthContextType {
     session: Session | null;
@@ -113,23 +117,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const signInWithGoogle = async () => {
         try {
-            const redirectUrl = Linking.createURL('/google-auth');
-            // Debug: Show user exactly what URL is being sent
-            Alert.alert("Debug", `Redirect URL: ${redirectUrl}`);
+            if (Platform.OS === 'web') {
+                // Web Flow: Let Supabase handle the redirect
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+                    },
+                });
+                if (error) throw error;
+            } else {
+                // Native Flow: Use Expo Web Browser
+                const redirectUrl = Linking.createURL('/google-auth');
 
-            const { data, error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    redirectTo: redirectUrl,
-                    skipBrowserRedirect: true,
-                },
-            });
+                const { data, error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: redirectUrl,
+                        skipBrowserRedirect: true,
+                    },
+                });
 
-            if (error) throw error;
+                if (error) throw error;
 
-            if (data?.url) {
-                // Open the browser
-                await Linking.openURL(data.url);
+                if (data?.url) {
+                    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+                    if (result.type === 'success' && result.url) {
+                        const url = result.url;
+                        const hashIndex = url.indexOf('#');
+                        const queryIndex = url.indexOf('?');
+                        let paramsString = '';
+                        if (hashIndex !== -1) paramsString = url.substring(hashIndex + 1);
+                        else if (queryIndex !== -1) paramsString = url.substring(queryIndex + 1);
+
+                        const params = new URLSearchParams(paramsString);
+                        const accessToken = params.get('access_token');
+                        const refreshToken = params.get('refresh_token');
+
+                        if (accessToken && refreshToken) {
+                            const { error: sessionError } = await supabase.auth.setSession({
+                                access_token: accessToken,
+                                refresh_token: refreshToken,
+                            });
+                            if (sessionError) throw sessionError;
+                        }
+                    }
+                }
             }
         } catch (error: any) {
             Alert.alert("Sign In Error", error.message);

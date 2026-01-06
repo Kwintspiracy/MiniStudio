@@ -13,8 +13,11 @@ const ADMIN_EMAILS = [
   'magneticfoundry@gmail.com'
 ];
 
+import { useHaptics } from '../src/hooks/useHaptics';
+
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
+  const { triggerSelection } = useHaptics();
   const [currentApiKey, setCurrentApiKey] = useState<string>('');
   const [newApiKey, setNewApiKey] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
@@ -97,6 +100,7 @@ export default function SettingsScreen() {
   };
 
   const handleSignOut = async () => {
+    triggerSelection();
     Alert.alert(
       'Sign Out',
       'Are you sure you want to sign out?',
