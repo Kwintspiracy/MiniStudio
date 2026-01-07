@@ -19,7 +19,7 @@
         "NSPhotoLibraryUsageDescription": "MiniStudio needs photo library access to import miniature images.",
         "NSPhotoLibraryAddUsageDescription": "MiniStudio needs permission to save generated images to your photo library."
       },
-      "buildNumber": "3"
+      "buildNumber": "4"
     },
     "android": {
       "adaptiveIcon": {
