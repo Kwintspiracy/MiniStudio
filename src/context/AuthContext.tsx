@@ -271,18 +271,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const signOut = async () => {
+        setLoading(true); // Start loading to prevent race conditions in UI checks
         try {
             const { error } = await supabase.auth.signOut();
             if (error) {
                 console.error("Sign Out Error:", error.message);
-                Alert.alert("Sign Out Error", error.message);
+                // Alert.alert("Sign Out Error", error.message);
             }
-            // Explicitly clear state just in case
+            // Explicitly clear state
             setSession(null);
             setUser(null);
         } catch (e: any) {
             console.error("Sign Out Exception:", e);
             Alert.alert("Sign Out Exception", e.message);
+        } finally {
+            setLoading(false);
         }
     };
 

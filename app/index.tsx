@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Image, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, Linking, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SparklesIcon, ChevronRightIcon, KeyIcon } from '../src/components/Icons';
@@ -109,8 +109,8 @@ export default function WelcomeScreen() {
             </View>
 
             <Text className="text-4xl font-black text-white tracking-tight uppercase italic text-center">
-              Studio{'\n'}
-              <Text className="text-indigo-500 font-light not-italic">Artisan</Text>
+              MiniPainter{'\n'}
+              <Text className="text-indigo-500 font-light not-italic">Studio</Text>
             </Text>
 
             <Text className="text-zinc-500 text-xs text-center mt-3 px-8 leading-5">

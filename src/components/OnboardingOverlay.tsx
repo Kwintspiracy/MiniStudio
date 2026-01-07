@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, Image, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraIcon, SparklesIcon, XMarkIcon } from './Icons';
 import { useHaptics } from '../hooks/useHaptics';

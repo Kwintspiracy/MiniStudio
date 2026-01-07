@@ -7,17 +7,15 @@
     "icon": "./assets/icon.png",
     "scheme": "ministudio",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#0D1117"
-    },
+    "backgroundColor": "#0D1117",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ministudio.app",
       "infoPlist": {
         "NSCameraUsageDescription": "MiniStudio needs camera access to capture photos of your miniatures.",
         "NSPhotoLibraryUsageDescription": "MiniStudio needs photo library access to import miniature images.",
-        "NSPhotoLibraryAddUsageDescription": "MiniStudio needs permission to save generated images to your photo library."
+        "NSPhotoLibraryAddUsageDescription": "MiniStudio needs permission to save generated images to your photo library.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "buildNumber": "4"
     },

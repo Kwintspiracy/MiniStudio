@@ -302,7 +302,7 @@ export default function StudioScreen() {
             <View className="flex-row gap-2">
               {sourceImages.map((img, i) => (
                 <View key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-zinc-800">
-                  <Image source={{ uri: img.base64 }} className="w-full h-full" resizeMode="cover" />
+                  <Image source={{ uri: img.base64 }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                   <TouchableOpacity
                     onPress={() => handleRemoveImage(i)}
                     className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-600 rounded-full items-center justify-center"
@@ -491,7 +491,7 @@ export default function StudioScreen() {
                     }}
                     className="w-16 h-16 rounded-lg overflow-hidden border border-zinc-800"
                   >
-                    <Image source={{ uri: item.url }} className="w-full h-full" resizeMode="cover" />
+                    <Image source={{ uri: item.url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                   </TouchableOpacity>
                 ))}
               </View>
@@ -518,7 +518,7 @@ export default function StudioScreen() {
           <ScrollView className="flex-1 p-4">
             {activePreviewImage && (
               <View className="aspect-square w-full rounded-2xl overflow-hidden bg-black border border-zinc-800 mb-4">
-                <Image source={{ uri: activePreviewImage }} className="w-full h-full" resizeMode="contain" />
+                <Image source={{ uri: activePreviewImage }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
               </View>
             )}
 
@@ -562,7 +562,7 @@ export default function StudioScreen() {
                       className={`w-16 h-16 rounded-lg overflow-hidden border ${activePreviewImage === item.url ? 'border-indigo-500' : 'border-zinc-800'
                         }`}
                     >
-                      <Image source={{ uri: item.url }} className="w-full h-full" resizeMode="cover" />
+                      <Image source={{ uri: item.url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                     </TouchableOpacity>
                   ))}
                 </View>

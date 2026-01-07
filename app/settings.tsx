@@ -83,25 +83,17 @@ export default function SettingsScreen() {
 
   const performSignOut = async () => {
     setIsSignOutModalVisible(false);
-    // Add a small delay for modal to close smoothly
-    setTimeout(async () => {
-      setIsLoading(true);
-      try {
-        await signOut();
-
-        // dismissAll pops to the root (index)
-        if (router.canGoBack()) {
-          router.dismissAll();
-        }
-
-        // Ensure we are definitely replacing to root
-        router.replace('/');
-      } catch (error) {
-        console.error("Sign out failed", error);
-        Alert.alert("Error", "Failed to sign out. Please try again.");
-        setIsLoading(false);
-      }
-    }, 200);
+    setIsLoading(true);
+    try {
+      await signOut();
+      // On Web/Expo Router, simply replacing with '/' is robust enough.
+      // The AuthGuard in (studio)/_layout.tsx acts as a backup.
+      router.replace('/');
+    } catch (error) {
+      console.error("Sign out failed", error);
+      Alert.alert("Error", "Failed to sign out. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   const handleSignOut = () => {
