@@ -13,6 +13,8 @@ interface AuthContextType {
     user: User | null;
     loading: boolean;
     signInWithGoogle: () => Promise<void>;
+    signInWithEmail: (email: string, password: string) => Promise<void>;
+    signUpWithEmail: (email: string, password: string) => Promise<void>;
     signOut: () => Promise<void>;
 }
 
@@ -21,6 +23,8 @@ const AuthContext = createContext<AuthContextType>({
     user: null,
     loading: true,
     signInWithGoogle: async () => { },
+    signInWithEmail: async () => { },
+    signUpWithEmail: async () => { },
     signOut: async () => { },
 });
 
@@ -35,14 +39,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         // 1. Initial Session Check
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            setLoading(false);
-        });
+        const initSession = async () => {
+            try {
+                // Add a timeout to prevent infinite hanging
+                const sessionPromise = supabase.auth.getSession();
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Session check timed out')), 5000)
+                );
+
+                const { data: { session }, error } = await Promise.race([
+                    sessionPromise,
+                    timeoutPromise
+                ]) as any;
+
+                if (error) throw error;
+
+                setSession(session);
+                setUser(session?.user ?? null);
+            } catch (error: any) {
+                console.warn("Auth check failed:", error);
+
+                // If Refresh Token is invalid, we MUST clear the session to prevent infinite loops
+                if (error?.message?.includes('Refresh Token Not Found') ||
+                    error?.message?.includes('Invalid Refresh Token')) {
+                    console.log("Clearing invalid session...");
+                    await supabase.auth.signOut();
+                    setSession(null);
+                    setUser(null);
+                }
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        initSession();
 
         // 2. Auth State Listener
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log("Auth State Change:", event);
+
+            if (event === 'TOKEN_REFRESH_NOT_UPDATED') {
+                console.warn("Token refresh failed, forcing sign out");
+                setSession(null);
+                setUser(null);
+                setLoading(false);
+                return;
+            }
+
+            if (event === 'SIGNED_IN' && Platform.OS === 'web') {
+                // Clear the hash from the URL to prevent "stale token" errors on reload
+                if (window.history && window.history.replaceState) {
+                    const newUrl = window.location.href.split('#')[0];
+                    window.history.replaceState({}, document.title, newUrl);
+                }
+            }
+
             setSession(session);
             setUser(session?.user ?? null);
             setLoading(false);
@@ -55,6 +106,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const handleDeepLink = async (url: string | null) => {
             if (!url) return;
+
+            // On Web, Supabase handles the session via detectSessionInUrl: true
+            if (Platform.OS === 'web') return;
 
             // Allow debugging to see exactly what URL the app receives
             console.log("Deep Link Received:", url);
@@ -88,16 +142,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }
 
                 if (accessToken && refreshToken) {
-                    const { error } = await supabase.auth.setSession({
+                    console.log("Attempting to set session from deep link...");
+                    const { data, error } = await supabase.auth.setSession({
                         access_token: accessToken,
                         refresh_token: refreshToken,
                     });
 
                     if (error) {
+                        console.error("Supabase setSession Error:", error);
                         Alert.alert("Session Error", error.message);
                     } else {
+                        console.log("Supabase setSession Success:", data.session?.user?.email);
                         // Success! The AuthStateListener will pick this up and redirect
                     }
+                } else {
+                    console.warn("Deep Link missing tokens:", { accessToken: !!accessToken, refreshToken: !!refreshToken });
                 }
             } catch (e: any) {
                 console.error("Deep Link Parsing Error:", e);
@@ -170,6 +229,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const signInWithEmail = async (email: string, password: string) => {
+        setLoading(true);
+        try {
+            const { error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+            if (error) throw error;
+        } catch (error: any) {
+            Alert.alert("Sign In Error", error.message);
+            throw error; // Re-throw to let caller know it failed
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const signUpWithEmail = async (email: string, password: string) => {
+        setLoading(true);
+        try {
+            const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+            });
+            if (error) throw error;
+
+            if (data?.session) {
+                // Session created immediately (auto-confirm disabled or not required)
+                setSession(data.session);
+                setUser(data.user);
+            } else if (data?.user && !data.session) {
+                // User created but waiting for confirmation
+                Alert.alert("Check your email", "We've sent you a confirmation link to complete your registration.");
+            }
+        } catch (error: any) {
+            Alert.alert("Sign Up Error", error.message);
+            throw error;
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const signOut = async () => {
         try {
             const { error } = await supabase.auth.signOut();
@@ -191,6 +291,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         loading,
         signInWithGoogle,
+        signInWithEmail,
+        signUpWithEmail,
         signOut,
     };
 

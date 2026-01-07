@@ -14,28 +14,7 @@ export interface PaletteColor {
   b: number | null;
 }
 
-<<<<<<< Updated upstream
-const SUPABASE_URL = 'https://gmbhkvpcebnwnzygcedi.supabase.co/rest/v1/paints';
-const SUPABASE_KEY = 'sb_publishable_U7OfeMgOJ0KQiRqdpnB3Jw_yWGecCo5';
-=======
 import { supabase } from './supabase';
-
-export interface PaletteColor {
-  id: string;
-  brand: string;
-  set: string;
-  name: string;
-  hex: string;
-  hue: number;
-  saturation: number;
-  lightness: number;
-  code: string | null;
-  is_discontinued: boolean;
-  r: number | null;
-  g: number | null;
-  b: number | null;
-}
->>>>>>> Stashed changes
 
 export async function fetchAllPaints(): Promise<PaletteColor[]> {
   let allPaints: PaletteColor[] = [];

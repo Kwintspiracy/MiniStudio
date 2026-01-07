@@ -3,6 +3,8 @@ import { Platform } from 'react-native';
 
 const API_KEY_STORAGE_KEY = 'ministudio_api_key';
 const SESSION_ACTIVE_KEY = 'ministudio_session_active';
+export const GALLERY_INDEX_KEY = 'ministudio_gallery_index';
+export const HAS_SEEN_ONBOARDING_KEY = 'ministudio_has_seen_onboarding';
 
 // For web platform, we'll use localStorage as fallback
 const isWeb = Platform.OS === 'web';
@@ -104,9 +106,9 @@ export async function getData<T>(key: string): Promise<T | null> {
   } else {
     jsonValue = await SecureStore.getItemAsync(key);
   }
-  
+
   if (jsonValue === null) return null;
-  
+
   try {
     return JSON.parse(jsonValue) as T;
   } catch {

@@ -52,7 +52,6 @@ export const PaletteManager: React.FC<PaletteManagerProps> = ({
 
                     const uniqueList = Array.from(uniquePaintsMap.values());
                     setDbColors(uniqueList);
-                    if (onPaintsLoaded) onPaintsLoaded(uniqueList);
                 } catch (e) {
                     console.error(e);
                 } finally {
@@ -62,6 +61,13 @@ export const PaletteManager: React.FC<PaletteManagerProps> = ({
             init();
         }
     }, [isEnabled]);
+
+    // Sync paints to parent whenever they are loaded
+    useEffect(() => {
+        if (dbColors.length > 0 && onPaintsLoaded) {
+            onPaintsLoaded(dbColors);
+        }
+    }, [dbColors, onPaintsLoaded]);
 
     const availableBrands = useMemo(() => {
         const brands = new Set<string>();

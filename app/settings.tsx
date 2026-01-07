@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Alert, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, Alert, Linking, ActivityIndicator, Platform, Modal } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { XMarkIcon, KeyIcon, InfoIcon } from '../src/components/Icons';
-import { getApiKey, setApiKey, deleteApiKey, setSessionActive } from '../src/services/storageService';
+import { getApiKey, setApiKey, deleteApiKey } from '../src/services/storageService';
+import { useAuth } from '../src/context/AuthContext';
 
 export default function SettingsScreen() {
+  const { signOut } = useAuth();
   const [currentApiKey, setCurrentApiKey] = useState<string>('');
   const [newApiKey, setNewApiKey] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
 
   useEffect(() => {
     loadApiKey();
@@ -17,8 +20,15 @@ export default function SettingsScreen() {
 
   const loadApiKey = async () => {
     try {
-      const key = await getApiKey();
-      if (key) {
+      let key = await getApiKey();
+      if (!key) {
+        // Fallback for development/testing if no key is set
+        // DISCLAIMER: Using a hardcoded key is not recommended for production.
+        // This is just to unblock the user since they are facing "API Key not valid".
+        // Ideally prompt the user to enter one.
+        // But for now let's just log it.
+        console.log("No API key found in storage.");
+      } else {
         // Mask the key for display
         setCurrentApiKey(key.substring(0, 8) + '...' + key.substring(key.length - 4));
       }
@@ -71,29 +81,31 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleSignOut = async () => {
-<<<<<<< Updated upstream
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            await setSessionActive(false);
-            router.replace('/');
-          },
-        },
-      ]
-    );
-=======
-    console.log("Sign Out Button Pressed");
-    // Bypass Alert for debugging - triggers direct sign out
-    await signOut();
-    router.replace('/');
->>>>>>> Stashed changes
+  const performSignOut = async () => {
+    setIsSignOutModalVisible(false);
+    // Add a small delay for modal to close smoothly
+    setTimeout(async () => {
+      setIsLoading(true);
+      try {
+        await signOut();
+
+        // dismissAll pops to the root (index)
+        if (router.canGoBack()) {
+          router.dismissAll();
+        }
+
+        // Ensure we are definitely replacing to root
+        router.replace('/');
+      } catch (error) {
+        console.error("Sign out failed", error);
+        Alert.alert("Error", "Failed to sign out. Please try again.");
+        setIsLoading(false);
+      }
+    }, 200);
+  };
+
+  const handleSignOut = () => {
+    setIsSignOutModalVisible(true);
   };
 
   const handleOpenBillingDocs = () => {
@@ -151,7 +163,7 @@ export default function SettingsScreen() {
             <Text className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
               {currentApiKey ? 'Update API Key' : 'Enter API Key'}
             </Text>
-            
+
             <TextInput
               value={newApiKey}
               onChangeText={setNewApiKey}
@@ -166,9 +178,8 @@ export default function SettingsScreen() {
             <TouchableOpacity
               onPress={handleSaveApiKey}
               disabled={isSaving || !newApiKey.trim()}
-              className={`py-3 rounded-xl items-center ${
-                newApiKey.trim() ? 'bg-indigo-600' : 'bg-zinc-700'
-              }`}
+              className={`py-3 rounded-xl items-center ${newApiKey.trim() ? 'bg-indigo-600' : 'bg-zinc-700'
+                }`}
             >
               {isSaving ? (
                 <ActivityIndicator color="#ffffff" />
@@ -232,6 +243,40 @@ export default function SettingsScreen() {
           MiniStudio v7.0 • Expo Edition
         </Text>
       </View>
-    </SafeAreaView>
+
+
+      {/* Custom Sign Out Modal */}
+      <Modal
+        visible={isSignOutModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsSignOutModalVisible(false)}
+      >
+        <View className="flex-1 bg-black/80 items-center justify-center p-4">
+          <View className="w-full max-w-sm bg-[#161B22] border border-zinc-800 rounded-2xl p-6">
+            <Text className="text-lg font-bold text-white mb-2">Sign Out</Text>
+            <Text className="text-zinc-400 text-sm mb-6">
+              Are you sure you want to sign out? You will need to sign in again to access your projects.
+            </Text>
+
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                onPress={() => setIsSignOutModalVisible(false)}
+                className="flex-1 py-3 bg-zinc-800 rounded-xl items-center"
+              >
+                <Text className="text-white font-bold text-xs uppercase tracking-widest">Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={performSignOut}
+                className="flex-1 py-3 bg-red-600 rounded-xl items-center"
+              >
+                <Text className="text-white font-bold text-xs uppercase tracking-widest">Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView >
   );
 }
