@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System',
     fontSize: 14,
     fontWeight: '500',
-    color: colors.accent.blue,
+    color: colors.text.primary,
     letterSpacing: -0.41,
   },
 
