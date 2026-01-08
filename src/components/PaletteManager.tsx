@@ -133,7 +133,7 @@ export const PaletteManager: React.FC<PaletteManagerProps> = ({
                                 <TouchableOpacity
                                     key={brand}
                                     onPress={() => onToggleBrand(brand)}
-                                    className={`px-3 py-2 rounded-lg border transition-all mr-2 ${selectedBrands.includes(brand) ? 'bg-indigo-600 border-indigo-500' : 'bg-zinc-900/50 border-zinc-800'
+                                    className={`px-3 py-2 rounded-lg border mr-2 ${selectedBrands.includes(brand) ? 'bg-indigo-600 border-indigo-500' : 'bg-zinc-900/50 border-zinc-800'
                                         }`}
                                 >
                                     <Text className={`text-[8px] font-black uppercase tracking-widest ${selectedBrands.includes(brand) ? 'text-white' : 'text-zinc-500'

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import type { ImageFile } from '../types';
 
 interface UseImagePickerResult {
@@ -20,7 +20,7 @@ export function useImagePicker(): UseImagePickerResult {
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      
+
       // Determine mime type from URI extension
       const extension = uri.split('.').pop()?.toLowerCase() || 'jpg';
       let mimeType = 'image/jpeg';
@@ -37,7 +37,7 @@ export function useImagePicker(): UseImagePickerResult {
         default:
           mimeType = 'image/jpeg';
       }
-      
+
       return {
         base64: `data:${mimeType};base64,${base64}`,
         mimeType,
@@ -52,7 +52,7 @@ export function useImagePicker(): UseImagePickerResult {
   const pickImage = useCallback(async (): Promise<ImageFile | null> => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       // Request permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -74,7 +74,7 @@ export function useImagePicker(): UseImagePickerResult {
       }
 
       const asset = result.assets[0];
-      
+
       // If base64 is already provided, use it directly
       if (asset.base64) {
         const mimeType = asset.mimeType || 'image/jpeg';
@@ -84,7 +84,7 @@ export function useImagePicker(): UseImagePickerResult {
           uri: asset.uri,
         };
       }
-      
+
       // Otherwise convert from URI
       return await convertToImageFile(asset.uri);
     } catch (err) {
@@ -99,7 +99,7 @@ export function useImagePicker(): UseImagePickerResult {
   const pickMultipleImages = useCallback(async (): Promise<ImageFile[]> => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       // Request permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -120,7 +120,7 @@ export function useImagePicker(): UseImagePickerResult {
       }
 
       const imageFiles: ImageFile[] = [];
-      
+
       for (const asset of result.assets) {
         if (asset.base64) {
           const mimeType = asset.mimeType || 'image/jpeg';
@@ -134,7 +134,7 @@ export function useImagePicker(): UseImagePickerResult {
           imageFiles.push(imageFile);
         }
       }
-      
+
       return imageFiles;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to pick images';

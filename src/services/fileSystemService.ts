@@ -1,5 +1,5 @@
 import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 /**
  * Save a base64 image or remote URL to the device gallery

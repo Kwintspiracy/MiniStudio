@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { XMarkIcon, CameraIcon, RefreshIcon } from '../src/components/Icons';
 import type { ImageFile } from '../src/types';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -35,7 +35,7 @@ export default function CameraScreen() {
           mimeType: 'image/jpeg',
           uri: photo.uri,
         };
-        
+
         // Store the captured image in a global state or pass it back
         // For now, we'll use router params (simplified approach)
         router.back();
@@ -107,11 +107,11 @@ export default function CameraScreen() {
             >
               <XMarkIcon size={20} color="#ffffff" />
             </TouchableOpacity>
-            
+
             <Text className="text-white text-xs font-bold uppercase tracking-widest">
               Capture Miniature
             </Text>
-            
+
             <TouchableOpacity
               onPress={toggleFacing}
               className="w-10 h-10 bg-black/50 rounded-full items-center justify-center"
@@ -136,7 +136,7 @@ export default function CameraScreen() {
                 <View className="w-16 h-16 bg-white rounded-full" />
               )}
             </TouchableOpacity>
-            
+
             <Text className="text-white/60 text-[10px] font-bold uppercase tracking-widest mt-4">
               Tap to capture
             </Text>

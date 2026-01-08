@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform, Share } from 'react-native';
 
 interface UseMediaSaveResult {
@@ -34,7 +34,7 @@ export function useMediaSave(): UseMediaSaveResult {
         const base64Data = base64OrUri.split(',')[1];
         const filename = `ministudio-${Date.now()}.png`;
         fileUri = `${FileSystem.cacheDirectory}${filename}`;
-        
+
         await FileSystem.writeAsStringAsync(fileUri, base64Data, {
           encoding: FileSystem.EncodingType.Base64,
         });
@@ -45,7 +45,7 @@ export function useMediaSave(): UseMediaSaveResult {
 
       // Save to media library
       const asset = await MediaLibrary.createAssetAsync(fileUri);
-      
+
       // Optionally create or add to album
       const album = await MediaLibrary.getAlbumAsync('MiniStudio');
       if (album === null) {
@@ -77,7 +77,7 @@ export function useMediaSave(): UseMediaSaveResult {
         const base64Data = base64OrUri.split(',')[1];
         const filename = `ministudio-share-${Date.now()}.png`;
         fileUri = `${FileSystem.cacheDirectory}${filename}`;
-        
+
         await FileSystem.writeAsStringAsync(fileUri, base64Data, {
           encoding: FileSystem.EncodingType.Base64,
         });

@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Alert, Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 
 // Ensure WebBrowser works correctly on the web
 WebBrowser.maybeCompleteAuthSession();
@@ -78,7 +80,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             console.log("Auth State Change:", event);
 
-            if (event === 'TOKEN_REFRESH_NOT_UPDATED') {
+            // Handle token refresh issues if relevant, otherwise just rely on standard events
+            if (event === ('TOKEN_REFRESH_NOT_UPDATED' as any)) {
                 console.warn("Token refresh failed, forcing sign out");
                 setSession(null);
                 setUser(null);
@@ -102,75 +105,84 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => subscription.unsubscribe();
     }, []);
 
-    // 3. Deep Link Handler (Critical for OAuth)
-    useEffect(() => {
-        const handleDeepLink = async (url: string | null) => {
-            if (!url) return;
+    // 3. Shared Auth Result Handler
+    const handleAuthResult = async (url: string | null) => {
+        if (!url) return;
 
-            // On Web, Supabase handles the session via detectSessionInUrl: true
-            if (Platform.OS === 'web') return;
+        // On Web, Supabase handles the session via detectSessionInUrl: true
+        if (Platform.OS === 'web') return;
 
-            // Allow debugging to see exactly what URL the app receives
-            console.log("Deep Link Received:", url);
+        console.log("[AUTH] Handling result URL:", url);
 
-            try {
-                // Parse tokens from URL
-                // Supabase Auth usually returns: ...#access_token=...&refresh_token=...&...
+        try {
+            // 1. Parse URL to handle both hash and query params
+            const parsed = Linking.parse(url);
+            const { queryParams } = parsed;
 
-                // 1. Extract the part after # or ?
-                const hashIndex = url.indexOf('#');
-                const queryIndex = url.indexOf('?');
+            // 2. Auth fragments often come in via the hash part (#), which Linking.parse sometimes misses 
+            // depending on the platform/launcher. Handle manually as fallback.
+            let params: any = queryParams || {};
+            if (!params.access_token && url.includes('#')) {
+                const fragment = url.split('#')[1];
+                const hashParams = new URLSearchParams(fragment);
+                params.access_token = hashParams.get('access_token');
+                params.refresh_token = hashParams.get('refresh_token');
+                params.error_description = hashParams.get('error_description');
+            }
 
-                let paramsString = '';
-                if (hashIndex !== -1) {
-                    paramsString = url.substring(hashIndex + 1);
-                } else if (queryIndex !== -1) {
-                    paramsString = url.substring(queryIndex + 1);
-                }
+            const accessToken = params.access_token;
+            const refreshToken = params.refresh_token;
+            const errorDesc = params.error_description || params.error;
 
-                if (!paramsString) return;
+            console.log("[AUTH] Token Extraction Details:", {
+                hasAccessToken: !!accessToken,
+                hasRefreshToken: !!refreshToken,
+                error: errorDesc
+            });
 
-                // 2. Parse key-values manually to be safe
-                const params = new URLSearchParams(paramsString);
-                const accessToken = params.get('access_token');
-                const refreshToken = params.get('refresh_token');
-                const errorDesc = params.get('error_description');
+            if (errorDesc) {
+                Alert.alert("Auth Error", errorDesc);
+                return;
+            }
 
-                if (errorDesc) {
-                    Alert.alert("Auth Error", errorDesc);
-                    return;
-                }
+            if (accessToken && refreshToken) {
+                console.log("[AUTH] Final Attempt: setSession...");
+                const { data, error } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken,
+                });
 
-                if (accessToken && refreshToken) {
-                    console.log("Attempting to set session from deep link...");
-                    const { data, error } = await supabase.auth.setSession({
-                        access_token: accessToken,
-                        refresh_token: refreshToken,
-                    });
-
-                    if (error) {
-                        console.error("Supabase setSession Error:", error);
+                if (error) {
+                    console.error("[AUTH] setSession Failed:", error.message);
+                    if (!error.message.includes('signature is invalid')) {
                         Alert.alert("Session Error", error.message);
-                    } else {
-                        console.log("Supabase setSession Success:", data.session?.user?.email);
-                        // Success! The AuthStateListener will pick this up and redirect
                     }
                 } else {
-                    console.warn("Deep Link missing tokens:", { accessToken: !!accessToken, refreshToken: !!refreshToken });
+                    console.log("[AUTH] setSession Success for:", data.session?.user?.email);
                 }
-            } catch (e: any) {
-                console.error("Deep Link Parsing Error:", e);
-                Alert.alert("Link Parse Error", e.message);
+            } else {
+                console.log("[AUTH] No tokens found in this URL.");
             }
-        };
+        } catch (e: any) {
+            console.error("[AUTH] Extraction Exception:", e);
+        }
+    };
 
+    // 4. Deep Link Listener (Critical for OAuth)
+    useEffect(() => {
         // Handle Cold Start (App launched from link)
         Linking.getInitialURL().then((url) => {
-            if (url) handleDeepLink(url);
+            if (url) {
+                console.log("[AUTH] Cold Start Link:", url);
+                handleAuthResult(url);
+            }
         });
 
         // Handle Warm Start (App already running)
-        const sub = Linking.addEventListener('url', (event) => handleDeepLink(event.url));
+        const sub = Linking.addEventListener('url', (event) => {
+            console.log("[AUTH] Warm Start Link Received:", event.url);
+            handleAuthResult(event.url);
+        });
         return () => sub.remove();
     }, []);
 
@@ -186,8 +198,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 });
                 if (error) throw error;
             } else {
-                // Native Flow: Use Expo Web Browser
-                const redirectUrl = Linking.createURL('/google-auth');
+                // Native Flow: Use Expo Auth Session
+                // Native Flow: Use Expo Auth Session to handle Expo Go vs Standalone differences
+                const redirectUrl = AuthSession.makeRedirectUri({
+                    path: 'google-auth',
+                });
+
+                console.log("--- AUTH DEBUG START ---");
+                console.log("[AUTH] Redirect URL Generated:", redirectUrl);
+                console.log("[AUTH] Scheme detected:", Constants.expoConfig?.scheme);
+                console.log("--- AUTH DEBUG END ---");
 
                 const { data, error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
@@ -200,27 +220,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (error) throw error;
 
                 if (data?.url) {
+                    console.log("[AUTH] Opening Browser Flow...");
                     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+                    console.log("[AUTH] WebBrowser Result:", result.type);
 
                     if (result.type === 'success' && result.url) {
-                        const url = result.url;
-                        const hashIndex = url.indexOf('#');
-                        const queryIndex = url.indexOf('?');
-                        let paramsString = '';
-                        if (hashIndex !== -1) paramsString = url.substring(hashIndex + 1);
-                        else if (queryIndex !== -1) paramsString = url.substring(queryIndex + 1);
-
-                        const params = new URLSearchParams(paramsString);
-                        const accessToken = params.get('access_token');
-                        const refreshToken = params.get('refresh_token');
-
-                        if (accessToken && refreshToken) {
-                            const { error: sessionError } = await supabase.auth.setSession({
-                                access_token: accessToken,
-                                refresh_token: refreshToken,
-                            });
-                            if (sessionError) throw sessionError;
-                        }
+                        console.log("[AUTH] WebBrowser Success URL captured.");
+                        handleAuthResult(result.url);
                     }
                 }
             }

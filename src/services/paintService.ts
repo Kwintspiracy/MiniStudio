@@ -61,7 +61,6 @@ export async function fetchUserPaints(): Promise<PaletteColor[]> {
   // Ideally we would know the schema. For now, let's assume it stores full paint details or references.
 
   // If the user_paints table only has references (paint_id), we would need a join.
-  // For simplicity MVP: Query 'user_paints'export async function fetchUserPaints(): Promise<PaletteColor[]> {
   // The user_paints table is a relation table. We need to fetch the actual paint data.
   // Assuming there is a foreign key relation to 'paints' via 'paint_id'
   const { data, error } = await supabase
