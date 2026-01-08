@@ -1,49 +1,97 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Linking, ActivityIndicator } from 'react-native';
+import { 
+  View, 
+  Text, 
+  TouchableOpacity, 
+  TextInput, 
+  ActivityIndicator,
+  StyleSheet,
+  StatusBar,
+  Platform,
+  Linking,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  ScrollView
+} from 'react-native';
 import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { SparklesIcon, ChevronRightIcon, KeyIcon } from '../src/components/Icons';
-import { hasApiKey, setApiKey } from '../src/services/storageService';
+import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../src/context/AuthContext';
+import { hasApiKey, setApiKey } from '../src/services/storageService';
+
+// Design System Colors from Figma
+const colors = {
+  background: {
+    primary: '#1E1E2B',
+    secondary: '#12121F',
+    tertiary: 'rgba(255, 255, 255, 0.05)',
+  },
+  text: {
+    primary: '#F4F4F4',
+    secondary: 'rgba(244, 244, 244, 0.4)',
+    dark: '#1D1D1D',
+  },
+  button: {
+    primary: '#0058DB',
+    danger: '#FA0439',
+    secondary: 'rgba(255, 255, 255, 0.05)',
+    dark: 'rgba(0, 0, 0, 0.3)',
+    white: '#F4F4F4',
+  },
+  accent: {
+    blue: '#518CFF',
+    red: '#FA0439',
+  },
+  border: {
+    subtle: 'rgba(255, 255, 255, 0.05)',
+  },
+};
+
+// Google Icon Component
+const GoogleIcon = ({ size = 15 }: { size?: number }) => (
+  <Svg width={size} height={size + 1} viewBox="0 0 24 24">
+    <Path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+    <Path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+    <Path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+    <Path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+  </Svg>
+);
+
+// Apple Icon Component
+const AppleIcon = ({ size = 16, color = '#F4F4F4' }: { size?: number; color?: string }) => (
+  <Svg width={(size * 13.02) / 16} height={size} viewBox="0 0 14 17">
+    <Path
+      d="M13.0217 13.0312C12.7867 13.6006 12.4983 14.1233 12.1571 14.6001C11.6845 15.2595 11.2927 15.7163 10.984 15.9702C10.5058 16.3949 9.99463 16.6127 9.44912 16.6257C9.05577 16.6257 8.57824 16.5104 8.01967 16.2768C7.45949 16.0441 6.94343 15.9287 6.46996 15.9287C5.97365 15.9287 5.44285 16.0441 4.87652 16.2768C4.30946 16.5104 3.85466 16.6322 3.50964 16.6449C2.98644 16.6693 2.46293 16.4451 1.93869 15.9702C1.60561 15.6944 1.19643 15.2215 0.711841 14.5515C0.191772 13.8351 -0.238879 13.0054 -0.580148 12.0617C-0.945361 11.0412 -1.12836 10.0528 -1.12836 9.09613C-1.12836 7.99992 -0.890548 7.05212 -0.414282 6.25465C0.00919588 5.53911 0.565239 4.97586 1.25627 4.5638C1.94729 4.15173 2.69452 3.94188 3.49991 3.92896C3.91817 3.92896 4.46368 4.06149 5.13892 4.32291C5.81247 4.58502 6.24453 4.71755 6.43338 4.71755C6.57302 4.71755 7.05363 4.56312 7.87337 4.25502C8.64823 3.97016 9.29897 3.85112 9.82788 3.89499C11.2171 4.00771 12.2574 4.55826 12.9447 5.55013C11.7059 6.31172 11.0931 7.38117 11.1059 8.7543C11.1179 9.83398 11.5101 10.7398 12.28 11.4679C12.6192 11.7902 12.9992 12.042 13.4234 12.2241C13.2979 12.5138 13.1656 12.7911 13.0217 13.0312ZM9.92146 0.340287C9.92146 1.18591 9.61256 1.97636 8.99656 2.70845C8.25375 3.57972 7.35301 4.08318 6.37593 4.00328C6.36289 3.90411 6.35539 3.79987 6.35539 3.69038C6.35539 2.87913 6.70967 2.01201 7.33824 1.29961C7.65199 0.938994 8.05365 0.641058 8.54289 0.405807C9.03106 0.173963 9.49428 0.0455933 9.93164 0.0215454C9.9447 0.128123 9.92146 0.234678 9.92146 0.340287Z"
+      fill={color}
+      transform="translate(1.12836, 0)"
+    />
+  </Svg>
+);
+
+// Key Icon for API screen
+const KeyIcon = ({ size = 16, color = '#518CFF' }: { size?: number; color?: string }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
 
 export default function WelcomeScreen() {
   const { session, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, signOut } = useAuth();
-  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Email Auth State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUpMode, setIsSignUpMode] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
 
-  const handleEmailAuth = async () => {
-    if (!email || !password) {
-      setError('Please fill in all fields');
-      return;
-    }
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      if (isSignUpMode) {
-        await signUpWithEmail(email, password);
-      } else {
-        await signInWithEmail(email, password);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Authentication failed');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Monitor Session and Key Status
   useEffect(() => {
-    if (!loading) {
-      if (session) {
-        checkApiKey();
-      }
+    if (!loading && session) {
+      checkApiKey();
     }
   }, [session, loading]);
 
@@ -60,18 +108,63 @@ export default function WelcomeScreen() {
     }
   };
 
+  const handleSignIn = async () => {
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await signInWithEmail(email, password);
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateAccount = async () => {
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await signUpWithEmail(email, password);
+    } catch (err: any) {
+      setError(err.message || 'Account creation failed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = () => {
+    Linking.openURL('mailto:support@ministudio.app?subject=Password%20Reset');
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      setError(err.message || 'Google sign in failed');
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setError('Apple Sign In coming soon');
+  };
+
   const handleSubmitApiKey = async () => {
     if (!apiKeyInput.trim()) {
       setError('Please enter your API key');
       return;
     }
-
     setIsSubmitting(true);
     setError(null);
-
     try {
       await setApiKey(apiKeyInput.trim());
-      // Session is already active via Google Auth
       router.replace('/(studio)');
     } catch (err) {
       setError('Failed to save API key');
@@ -86,205 +179,432 @@ export default function WelcomeScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-[#0D1117] items-center justify-center">
-        <ActivityIndicator size="large" color="#6366f1" />
+      <View style={styles.loadingContainer}>
+        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+        <ActivityIndicator size="large" color={colors.button.primary} />
       </View>
     );
   }
 
+  // API Key Screen
+  if (session && showApiKeyInput) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoid}
+        >
+          <View style={styles.mainContent}>
+            {/* Header */}
+            <View style={styles.headerSection}>
+              <Text style={styles.headerTitle}>API Key</Text>
+              <Text style={styles.headerSubtitle}>Enter your Gemini API key to continue</Text>
+            </View>
+
+            {/* Form */}
+            <View style={styles.formSection}>
+              <View style={styles.formGroup}>
+                <View style={styles.apiKeyLabelRow}>
+                  <KeyIcon size={16} color={colors.accent.blue} />
+                  <Text style={styles.apiKeyLabel}>Gemini API Key</Text>
+                </View>
+                <View style={styles.inputGroup}>
+                  <TextInput
+                    value={apiKeyInput}
+                    onChangeText={setApiKeyInput}
+                    placeholder="Enter your API key..."
+                    placeholderTextColor={colors.text.secondary}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    style={styles.input}
+                  />
+                </View>
+                {error && <Text style={styles.errorText}>{error}</Text>}
+                <TouchableOpacity
+                  onPress={handleSubmitApiKey}
+                  disabled={isSubmitting}
+                  style={styles.primaryButton}
+                  activeOpacity={0.8}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator color={colors.text.primary} />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>CONTINUE TO STUDIO</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity onPress={handleOpenBillingDocs} activeOpacity={0.7}>
+                <Text style={styles.linkText}>Billing Documentation</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => signOut()} activeOpacity={0.7}>
+                <Text style={[styles.linkText, { color: colors.accent.red }]}>Sign Out / Switch Account</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
+
+  // Sign In Screen
   return (
-    <SafeAreaView className="flex-1 bg-[#0D1117]">
-      <View className="flex-1 items-center justify-center px-6">
-        {/* Brand Identity */}
-        <View className="items-center mb-8">
-          <View className="w-20 h-20 bg-indigo-600 rounded-3xl items-center justify-center shadow-lg mb-4">
-            <SparklesIcon size={40} color="#ffffff" />
-          </View>
-
-          <View className="items-center">
-            <View className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full mb-2">
-              <Text className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
-                v7.0 Stable
-              </Text>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoid}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Main Content Area - Frame 1998 */}
+          <View style={styles.mainContent}>
+            {/* Header Section - Frame 1993 */}
+            <View style={styles.headerSection}>
+              <Text style={styles.headerTitle}>Sign in</Text>
+              <Text style={styles.headerSubtitle}>Enter your credentials or create an account</Text>
             </View>
 
-            <Text className="text-4xl font-black text-white tracking-tight uppercase italic text-center">
-              MiniPainter{'\n'}
-              <Text className="text-indigo-500 font-light not-italic">Studio</Text>
-            </Text>
+            {/* Form Section - Frame 1992 */}
+            <View style={styles.formSection}>
+              {/* Inputs and Sign In - Frame 1999 */}
+              <View style={styles.formGroup}>
+                {/* Input Fields - Frame 1994 */}
+                <View style={styles.inputGroup}>
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="Email"
+                    placeholderTextColor={colors.text.secondary}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    style={styles.input}
+                  />
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Password"
+                    placeholderTextColor={colors.text.secondary}
+                    secureTextEntry
+                    style={styles.input}
+                  />
+                </View>
 
-            <Text className="text-zinc-500 text-xs text-center mt-3 px-8 leading-5">
-              The premier autonomous visualization engine for miniature hobbyists and collectors.
-            </Text>
-          </View>
-        </View>
+                {error && <Text style={styles.errorText}>{error}</Text>}
 
-        {/* Auth & API Key Flow */}
-        {!session ? (
-          <View className="w-full max-w-sm space-y-4">
-            {/* Email/Password Form */}
-            <View className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 space-y-3">
-              <View>
-                <Text className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
-                  Email Address
-                </Text>
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="name@example.com"
-                  placeholderTextColor="#3f3f46"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="email-address"
-                  className="bg-zinc-800/50 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm"
-                />
+                {/* Sign In Button */}
+                <TouchableOpacity
+                  onPress={handleSignIn}
+                  disabled={isSubmitting}
+                  style={styles.primaryButton}
+                  activeOpacity={0.8}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator color={colors.text.primary} />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Sign In</Text>
+                  )}
+                </TouchableOpacity>
               </View>
 
-              <View>
-                <Text className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
-                  Password
-                </Text>
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Enter your password"
-                  placeholderTextColor="#3f3f46"
-                  secureTextEntry
-                  className="bg-zinc-800/50 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm"
-                />
+              {/* Alternatively Text */}
+              <Text style={styles.alternativelyText}>Alternatively</Text>
+
+              {/* Social Buttons - Frame 1995 */}
+              <View style={styles.socialButtonsGroup}>
+                {/* Google Sign In */}
+                <TouchableOpacity
+                  onPress={handleGoogleSignIn}
+                  style={styles.googleButton}
+                  activeOpacity={0.9}
+                >
+                  <GoogleIcon size={15} />
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </TouchableOpacity>
+
+                {/* Apple Sign In */}
+                <TouchableOpacity
+                  onPress={handleAppleSignIn}
+                  style={styles.appleButton}
+                  activeOpacity={0.9}
+                >
+                  <AppleIcon size={16} color={colors.text.primary} />
+                  <Text style={styles.appleButtonText}>Continue with Apple</Text>
+                </TouchableOpacity>
               </View>
-
-              {error && (
-                <Text className="text-red-400 text-xs">{error}</Text>
-              )}
-
-              <TouchableOpacity
-                onPress={handleEmailAuth}
-                disabled={isSubmitting || loading}
-                className="bg-indigo-600 py-3 rounded-xl items-center mt-2"
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <Text className="text-white font-bold uppercase text-xs tracking-widest">
-                    {isSignUpMode ? 'Create Account' : 'Sign In'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => {
-                  setIsSignUpMode(!isSignUpMode);
-                  setError(null);
-                }}
-                className="items-center py-2"
-              >
-                <Text className="text-zinc-400 text-xs">
-                  {isSignUpMode ? 'Already have an account? ' : "Don't have an account? "}
-                  <Text className="text-indigo-400 font-bold">
-                    {isSignUpMode ? 'Sign In' : 'Sign Up'}
-                  </Text>
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Divider */}
-            <View className="flex-row items-center justify-center space-x-4">
-              <View className="h-[1px] bg-zinc-800 flex-1" />
-              <Text className="text-zinc-600 text-[10px] font-bold uppercase">OR</Text>
-              <View className="h-[1px] bg-zinc-800 flex-1" />
-            </View>
-
-            {/* Google Sign In */}
-            <TouchableOpacity
-              onPress={signInWithGoogle}
-              disabled={loading}
-              className="bg-white py-4 rounded-2xl flex-row items-center justify-center shadow-lg"
-            >
-              {/* Google G logo fallback/text */}
-              <View className="mr-3">
-                <Text className="text-lg">G</Text>
-              </View>
-              <Text className="text-black font-black uppercase text-xs tracking-widest">
-                Sign in with Google
-              </Text>
-            </TouchableOpacity>
-
-            <View className="items-center pt-2">
-              <Text className="text-[9px] text-zinc-700 font-bold uppercase tracking-wide text-center px-8 leading-4">
-                Powered by MiniPainterDB Shared Auth
-              </Text>
             </View>
           </View>
-        ) : showApiKeyInput ? (
-          <View className="w-full max-w-sm space-y-4">
-            <View className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-              <View className="flex-row items-center mb-3">
-                <KeyIcon size={16} color="#6366f1" />
-                <Text className="text-xs font-bold text-zinc-400 uppercase tracking-wider ml-2">
-                  Gemini API Key
-                </Text>
-              </View>
 
-              <TextInput
-                value={apiKeyInput}
-                onChangeText={setApiKeyInput}
-                placeholder="Enter your API key..."
-                placeholderTextColor="#3f3f46"
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-                className="bg-zinc-800/50 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-3"
-              />
-
-              {error && (
-                <Text className="text-red-400 text-xs mb-3">{error}</Text>
-              )}
-
+          {/* Bottom Section - Frame 1996 */}
+          <View style={styles.bottomSection}>
+            {/* Frame 1997 */}
+            <View style={styles.bottomContent}>
+              {/* Create Account Button */}
               <TouchableOpacity
-                onPress={handleSubmitApiKey}
+                onPress={handleCreateAccount}
                 disabled={isSubmitting}
-                className="bg-indigo-600 py-4 rounded-xl items-center"
+                style={styles.createAccountButton}
+                activeOpacity={0.8}
               >
-                {isSubmitting ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <Text className="text-white font-bold uppercase text-xs tracking-widest">
-                    Continue to Studio
-                  </Text>
-                )}
+                <Text style={styles.createAccountButtonText}>Create an Account</Text>
+              </TouchableOpacity>
+
+              {/* Forgot Password */}
+              <TouchableOpacity
+                onPress={handleForgotPassword}
+                style={styles.forgotPasswordButton}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot your password?</Text>
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity onPress={handleOpenBillingDocs} className="items-center mb-4">
-              <Text className="text-indigo-400/60 text-[10px] font-bold uppercase tracking-wider underline">
-                Billing Documentation
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => signOut()}
-              className="items-center"
-            >
-              <Text className="text-red-400/60 text-[10px] font-bold uppercase tracking-wider">
-                Sign Out / Switch Account
-              </Text>
-            </TouchableOpacity>
           </View>
-        ) : (
-          <View className="items-center">
-            <ActivityIndicator color="#6366f1" />
-            <Text className="text-zinc-500 text-xs mt-4">Verifying access...</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Footer */}
-      <View className="pb-6 items-center">
-        <Text className="text-[8px] text-zinc-800 font-bold uppercase tracking-[0.3em]">
-          © 2025 Miniature Logic Systems
-        </Text>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keyboardAvoid: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  
+  // Main Content - Frame 1998: column, center, gap=32px, padding=0 40px
+  mainContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 32,
+    paddingHorizontal: 40,
+    paddingTop: 58, // Account for status bar
+  },
+
+  // Header Section - Frame 1993: column, justifyContent=center, stretch, gap=6px
+  headerSection: {
+    width: '100%',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  headerTitle: {
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontSize: 32,
+    fontWeight: '700',
+    color: colors.text.primary,
+    letterSpacing: -0.41,
+    lineHeight: 32,
+    textAlign: 'left',
+  },
+  headerSubtitle: {
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontSize: 16,
+    fontWeight: '400',
+    color: colors.text.secondary,
+    letterSpacing: -0.41,
+    lineHeight: 16,
+    textAlign: 'left',
+  },
+
+  // Form Section - Frame 1992: column, alignItems=center, stretch, gap=24px
+  formSection: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 24,
+  },
+
+  // Form Group - Frame 2010: column, gap=16px, stretch
+  formGroup: {
+    width: '100%',
+    gap: 16,
+  },
+
+  // Input Group - Frame 2009: column, gap=8px, stretch
+  inputGroup: {
+    width: '100%',
+    gap: 8,
+  },
+  // Input - padding: 16px 12px, stretch, border 2px
+  input: {
+    width: '100%',
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.border.subtle,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.text.dark,
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+  },
+  errorText: {
+    color: colors.accent.red,
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    marginTop: -10,
+  },
+
+  // Primary Button (Sign In)
+  primaryButton: {
+    width: '100%',
+    height: 48,
+    backgroundColor: colors.button.primary,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.primary,
+    letterSpacing: -0.41,
+  },
+
+  // Alternatively Text - stretch, centered
+  alternativelyText: {
+    width: '100%',
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System',
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text.primary,
+    letterSpacing: -0.41,
+    textAlign: 'center',
+  },
+
+  // Social Buttons - Frame 2007: column, gap=8px, stretch
+  socialButtonsGroup: {
+    width: '100%',
+    gap: 8,
+  },
+  googleButton: {
+    width: '100%',
+    backgroundColor: colors.button.white,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 16,
+  },
+  googleButtonText: {
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.dark,
+    letterSpacing: -0.41,
+    textAlign: 'center',
+  },
+  appleButton: {
+    width: '100%',
+    backgroundColor: colors.background.secondary,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 16,
+  },
+  appleButtonText: {
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.primary,
+    letterSpacing: -0.41,
+  },
+
+  // Bottom Section - Frame 1996: column, center, gap=16px, padding=24px 40px 40px
+  bottomSection: {
+    paddingHorizontal: 40,
+    paddingTop: 24,
+    paddingBottom: 40,
+    alignItems: 'center',
+    gap: 16,
+  },
+
+  // Bottom Content - Frame 1997: column, center, stretch, gap=16px
+  bottomContent: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 16,
+  },
+
+  // Create Account Button - stretch, h=48
+  createAccountButton: {
+    width: '100%',
+    height: 48,
+    backgroundColor: colors.button.dark,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createAccountButtonText: {
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System',
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.accent.blue,
+    letterSpacing: -0.41,
+  },
+
+  // Forgot Password Button - hug content
+  forgotPasswordButton: {
+    backgroundColor: colors.button.secondary,
+    borderRadius: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  forgotPasswordText: {
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System',
+    fontSize: 13,
+    fontWeight: '300',
+    color: colors.text.primary,
+    letterSpacing: -0.41,
+    lineHeight: 14,
+  },
+
+  // API Key Screen
+  apiKeyLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  apiKeyLabel: {
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  linkText: {
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System',
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.accent.blue,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    textDecorationLine: 'underline',
+  },
+});

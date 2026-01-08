@@ -1,0 +1,220 @@
+{
+  "name": "MiniStudio Design System",
+  "version": "1.0.0",
+  "colors": {
+    "background": {
+      "primary": "#1E1E2B",
+      "secondary": "#12121F",
+      "tertiary": "rgba(255, 255, 255, 0.05)",
+      "bottom": "rgba(255, 255, 255, 0.05)"
+    },
+    "text": {
+      "primary": "#F4F4F4",
+      "secondary": "rgba(244, 244, 244, 0.4)",
+      "dark": "#1D1D1D"
+    },
+    "button": {
+      "primary": "#0058DB",
+      "danger": "#FA0439",
+      "secondary": "rgba(255, 255, 255, 0.05)",
+      "dark": "rgba(0, 0, 0, 0.3)",
+      "white": "#F4F4F4"
+    },
+    "accent": {
+      "blue": "#518CFF",
+      "red": "#FA0439"
+    },
+    "border": {
+      "subtle": "rgba(255, 255, 255, 0.05)"
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "primary": "SF Pro Display",
+      "secondary": "SF Pro",
+      "system": "System"
+    },
+    "fontSize": {
+      "xs": 13,
+      "sm": 14,
+      "base": 16,
+      "lg": 18,
+      "xl": 20,
+      "2xl": 24,
+      "3xl": 32
+    },
+    "fontWeight": {
+      "light": "276",
+      "normal": "400",
+      "medium": "590",
+      "semibold": "600",
+      "bold": "700"
+    },
+    "lineHeight": {
+      "tight": 1,
+      "normal": 1.08,
+      "relaxed": 1.31
+    },
+    "letterSpacing": {
+      "tight": "-3.14%",
+      "normal": "-2.91%",
+      "wide": "-2.55%",
+      "wider": "-2%",
+      "widest": "-1.27%"
+    },
+    "styles": {
+      "heading": {
+        "fontFamily": "SF Pro Display",
+        "fontWeight": "700",
+        "fontSize": 32,
+        "letterSpacing": "-1.27%"
+      },
+      "subheading": {
+        "fontFamily": "SF Pro Display",
+        "fontWeight": "400",
+        "fontSize": 16,
+        "letterSpacing": "-2.55%"
+      },
+      "button": {
+        "fontFamily": "SF Pro Display",
+        "fontWeight": "700",
+        "fontSize": 16,
+        "letterSpacing": "-2.55%"
+      },
+      "buttonSecondary": {
+        "fontFamily": "SF Pro Display",
+        "fontWeight": "600",
+        "fontSize": 14,
+        "letterSpacing": "-2.91%"
+      },
+      "buttonTertiary": {
+        "fontFamily": "SF Pro",
+        "fontWeight": "590",
+        "fontSize": 14,
+        "letterSpacing": "-2.91%"
+      },
+      "input": {
+        "fontFamily": "SF Pro Display",
+        "fontWeight": "400",
+        "fontSize": 14,
+        "letterSpacing": "-2.91%"
+      },
+      "link": {
+        "fontFamily": "SF Pro",
+        "fontWeight": "276",
+        "fontSize": 13,
+        "letterSpacing": "-3.14%"
+      },
+      "callout": {
+        "fontFamily": "SF Pro Text",
+        "fontWeight": "600",
+        "fontSize": 16,
+        "letterSpacing": "-2%"
+      }
+    }
+  },
+  "spacing": {
+    "xs": 4,
+    "sm": 8,
+    "md": 10,
+    "lg": 12,
+    "xl": 16,
+    "2xl": 20,
+    "3xl": 24,
+    "4xl": 32,
+    "5xl": 48
+  },
+  "borderRadius": {
+    "sm": 4,
+    "md": 6,
+    "lg": 8,
+    "xl": 24,
+    "full": 32
+  },
+  "shadows": {
+    "blur": {
+      "backdrop": "20px"
+    }
+  },
+  "components": {
+    "button": {
+      "primary": {
+        "backgroundColor": "#0058DB",
+        "textColor": "#F4F4F4",
+        "borderRadius": 6,
+        "paddingVertical": 8,
+        "paddingHorizontal": 16,
+        "height": 48
+      },
+      "secondary": {
+        "backgroundColor": "rgba(255, 255, 255, 0.05)",
+        "textColor": "#F4F4F4",
+        "borderRadius": 32,
+        "paddingVertical": 8,
+        "paddingHorizontal": 12,
+        "height": 40
+      },
+      "danger": {
+        "backgroundColor": "#FA0439",
+        "textColor": "#F4F4F4",
+        "borderRadius": 32,
+        "paddingVertical": 8,
+        "paddingHorizontal": 12,
+        "height": 40
+      },
+      "outline": {
+        "backgroundColor": "rgba(0, 0, 0, 0.3)",
+        "textColor": "#518CFF",
+        "borderRadius": 6,
+        "paddingVertical": 8,
+        "paddingHorizontal": 16,
+        "height": 48
+      },
+      "google": {
+        "backgroundColor": "#F4F4F4",
+        "textColor": "#1D1D1D",
+        "borderRadius": 6,
+        "height": 48
+      },
+      "apple": {
+        "backgroundColor": "rgba(0, 0, 0, 0.3)",
+        "textColor": "#F4F4F4",
+        "borderRadius": 6,
+        "height": 48
+      }
+    },
+    "input": {
+      "backgroundColor": "#F4F4F4",
+      "textColor": "rgba(244, 244, 244, 0.4)",
+      "borderColor": "rgba(255, 255, 255, 0.05)",
+      "borderWidth": 2,
+      "borderRadius": 6,
+      "paddingVertical": 17,
+      "paddingHorizontal": 16,
+      "height": 48
+    },
+    "card": {
+      "backgroundColor": "#12121F",
+      "borderRadius": 8
+    },
+    "statusBar": {
+      "height": 47,
+      "blurRadius": 20
+    }
+  },
+  "layout": {
+    "screen": {
+      "width": 393,
+      "height": 852
+    },
+    "contentPadding": {
+      "horizontal": 48,
+      "vertical": 30
+    },
+    "formBackground": {
+      "marginTop": 242,
+      "width": 336,
+      "height": 204
+    }
+  }
+}
