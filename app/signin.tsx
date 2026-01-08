@@ -9,16 +9,14 @@ import {
   StatusBar,
   Platform,
   Linking,
-  Dimensions,
-  Image
+  SafeAreaView,
+  KeyboardAvoidingView,
+  ScrollView
 } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../src/context/AuthContext';
 import { hasApiKey } from '../src/services/storageService';
-
-// Get screen dimensions
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Design System Colors from Figma
 const colors = {
@@ -48,43 +46,17 @@ const colors = {
   },
 };
 
-/**
- * IMAGE PLACEHOLDERS
- * 
- * Download these images and place them in assets/icons/:
- * 
- * 1. Google Icon (15x16px):
- *    https://www.figma.com/file/wovATQaYDmNY2GZ84UKi4e/minipainter?node-id=26:6247
- *    Save as: assets/icons/google-icon.png
- * 
- * 2. Apple Icon (13x16px):
- *    https://www.figma.com/file/wovATQaYDmNY2GZ84UKi4e/minipainter?node-id=26:6301
- *    Save as: assets/icons/apple-icon.png
- */
-
-// Google Icon Component (SVG fallback)
+// Google Icon Component
 const GoogleIcon = ({ size = 15 }: { size?: number }) => (
   <Svg width={size} height={size + 1} viewBox="0 0 24 24">
-    <Path
-      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-      fill="#4285F4"
-    />
-    <Path
-      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-      fill="#34A853"
-    />
-    <Path
-      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-      fill="#FBBC05"
-    />
-    <Path
-      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-      fill="#EA4335"
-    />
+    <Path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+    <Path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+    <Path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+    <Path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
   </Svg>
 );
 
-// Apple Icon Component (SVG fallback)
+// Apple Icon Component
 const AppleIcon = ({ size = 16, color = '#F4F4F4' }: { size?: number; color?: string }) => (
   <Svg width={(size * 13.02) / 16} height={size} viewBox="0 0 14 17">
     <Path
@@ -102,7 +74,7 @@ export default function SignInScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Monitor Session and Key Status
+  // Monitor Session and navigate appropriately
   useEffect(() => {
     if (!loading && session) {
       checkApiKeyAndNavigate();
@@ -115,10 +87,11 @@ export default function SignInScreen() {
       if (hasKey) {
         router.replace('/(studio)');
       } else {
-        router.replace('/');
+        router.replace('/api-key');
       }
     } catch (err) {
       console.error('Error checking API key:', err);
+      router.replace('/api-key');
     }
   };
 
@@ -172,7 +145,7 @@ export default function SignInScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centered]}>
+      <View style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
         <ActivityIndicator size="large" color={colors.button.primary} />
       </View>
@@ -180,301 +153,261 @@ export default function SignInScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      
-      {/* Header Title - Position: y=182 */}
-      <Text style={styles.headerTitle}>Sign in</Text>
-      
-      {/* Subtitle - Position: y=212 */}
-      <Text style={styles.headerSubtitle}>
-        Enter your credentials or create an account
-      </Text>
-
-      {/* Form Background Card - Position: x=30, y=242, size: 336x204 */}
-      <View style={styles.formCard}>
-        {/* Email Input - Relative position within card */}
-        <View style={styles.inputWrapper}>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Email"
-            placeholderTextColor={colors.text.secondary}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            style={styles.input}
-          />
-        </View>
-
-        {/* Password Input */}
-        <View style={styles.inputWrapper}>
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Password"
-            placeholderTextColor={colors.text.secondary}
-            secureTextEntry
-            style={styles.input}
-          />
-        </View>
-
-        {/* Error Message */}
-        {error && (
-          <Text style={styles.errorText}>{error}</Text>
-        )}
-
-        {/* Sign In Button - Position: y=382 (relative to screen) */}
-        <TouchableOpacity
-          onPress={handleSignIn}
-          disabled={isSubmitting}
-          style={styles.signInButton}
-          activeOpacity={0.8}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color={colors.text.primary} />
-          ) : (
-            <Text style={styles.signInButtonText}>SIGN IN</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Gallery and Create Buttons - Position: y=398 */}
-      <View style={styles.actionButtonsRow}>
-        <TouchableOpacity 
-          style={styles.galleryButton}
-          activeOpacity={0.7}
-          onPress={() => router.push('/(studio)')}
-        >
-          <Text style={styles.galleryButtonText}>Open Gallery</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.createButton}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.createButtonText}>Create</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Alternatively Text - Position: y=462 */}
-      <Text style={styles.alternativelyText}>Alternatively</Text>
-
-      {/* Google Sign In Button - Position: y=508 */}
-      <TouchableOpacity
-        onPress={handleGoogleSignIn}
-        style={styles.googleButton}
-        activeOpacity={0.9}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoid}
       >
-        <View style={styles.socialButtonContent}>
-          <GoogleIcon size={15} />
-          <Text style={styles.googleButtonText}>Continue with Google</Text>
-        </View>
-      </TouchableOpacity>
-
-      {/* Apple Sign In Button - Position: y=564 */}
-      <TouchableOpacity
-        onPress={handleAppleSignIn}
-        style={styles.appleButton}
-        activeOpacity={0.9}
-      >
-        <View style={styles.socialButtonContent}>
-          <AppleIcon size={16} color={colors.text.primary} />
-          <Text style={styles.appleButtonText}>Continue with Apple</Text>
-        </View>
-      </TouchableOpacity>
-
-      {/* Bottom Background - Position: y=692, height=160 */}
-      <View style={styles.bottomSection}>
-        {/* Create Account Button - Position: y=716 (24px from bottom section top) */}
-        <TouchableOpacity
-          onPress={handleCreateAccount}
-          disabled={isSubmitting}
-          style={styles.createAccountButton}
-          activeOpacity={0.8}
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.createAccountButtonText}>CREATE AN ACCOUNT</Text>
-        </TouchableOpacity>
+          {/* Main Content Area - Frame 1998 */}
+          <View style={styles.mainContent}>
+            {/* Header Section - Frame 1993 */}
+            <View style={styles.headerSection}>
+              <Text style={styles.headerTitle}>Sign in</Text>
+              <Text style={styles.headerSubtitle}>Enter your credentials or create an account</Text>
+            </View>
 
-        {/* Forgot Password Button - Position: y=780 */}
-        <TouchableOpacity
-          onPress={handleForgotPassword}
-          style={styles.forgotPasswordButton}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.forgotPasswordText}>Forgot your password?</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+            {/* Form Section - Frame 1992 */}
+            <View style={styles.formSection}>
+              {/* Inputs and Sign In - Frame 1999 */}
+              <View style={styles.formGroup}>
+                {/* Input Fields - Frame 1994 */}
+                <View style={styles.inputGroup}>
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="Email"
+                    placeholderTextColor={colors.text.secondary}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    style={styles.input}
+                  />
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Password"
+                    placeholderTextColor={colors.text.secondary}
+                    secureTextEntry
+                    style={styles.input}
+                  />
+                </View>
+
+                {error && <Text style={styles.errorText}>{error}</Text>}
+
+                {/* Sign In Button */}
+                <TouchableOpacity
+                  onPress={handleSignIn}
+                  disabled={isSubmitting}
+                  style={styles.primaryButton}
+                  activeOpacity={0.8}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator color={colors.text.primary} />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Sign In</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Alternatively Text */}
+              <Text style={styles.alternativelyText}>Alternatively</Text>
+
+              {/* Social Buttons - Frame 1995 */}
+              <View style={styles.socialButtonsGroup}>
+                {/* Google Sign In */}
+                <TouchableOpacity
+                  onPress={handleGoogleSignIn}
+                  style={styles.googleButton}
+                  activeOpacity={0.9}
+                >
+                  <GoogleIcon size={15} />
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </TouchableOpacity>
+
+                {/* Apple Sign In */}
+                <TouchableOpacity
+                  onPress={handleAppleSignIn}
+                  style={styles.appleButton}
+                  activeOpacity={0.9}
+                >
+                  <AppleIcon size={16} color={colors.text.primary} />
+                  <Text style={styles.appleButtonText}>Continue with Apple</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Bottom Section - Frame 1996 */}
+          <View style={styles.bottomSection}>
+            {/* Frame 1997 */}
+            <View style={styles.bottomContent}>
+              {/* Create Account Button */}
+              <TouchableOpacity
+                onPress={handleCreateAccount}
+                disabled={isSubmitting}
+                style={styles.createAccountButton}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.createAccountButtonText}>Create an Account</Text>
+              </TouchableOpacity>
+
+              {/* Forgot Password */}
+              <TouchableOpacity
+                onPress={handleForgotPassword}
+                style={styles.forgotPasswordButton}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot your password?</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
     backgroundColor: colors.background.primary,
   },
-  centered: {
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Header Title - Figma: y=182, x=49
+  keyboardAvoid: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  
+  // Main Content - Frame 1998: column, center, gap=32px, padding=0 40px
+  mainContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 32,
+    paddingHorizontal: 40,
+    paddingTop: 58, // Account for status bar
+  },
+
+  // Header Section - Frame 1993: column, justifyContent=center, stretch, gap=6px
+  headerSection: {
+    width: '100%',
+    justifyContent: 'center',
+    gap: 6,
+  },
   headerTitle: {
-    position: 'absolute',
-    top: 182,
-    left: 49,
     fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
     fontSize: 32,
     fontWeight: '700',
     color: colors.text.primary,
     letterSpacing: -0.41,
+    lineHeight: 32,
+    textAlign: 'left',
   },
-  // Subtitle - Figma: y=212, x=49
   headerSubtitle: {
-    position: 'absolute',
-    top: 212,
-    left: 49,
-    width: 266,
     fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
     fontSize: 16,
     fontWeight: '400',
     color: colors.text.secondary,
     letterSpacing: -0.41,
-    lineHeight: 14,
+    lineHeight: 16,
+    textAlign: 'left',
   },
-  // Form Card - Figma: x=30, y=242, w=336, h=204
-  formCard: {
-    position: 'absolute',
-    top: 242,
-    left: 30,
-    width: 336,
-    height: 204,
-    backgroundColor: colors.background.secondary,
-    borderRadius: 8,
-    paddingTop: 20,
-    paddingHorizontal: 18,
+
+  // Form Section - Frame 1992: column, alignItems=center, stretch, gap=24px
+  formSection: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 24,
   },
-  inputWrapper: {
-    marginBottom: 8,
+
+  // Form Group - Frame 2010: column, gap=16px, stretch
+  formGroup: {
+    width: '100%',
+    gap: 16,
   },
-  // Input - Figma: w=297, h=48
+
+  // Input Group - Frame 2009: column, gap=8px, stretch
+  inputGroup: {
+    width: '100%',
+    gap: 8,
+  },
+  // Input - padding: 16px 12px, stretch, border 2px
   input: {
-    width: 297,
-    height: 48,
-    backgroundColor: 'transparent',
+    width: '100%',
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: colors.border.subtle,
+    backgroundColor: 'transparent',
     paddingVertical: 16,
     paddingHorizontal: 12,
     fontSize: 14,
     fontWeight: '400',
     color: 'rgba(244, 244, 244, 0.4)',
     fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
-    letterSpacing: -0.41,
     lineHeight: 14,
   },
   errorText: {
     color: colors.accent.red,
     fontSize: 12,
-    marginBottom: 4,
     fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    marginTop: -10,
   },
-  // Sign In Button - Figma: w=297, h=48 (inside form card)
-  signInButton: {
-    width: 297,
+
+  // Primary Button (Sign In)
+  primaryButton: {
+    width: '100%',
     height: 48,
     backgroundColor: colors.button.primary,
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
   },
-  signInButtonText: {
+  primaryButtonText: {
     fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
     fontSize: 14,
     fontWeight: '600',
     color: colors.text.primary,
     letterSpacing: -0.41,
   },
-  // Action Buttons Row - Figma: y=398, center aligned
-  actionButtonsRow: {
-    position: 'absolute',
-    top: 398,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 8,
-  },
-  // Gallery Button - Figma: flex fill, h=40
-  galleryButton: {
-    flex: 1,
-    maxWidth: 114,
-    height: 40,
-    backgroundColor: colors.button.secondary,
-    borderRadius: 32,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  galleryButtonText: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text.primary,
-    letterSpacing: -0.41,
-  },
-  // Create Button - Figma: w=153, h=40
-  createButton: {
-    width: 153,
-    height: 40,
-    backgroundColor: colors.button.danger,
-    borderRadius: 32,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  createButtonText: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text.primary,
-    letterSpacing: -0.41,
-  },
-  // Alternatively Text - Figma: y=462, center x=155
+
+  // Alternatively Text - stretch, centered
   alternativelyText: {
-    position: 'absolute',
-    top: 462,
-    left: 155,
-    width: 83,
+    width: '100%',
     fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System',
     fontSize: 14,
     fontWeight: '500',
     color: colors.text.primary,
     letterSpacing: -0.41,
+    textAlign: 'center',
   },
-  // Google Button - Figma: x=48, y=508, w=297, h=48
+
+  // Social Buttons - Frame 2007: column, gap=8px, stretch
+  socialButtonsGroup: {
+    width: '100%',
+    gap: 8,
+  },
   googleButton: {
-    position: 'absolute',
-    top: 508,
-    left: 48,
-    width: 297,
-    height: 48,
+    width: '100%',
     backgroundColor: colors.button.white,
     borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  socialButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
+    padding: 16,
   },
   googleButtonText: {
     fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
@@ -482,18 +415,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text.dark,
     letterSpacing: -0.41,
+    textAlign: 'center',
   },
-  // Apple Button - Figma: x=48, y=564, w=297, h=48
   appleButton: {
-    position: 'absolute',
-    top: 564,
-    left: 48,
-    width: 297,
-    height: 48,
+    width: '100%',
     backgroundColor: colors.button.dark,
     borderRadius: 6,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    padding: 16,
   },
   appleButtonText: {
     fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
@@ -502,35 +434,41 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     letterSpacing: -0.41,
   },
-  // Bottom Section - Figma: y=692, w=393, h=160
+
+  // Bottom Section - Frame 1996: column, center, gap=16px, padding=24px 40px 40px
   bottomSection: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 160,
-    backgroundColor: colors.background.tertiary,
+    paddingHorizontal: 40,
     paddingTop: 24,
+    paddingBottom: 40,
     alignItems: 'center',
+    gap: 16,
   },
-  // Create Account Button - Figma: x=48, y=716 (24px from bottom top), w=297, h=48
+
+  // Bottom Content - Frame 1997: column, center, stretch, gap=16px
+  bottomContent: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 16,
+  },
+
+  // Create Account Button - stretch, h=48
   createAccountButton: {
-    width: 297,
+    width: '100%',
     height: 48,
     backgroundColor: colors.button.dark,
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
   },
   createAccountButtonText: {
     fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System',
     fontSize: 14,
     fontWeight: '500',
-    color: colors.accent.blue,
+    color: colors.text.primary,
     letterSpacing: -0.41,
   },
-  // Forgot Password Button - Figma: y=780, centered
+
+  // Forgot Password Button - hug content
   forgotPasswordButton: {
     backgroundColor: colors.button.secondary,
     borderRadius: 4,
@@ -545,5 +483,6 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     color: colors.text.primary,
     letterSpacing: -0.41,
+    lineHeight: 14,
   },
 });
