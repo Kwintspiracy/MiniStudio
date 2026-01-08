@@ -2,6 +2,15 @@ import { GoogleGenAI } from "@google/genai";
 import type { ImageFile } from '../types';
 import { getApiKey } from './storageService';
 
+let abortController: AbortController | null = null;
+
+export const cancelGeneration = () => {
+  if (abortController) {
+    abortController.abort();
+    abortController = null;
+  }
+};
+
 /**
  * Creates a fresh AI client using the stored API key.
  */
@@ -34,6 +43,7 @@ export async function generatePaintedMiniature(
   model: 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001' | 'gemini-3-pro-image-preview'
 ): Promise<string[]> {
   const ai = await createAiClient();
+  abortController = new AbortController();
   const imagesToProcess = Array.isArray(baseImages) ? baseImages : (baseImages ? [baseImages] : []);
   const isPro = model === 'gemini-3-pro-image-preview';
 
@@ -86,6 +96,7 @@ export async function generateImageFromImage(
   model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview'
 ): Promise<string[]> {
   const ai = await createAiClient();
+  abortController = new AbortController();
   const imagesToProcess = Array.isArray(baseImages) ? baseImages : [baseImages];
   const imageParts = imagesToProcess.map(img => dataUrlToGeminiPart(img));
   const isPro = model === 'gemini-3-pro-image-preview';
