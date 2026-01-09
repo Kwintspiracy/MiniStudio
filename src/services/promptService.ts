@@ -183,12 +183,16 @@ export async function adminUpdateAssetsList(
             template_pro: jsonString // Keep sync
         });
     } else {
-        return await adminCreatePromptVersion(
-            key,
-            'Example Assets',
-            'v1.0',
-            jsonString,
-            jsonString
-        );
+        // Create new and activate it
+        const { data: newConfig, error: createError } = await supabase
+            .from('prompt_configs')
+            .insert([
+                { key, name: 'Example Assets', version_label: 'v1.0', template: jsonString, template_pro: jsonString, is_active: true }
+            ])
+            .select()
+            .single();
+
+        if (createError) return { error: createError };
+        return { error: null };
     }
 }

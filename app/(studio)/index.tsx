@@ -297,24 +297,27 @@ export default function StudioScreen() {
   const { pickMultipleImages } = useImagePicker();
   const { saveImage } = useMediaSave();
 
-  // Load example assets when available
+  // Load example assets into Gallery history when available
   useEffect(() => {
     if (exampleAssets && exampleAssets.length > 0) {
-      // Avoid duplicates if already loaded
-      setSourceImages(prev => {
-        // Convert exampleAssets (strings) to ImageFile objects
-        const exampleImageFiles: ImageFile[] = exampleAssets.map(url => ({
-          base64: url,
-          mimeType: 'image/png', // Assuming example assets are PNGs, adjust if needed
+      setGenerationHistory(prev => {
+        // Convert exampleAssets (URLs) to HistoryItem objects
+        const exampleHistoryItems: HistoryItem[] = exampleAssets.map(url => ({
+          url,
+          isPro: false,
+          isMaster: false,
+          modelName: 'demo',
+          timestamp: 0, // Mark as demo with timestamp 0
         }));
 
-        // Filter out duplicates based on base64 content
-        const newImages = exampleImageFiles.filter(
-          newImg => !prev.some(existingImg => existingImg.base64 === newImg.base64)
+        // Filter out duplicates based on URL
+        const newItems = exampleHistoryItems.filter(
+          newItem => !prev.some(existingItem => existingItem.url === newItem.url)
         );
 
-        if (newImages.length === 0) return prev;
-        return [...prev, ...newImages];
+        if (newItems.length === 0) return prev;
+        // Add demo items at the end of history
+        return [...prev, ...newItems];
       });
     }
   }, [exampleAssets]);
@@ -442,9 +445,29 @@ export default function StudioScreen() {
     }
   }, [activePreviewImage]);
 
-  const handleUseAsSource = useCallback(() => {
+  const handleUseAsSource = useCallback(async () => {
     if (!activePreviewImage) return;
-    const newImage: ImageFile = { base64: activePreviewImage, mimeType: 'image/png' };
+
+    let imageData = activePreviewImage;
+
+    // If it's a remote URL (not a data URL), fetch and convert to base64
+    if (activePreviewImage.startsWith('http')) {
+      try {
+        const response = await fetch(activePreviewImage);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        imageData = await new Promise<string>((resolve, reject) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        Alert.alert('Error', 'Failed to load image');
+        return;
+      }
+    }
+
+    const newImage: ImageFile = { base64: imageData, mimeType: 'image/png' };
     setSourceImages([newImage]);
     setIsResultsDrawerOpen(false);
   }, [activePreviewImage]);
@@ -473,7 +496,7 @@ export default function StudioScreen() {
   if (authLoading) return <View style={styles.centered}><ActivityIndicator size="large" color="#0058DB" /></View>;
 
   const hasImageLoaded = sourceImages.length > 0;
-  const hasContentToView = hasImageLoaded || generationHistory.length > 0;
+  const hasContentToView = hasImageLoaded || generationHistory.length > 0 || exampleAssets.length > 0;
 
   // paintStylesList is now coming from the hook
 

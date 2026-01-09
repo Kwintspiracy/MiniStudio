@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, StyleSheet, Image } from 'react-native';
 import { adminFetchAllPrompts, adminCreatePromptVersion, adminActivatePromptVersion, adminUpdatePrompt, PromptConfig, uploadAsset, adminUpdateAssetsList } from '../../src/services/promptService';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -21,6 +21,8 @@ export default function AdminDashboard() {
 
     // Asset Manager State
     const [uploading, setUploading] = useState(false);
+    const [assetUrls, setAssetUrls] = useState<string[]>([]);
+    const [assetsDirty, setAssetsDirty] = useState(false);
 
     const fetchData = async () => {
         setLoading(true);
@@ -173,6 +175,98 @@ export default function AdminDashboard() {
         }
     };
 
+    // Asset Manager Functions
+    const isAssetKey = selectedKey === 'assets.examples';
+
+    // Load asset URLs when assets.examples is selected
+    useEffect(() => {
+        if (isAssetKey) {
+            const config = groupedPrompts['assets.examples']?.find(p => p.is_active);
+            if (config) {
+                try {
+                    const parsed = JSON.parse(config.template);
+                    if (parsed.urls && Array.isArray(parsed.urls)) {
+                        setAssetUrls(parsed.urls);
+                        setAssetsDirty(false);
+                    }
+                } catch (e) {
+                    setAssetUrls([]);
+                }
+            } else {
+                setAssetUrls([]);
+            }
+        }
+    }, [isAssetKey, groupedPrompts]);
+
+    const moveAssetUp = (index: number) => {
+        if (index <= 0) return;
+        const newUrls = [...assetUrls];
+        [newUrls[index - 1], newUrls[index]] = [newUrls[index], newUrls[index - 1]];
+        setAssetUrls(newUrls);
+        setAssetsDirty(true);
+    };
+
+    const moveAssetDown = (index: number) => {
+        if (index >= assetUrls.length - 1) return;
+        const newUrls = [...assetUrls];
+        [newUrls[index], newUrls[index + 1]] = [newUrls[index + 1], newUrls[index]];
+        setAssetUrls(newUrls);
+        setAssetsDirty(true);
+    };
+
+    const deleteAsset = (index: number) => {
+        const newUrls = assetUrls.filter((_, i) => i !== index);
+        setAssetUrls(newUrls);
+        setAssetsDirty(true);
+    };
+
+    const saveAssetOrder = async () => {
+        const { error } = await adminUpdateAssetsList(assetUrls);
+        if (error) {
+            Alert.alert('Error', error.message);
+        } else {
+            Alert.alert('Success', 'Asset order saved!');
+            setAssetsDirty(false);
+            await fetchData();
+        }
+    };
+
+    const addNewAsset = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                quality: 0.8,
+            });
+
+            if (!result.canceled) {
+                setUploading(true);
+                const asset = result.assets[0];
+                const fileName = `asset_${Date.now()}.png`;
+
+                const { publicUrl, error: uploadError } = await uploadAsset(asset.uri, fileName);
+                if (uploadError || !publicUrl) {
+                    Alert.alert('Upload Failed', uploadError?.message || 'Unknown error');
+                    setUploading(false);
+                    return;
+                }
+
+                const newUrls = [...assetUrls, publicUrl];
+                const { error: dbError } = await adminUpdateAssetsList(newUrls);
+                if (dbError) {
+                    Alert.alert('Database Update Failed', dbError.message);
+                } else {
+                    setAssetUrls(newUrls);
+                    Alert.alert('Success', 'Asset uploaded!');
+                    await fetchData();
+                }
+                setUploading(false);
+            }
+        } catch (e: any) {
+            Alert.alert('Error', e.message);
+            setUploading(false);
+        }
+    };
+
     if (loading && prompts.length === 0) {
         return (
             <View style={styles.center}>
@@ -308,6 +402,56 @@ export default function AdminDashboard() {
                                 </View>
                             </View>
 
+                        ) : isAssetKey ? (
+                            /* Asset Manager UI */
+                            <ScrollView style={styles.versionsList}>
+                                <Text style={styles.keyTitle}>Demo Assets</Text>
+                                <Text style={[styles.keySubtitle, { marginBottom: 20 }]}>Manage images shown in Gallery</Text>
+
+                                {assetUrls.map((url, index) => (
+                                    <View key={url} style={styles.assetRow}>
+                                        <Image source={{ uri: url }} style={styles.assetThumb} />
+                                        <Text style={styles.assetUrl} numberOfLines={1}>{url.split('/').pop()}</Text>
+                                        <View style={styles.assetActions}>
+                                            <TouchableOpacity
+                                                style={[styles.assetBtn, index === 0 && styles.assetBtnDisabled]}
+                                                onPress={() => moveAssetUp(index)}
+                                                disabled={index === 0}
+                                            >
+                                                <Text style={styles.assetBtnText}>↑</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[styles.assetBtn, index === assetUrls.length - 1 && styles.assetBtnDisabled]}
+                                                onPress={() => moveAssetDown(index)}
+                                                disabled={index === assetUrls.length - 1}
+                                            >
+                                                <Text style={styles.assetBtnText}>↓</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[styles.assetBtn, styles.assetBtnDelete]}
+                                                onPress={() => deleteAsset(index)}
+                                            >
+                                                <Text style={styles.assetBtnText}>✕</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                ))}
+
+                                <View style={styles.assetFooter}>
+                                    <TouchableOpacity style={styles.addAssetButton} onPress={addNewAsset} disabled={uploading}>
+                                        {uploading ? (
+                                            <ActivityIndicator size="small" color="#FFF" />
+                                        ) : (
+                                            <Text style={styles.addAssetButtonText}>+ Add Image</Text>
+                                        )}
+                                    </TouchableOpacity>
+                                    {assetsDirty && (
+                                        <TouchableOpacity style={styles.saveOrderButton} onPress={saveAssetOrder}>
+                                            <Text style={styles.saveOrderButtonText}>Save Order</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            </ScrollView>
                         ) : (
                             <ScrollView style={styles.versionsList}>
                                 {selectedVersions.map(version => (
@@ -419,4 +563,19 @@ const styles = StyleSheet.create({
     sidebarHeaderContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
     addKeyButton: { backgroundColor: '#30363D', width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
     addKeyButtonText: { color: '#C9D1D9', fontSize: 20, lineHeight: 22, fontWeight: 'bold' },
+
+    // Asset Manager Styles
+    assetRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#161B22', borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#30363D' },
+    assetThumb: { width: 60, height: 60, borderRadius: 6, marginRight: 12 },
+    assetUrl: { flex: 1, color: '#C9D1D9', fontSize: 13 },
+    assetActions: { flexDirection: 'row', gap: 6 },
+    assetBtn: { width: 32, height: 32, borderRadius: 6, backgroundColor: '#30363D', justifyContent: 'center', alignItems: 'center' },
+    assetBtnDisabled: { opacity: 0.3 },
+    assetBtnDelete: { backgroundColor: '#6e2b2b' },
+    assetBtnText: { color: '#F0F6FC', fontSize: 16, fontWeight: 'bold' },
+    assetFooter: { flexDirection: 'row', gap: 12, marginTop: 16 },
+    addAssetButton: { flex: 1, backgroundColor: '#238636', paddingVertical: 12, borderRadius: 6, alignItems: 'center' },
+    addAssetButtonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
+    saveOrderButton: { flex: 1, backgroundColor: '#1F6FEB', paddingVertical: 12, borderRadius: 6, alignItems: 'center' },
+    saveOrderButtonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
 });
