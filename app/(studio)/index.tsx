@@ -170,15 +170,21 @@ const CloseIcon = ({ color = "#FFFFFF" }: { color?: string }) => (
 
 // --- Figma Component Icons ---
 
-const ShareIcon = ({ color = "#FFFFFF" }: { color?: string }) => (
-  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-    <Path d="M18 8C19.6569 8 21 6.65685 21 5C21 3.34315 19.6569 2 18 2C16.3431 2 15 3.34315 15 5C15 5.12548 15.0077 5.24917 15.0227 5.37061L8.08261 8.84066C7.46211 8.31165 6.66773 8 5.8 8C4.14315 8 2.8 9.34315 2.8 11C2.8 12.6569 4.14315 14 5.8 14C6.66773 14 7.46211 13.6883 8.08261 13.1593L15.0227 16.6294C15.0077 16.7508 15 16.8745 15 17C15 18.6569 16.3431 20 18 20C19.6569 20 21 18.6569 21 17C21 15.3431 19.6569 14 18 14C17.1323 14 16.3379 14.3117 15.7174 14.8407L8.7773 11.3706C8.79227 11.2492 8.8 11.1255 8.8 11C8.8 10.8745 8.79227 10.7508 8.7773 10.6294L15.7174 7.15934C16.3379 7.68835 17.1323 8 18 8Z" fill={color} />
+const ShareIcon = ({ color = "#F4F4F4" }: { color?: string }) => (
+  <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+    <Path d="M8.74696 11.3482L5.94769 9.82127C5.46106 10.3413 4.76857 10.6663 4.00016 10.6663C2.5274 10.6663 1.3335 9.47241 1.3335 7.99967C1.3335 6.52691 2.5274 5.33301 4.00016 5.33301C4.76853 5.33301 5.461 5.65798 5.94762 6.17798L8.74696 4.65109C8.69463 4.44261 8.66683 4.22439 8.66683 3.99967C8.66683 2.52691 9.86076 1.33301 11.3335 1.33301C12.8062 1.33301 14.0002 2.52691 14.0002 3.99967C14.0002 5.47243 12.8062 6.66634 11.3335 6.66634C10.5651 6.66634 9.87263 6.34135 9.38596 5.82131L6.58668 7.34821C6.63903 7.55667 6.66683 7.77494 6.66683 7.99967C6.66683 8.22441 6.63904 8.44261 6.5867 8.65107L9.38603 10.178C9.87263 9.65801 10.5651 9.33301 11.3335 9.33301C12.8062 9.33301 14.0002 10.5269 14.0002 11.9997C14.0002 13.4724 12.8062 14.6663 11.3335 14.6663C9.86076 14.6663 8.66683 13.4724 8.66683 11.9997C8.66683 11.7749 8.69463 11.5567 8.74696 11.3482ZM4.00016 9.33301C4.73654 9.33301 5.3335 8.73607 5.3335 7.99967C5.3335 7.26327 4.73654 6.66634 4.00016 6.66634C3.26378 6.66634 2.66683 7.26327 2.66683 7.99967C2.66683 8.73607 3.26378 9.33301 4.00016 9.33301ZM11.3335 5.33301C12.0699 5.33301 12.6668 4.73605 12.6668 3.99967C12.6668 3.26329 12.0699 2.66634 11.3335 2.66634C10.5971 2.66634 10.0002 3.26329 10.0002 3.99967C10.0002 4.73605 10.5971 5.33301 11.3335 5.33301ZM11.3335 13.333C12.0699 13.333 12.6668 12.7361 12.6668 11.9997C12.6668 11.2633 12.0699 10.6663 11.3335 10.6663C10.5971 10.6663 10.0002 11.2633 10.0002 11.9997C10.0002 12.7361 10.5971 13.333 11.3335 13.333Z" fill={color} />
   </Svg>
 );
 
-const ToSourceIcon = ({ color = "#FFFFFF" }: { color?: string }) => (
-  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-    <Path d="M12 4V1L8 5L12 9V6C15.31 6 18 8.69 18 12C18 15.31 15.31 18 12 18C8.69 18 6 15.31 6 12H4C4 16.42 7.58 20 12 20C16.42 20 20 16.42 20 12C20 7.58 16.42 4 12 4Z" fill={color} />
+const ToSourceIcon = ({ color = "#1D1D1D" }: { color?: string }) => (
+  <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+    <Path d="M7.0286 1.19526C7.28893 0.934913 7.71107 0.934913 7.9714 1.19526L9.638 2.86185C9.763 2.98687 9.83327 3.15644 9.83327 3.33325C9.83327 3.51006 9.763 3.67963 9.638 3.80465L7.9714 5.47124C7.71107 5.73159 7.28893 5.73159 7.0286 5.47124C6.76827 5.21089 6.76827 4.78878 7.0286 4.52843L7.53407 4.02297C5.17549 4.25677 3.33333 6.24659 3.33333 8.66667C3.33333 11.244 5.42267 13.3333 8 13.3333C10.3793 13.3333 12.3435 11.5522 12.6305 9.25087C12.6761 8.88547 13.0092 8.6262 13.3745 8.6718C13.7399 8.71733 13.9992 9.05047 13.9536 9.4158C13.5845 12.3763 11.0602 14.6667 8 14.6667C4.68629 14.6667 2 11.9804 2 8.66667C2 5.49679 4.45815 2.90105 7.5722 2.68168L7.0286 2.13807C6.76827 1.87772 6.76827 1.45561 7.0286 1.19526ZM10.8047 6.52859C11.0651 6.78893 11.0651 7.21107 10.8047 7.4714L7.80473 10.4714C7.5444 10.7317 7.12227 10.7317 6.86193 10.4714L5.52859 9.13807C5.26825 8.87773 5.26825 8.4556 5.52859 8.19527C5.78895 7.93493 6.21105 7.93493 6.47141 8.19527L7.33333 9.0572L9.86193 6.52859C10.1223 6.26825 10.5444 6.26825 10.8047 6.52859Z" fill={color} />
+  </Svg>
+);
+
+const MdFileDownloadIcon = ({ color = "#F4F4F4" }: { color?: string }) => (
+  <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+    <Path d="M12.6668 6H10.0002V2H6.00016V6H3.3335L8.00016 10.6667L12.6668 6ZM3.3335 12V13.3333H12.6668V12H3.3335Z" fill={color} />
   </Svg>
 );
 
@@ -700,9 +706,9 @@ export default function StudioScreen() {
                 <View style={styles.resultContainer}>
                   <Image source={{ uri: activePreviewImage }} style={styles.activeResultImage} resizeMode="contain" />
                   <View style={styles.resultActions}>
-                    <TouchableOpacity onPress={handleUseAsSource} style={styles.resultActionButton}><ToSourceIcon color="#F4F4F4" /><Text style={styles.resultActionText}>To Source</Text></TouchableOpacity>
-                    <TouchableOpacity onPress={handleDownload} style={styles.resultActionButton}><DownloadIcon size={12} color="#F4F4F4" /><Text style={styles.resultActionText}>Download</Text></TouchableOpacity>
-                    <TouchableOpacity onPress={handleShare} style={styles.resultActionButton}><ShareIcon color="#F4F4F4" /><Text style={styles.resultActionText}>Share</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={handleUseAsSource} style={[styles.resultActionButton, styles.resultActionButtonPrimary]}><ToSourceIcon color="#1D1D1D" /><Text style={[styles.resultActionText, styles.resultActionTextDark]}>Use as source</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={handleDownload} style={styles.resultActionButtonIcon}><MdFileDownloadIcon color="#F4F4F4" /></TouchableOpacity>
+                    <TouchableOpacity onPress={handleShare} style={styles.resultActionButtonIcon}><ShareIcon color="#F4F4F4" /></TouchableOpacity>
                   </View>
                 </View>
               )}
@@ -842,7 +848,10 @@ const styles = StyleSheet.create({
   activeResultImage: { width: '100%', height: 345, borderRadius: 8, backgroundColor: '#000' },
   resultActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, alignSelf: 'stretch' },
   resultActionButton: { flex: 1, minWidth: 100, height: 40, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 12 },
-  resultActionText: { color: '#F4F4F4', fontSize: 13, fontFamily: 'SF Pro Display', fontWeight: '400', letterSpacing: -0.41 },
+  resultActionButtonPrimary: { backgroundColor: '#F4F4F4' },
+  resultActionText: { color: '#F4F4F4', fontSize: 14, fontFamily: 'SF Pro Display', fontWeight: '500', letterSpacing: -0.41 },
+  resultActionTextDark: { color: '#1D1D1D' },
+  resultActionButtonIcon: { height: 40, paddingHorizontal: 24, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   historyContainer: { alignSelf: 'stretch', gap: 9 },
   historyTitle: { color: '#F4F4F4', fontSize: 16, fontFamily: 'SF Pro Display', fontWeight: '700', letterSpacing: -0.41 },
   historyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: '2%', alignSelf: 'stretch' },
