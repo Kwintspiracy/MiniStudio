@@ -8,7 +8,6 @@ export const PAINTING_STYLES: StyleOption[] = [
   { id: 'grimdark', name: 'Grimdark', prompt: "Paint this miniature with a desaturated, earthy color palette dominated by muted tones, incorporating occasional stark contrasts. Apply heavy weathering techniques throughout, including detailed rust, grime, and dirt, to create a distinct battle-worn and dystopian appearance. Utilize oil washes and glazes to achieve subtle shading and highlighting, enhancing the overall realism. Add intricate textures like scratches, dents, and corrosion to visibly convey wear and tear. The final image must evoke a gritty, dark, and oppressive atmosphere, as if the miniature exists in a war-torn, post-apocalyptic universe." },
   { id: 'blanchitsu', name: 'Blanchitsu', prompt: "in a painterly, chaotic, and atmospheric miniature painting style that blends dark fantasy, surrealism, and religious iconography into a distinctive, moody aesthetic. It favors muted, earthy tones, stained and aged surfaces, and a sketch-like, expressive application of paint that prioritizes emotion and storytelling over technical precision." },
   { id: 'cel-shaded', name: 'CelShaded', prompt: "in a cel-shaded, comic book style with bold black outlines and flat colors" },
-  { id: 'nmm', name: 'NNM', prompt: "using the Non-Metallic Metal (NMM) technique for all metallic parts, with smooth blends from light to dark" },
   { id: 'oil-painting', name: 'Oil Painting', prompt: "to look like a classical oil painting, with visible brushstrokes and rich, deep colors" },
 ];
 

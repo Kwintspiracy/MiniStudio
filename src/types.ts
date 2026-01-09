@@ -2,6 +2,7 @@ export interface StyleOption {
   id: string;
   name: string;
   prompt: string;
+  promptPro?: string;
 }
 
 export interface ImageFile {

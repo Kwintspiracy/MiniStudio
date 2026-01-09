@@ -9,14 +9,16 @@ import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import {
   XMarkIcon, RefreshIcon, ArrowsPointingOutIcon, DownloadIcon, CheckIcon
 } from '../../src/components/Icons';
-import { PAINTING_STYLES, DEFAULT_DESIGNER_TEMPLATES } from '../../src/constants';
 import type { ImageFile, ToolMode, DesignerType, HistoryItem, StyleOption } from '../../src/types';
+import { usePrompts } from '../../src/hooks/usePrompts';
 import { generatePaintedMiniature, generateImageFromImage, upscaleImage, cancelGeneration } from '../../src/services/geminiService';
 import { fetchAllPaints, fetchUserPaints, PaletteColor } from '../../src/services/paintService';
 import { useImagePicker } from '../../src/hooks/useImagePicker';
 import { useMediaSave } from '../../src/hooks/useMediaSave';
 import { useAuth } from '../../src/context/AuthContext';
 import { PaintExplorerModal } from '../../src/components/PaintExplorerModal';
+import * as FileSystem from 'expo-file-system/legacy';
+import { shareAsync, isAvailableAsync } from 'expo-sharing';
 
 // Get screen dimensions
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -255,9 +257,17 @@ const ProBadge = ({ isPro, onToggle }: { isPro: boolean; onToggle: () => void })
 export default function StudioScreen() {
   const { loading: authLoading } = useAuth();
   const insets = useSafeAreaInsets();
+
+  const { styles: paintStylesList, templates: designerTemplates, effects: effectPrompts, shareMessage, exampleAssets, loading: promptsLoading } = usePrompts();
+
   const [activeTab, setActiveTab] = useState<ToolMode>('designer');
   const [designerType, setDesignerType] = useState<DesignerType>('sketch');
-  const [selectedStyle, setSelectedStyle] = useState<StyleOption>(PAINTING_STYLES[0]);
+  const [selectedStyle, setSelectedStyle] = useState<StyleOption>(paintStylesList[0]);
+  useEffect(() => {
+    if (paintStylesList.length > 0 && !selectedStyle) {
+      setSelectedStyle(paintStylesList[0]);
+    }
+  }, [paintStylesList]);
   const [isNMMEnabled, setIsNMMEnabled] = useState(false);
   const [isOSLEnabled, setIsOSLEnabled] = useState(false);
   const [isPaletteEnabled, setIsPaletteEnabled] = useState(false);
@@ -281,6 +291,28 @@ export default function StudioScreen() {
   const { pickMultipleImages } = useImagePicker();
   const { saveImage } = useMediaSave();
 
+  // Load example assets when available
+  useEffect(() => {
+    if (exampleAssets && exampleAssets.length > 0) {
+      // Avoid duplicates if already loaded
+      setSourceImages(prev => {
+        // Convert exampleAssets (strings) to ImageFile objects
+        const exampleImageFiles: ImageFile[] = exampleAssets.map(url => ({
+          base64: url,
+          mimeType: 'image/png', // Assuming example assets are PNGs, adjust if needed
+        }));
+
+        // Filter out duplicates based on base64 content
+        const newImages = exampleImageFiles.filter(
+          newImg => !prev.some(existingImg => existingImg.base64 === newImg.base64)
+        );
+
+        if (newImages.length === 0) return prev;
+        return [...prev, ...newImages];
+      });
+    }
+  }, [exampleAssets]);
+
   const handlePickImage = useCallback(async () => {
     const images = await pickMultipleImages();
     if (images.length > 0) {
@@ -299,9 +331,14 @@ export default function StudioScreen() {
     try {
       let images: string[] = [];
       if (activeTab === 'painter' && sourceImages.length >= 1) {
-        const promptParts: string[] = [selectedStyle.prompt, painterPrompt];
-        if (isNMMEnabled) promptParts.push("using the Non-Metallic Metal (NMM) technique for all metallic parts");
-        if (isOSLEnabled) promptParts.push("Integrate Object Source Lighting (OSL) showing realistic colored light emanating from specific points");
+        const promptToUse = isPro ? (selectedStyle.promptPro || selectedStyle.prompt) : selectedStyle.prompt;
+        const promptParts: string[] = [promptToUse, painterPrompt];
+
+        const nmmEffect = effectPrompts['effect.nmm'];
+        if (isNMMEnabled && nmmEffect) promptParts.push(isPro ? nmmEffect.pro : nmmEffect.default);
+
+        const oslEffect = effectPrompts['effect.osl'];
+        if (isOSLEnabled && oslEffect) promptParts.push(isPro ? oslEffect.pro : oslEffect.default);
         if (isPaletteEnabled) {
           if (selectedColors.length > 0) {
             promptParts.push(`strictly using this color palette: ${selectedColors.map(c => `${c.name} (${c.hex})`).join(', ')}`);
@@ -315,7 +352,8 @@ export default function StudioScreen() {
       } else if (activeTab === 'designer') {
         const characterDesc = designerPrompt.trim() || 'character';
         const typeToUse = sourceImages.length > 1 ? 'combined' : designerType;
-        const template = DEFAULT_DESIGNER_TEMPLATES[typeToUse];
+        const templateConfig = designerTemplates[typeToUse];
+        const template = isPro ? templateConfig.pro : templateConfig.default;
         const prompt = template.replace(/{input}/g, characterDesc);
         images = await generateImageFromImage(sourceImages, prompt, model);
       }
@@ -361,12 +399,40 @@ export default function StudioScreen() {
   const handleShare = useCallback(async () => {
     if (!activePreviewImage) return;
     try {
-      await Share.share({
-        url: activePreviewImage,
-        message: 'Check out this generated miniature from MiniPainterStudio!',
+      // Check if sharing is available
+      const isAvailable = await isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert('Error', 'Sharing is not available on this device');
+        return;
+      }
+
+      // Generate a temporary file path
+      const filename = `ministudio_share_${Date.now()}.png`;
+      const fileUri = FileSystem.cacheDirectory + filename;
+
+      // The base64 data usually comes with prefix "data:image/png;base64,", strip it if needed for writeAsStringAsync
+      // But passing base64 directly to writeAsStringAsync with encoding base64 expects pure base64.
+      // activePreviewImage includes "data:image/png;base64," prefix.
+      const base64Data = activePreviewImage.split(',')[1];
+
+      await FileSystem.writeAsStringAsync(fileUri, base64Data, {
+        encoding: 'base64',
       });
+
+      if (Platform.OS === 'ios') {
+        await Share.share({
+          url: fileUri,
+          message: shareMessage,
+        });
+      } else {
+        await shareAsync(fileUri, {
+          mimeType: 'image/png',
+          dialogTitle: 'Share your Miniature',
+          UTI: 'public.png',
+        });
+      }
     } catch (error: any) {
-      Alert.alert(error.message);
+      Alert.alert('Error sharing', error.message);
     }
   }, [activePreviewImage]);
 
@@ -403,14 +469,7 @@ export default function StudioScreen() {
   const hasImageLoaded = sourceImages.length > 0;
   const hasContentToView = hasImageLoaded || generationHistory.length > 0;
 
-  const paintStyles = [
-    { id: 'none', name: 'Custom' },
-    { id: 'heavy-metal', name: "'Eavy Metal" },
-    { id: 'craftworld', name: 'Craftworld Studio' },
-    { id: 'blanchitsu', name: 'Blanchitsu' },
-    { id: 'slapchop', name: 'Slapshop' },
-    { id: 'grimdark', name: 'Grimdark' },
-  ];
+  // paintStylesList is now coming from the hook
 
   const brandTabs = ['My Paints', 'Army Painter', 'Citadel Colour', 'Scale75', 'Duncan', 'Vallejo'];
 
@@ -501,13 +560,13 @@ export default function StudioScreen() {
                       <Text style={styles.sectionHeaderText}>CHOOSE A STYLE</Text>
                     </View>
                     <View style={styles.styleGrid}>
-                      {paintStyles.map((style) => (
+                      {paintStylesList.map((style) => (
                         <TouchableOpacity
                           key={style.id}
-                          onPress={() => setSelectedStyle(PAINTING_STYLES.find(s => s.id === style.id) || PAINTING_STYLES[0])}
-                          style={[styles.styleButton, selectedStyle.id === style.id && styles.styleButtonActive]}
+                          onPress={() => setSelectedStyle(paintStylesList.find(s => s.id === style.id) || paintStylesList[0])}
+                          style={[styles.styleButton, selectedStyle?.id === style.id && styles.styleButtonActive]}
                         >
-                          <Text style={[styles.styleButtonText, selectedStyle.id === style.id ? styles.styleTextActive : styles.styleTextInactive]}>
+                          <Text style={[styles.styleButtonText, selectedStyle?.id === style.id ? styles.styleTextActive : styles.styleTextInactive]}>
                             {style.name}
                           </Text>
                         </TouchableOpacity>
@@ -639,7 +698,7 @@ export default function StudioScreen() {
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
               {activePreviewImage && (
                 <View style={styles.resultContainer}>
-                  <Image source={{ uri: activePreviewImage }} style={styles.activeResultImage} resizeMode="cover" />
+                  <Image source={{ uri: activePreviewImage }} style={styles.activeResultImage} resizeMode="contain" />
                   <View style={styles.resultActions}>
                     <TouchableOpacity onPress={handleUseAsSource} style={styles.resultActionButton}><ToSourceIcon color="#F4F4F4" /><Text style={styles.resultActionText}>To Source</Text></TouchableOpacity>
                     <TouchableOpacity onPress={handleDownload} style={styles.resultActionButton}><DownloadIcon size={12} color="#F4F4F4" /><Text style={styles.resultActionText}>Download</Text></TouchableOpacity>
@@ -786,8 +845,8 @@ const styles = StyleSheet.create({
   resultActionText: { color: '#F4F4F4', fontSize: 13, fontFamily: 'SF Pro Display', fontWeight: '400', letterSpacing: -0.41 },
   historyContainer: { alignSelf: 'stretch', gap: 9 },
   historyTitle: { color: '#F4F4F4', fontSize: 16, fontFamily: 'SF Pro Display', fontWeight: '700', letterSpacing: -0.41 },
-  historyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5.67, alignSelf: 'stretch' },
-  historyItem: { width: 82, height: 82, borderRadius: 8, overflow: 'hidden' },
+  historyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: '2%', alignSelf: 'stretch' },
+  historyItem: { width: '23.5%', aspectRatio: 1, minWidth: 82, minHeight: 82, borderRadius: 8, overflow: 'hidden' },
   historyItemActive: { borderWidth: 2, borderColor: '#0058DB' },
   historyImage: { width: '100%', height: '100%' },
 });
