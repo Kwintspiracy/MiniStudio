@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, Image, TextInput,
-  ActivityIndicator, Alert, Modal, StyleSheet, Platform, Dimensions, StatusBar
+  ActivityIndicator, Alert, Modal, StyleSheet, Platform, Dimensions, StatusBar, Share, Animated, Easing
 } from 'react-native';
 import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import {
   XMarkIcon, RefreshIcon, ArrowsPointingOutIcon, DownloadIcon, CheckIcon
@@ -16,6 +16,7 @@ import { fetchAllPaints, fetchUserPaints, PaletteColor } from '../../src/service
 import { useImagePicker } from '../../src/hooks/useImagePicker';
 import { useMediaSave } from '../../src/hooks/useMediaSave';
 import { useAuth } from '../../src/context/AuthContext';
+import { PaintExplorerModal } from '../../src/components/PaintExplorerModal';
 
 // Get screen dimensions
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -45,17 +46,16 @@ const AppTitleIcon = () => (
 );
 
 const BiSolidUserCircleIcon = ({ color = "#F4F4F4", size = 16, opacity = 1 }: { color?: string, size?: number, opacity?: number }) => (
+  <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+    <Path d="M8.00016 1.33301C4.38616 1.33301 1.3335 4.38567 1.3335 7.99967C1.3335 11.6137 4.38616 14.6663 8.00016 14.6663C11.6142 14.6663 14.6668 11.6137 14.6668 7.99967C14.6668 4.38567 11.6142 1.33301 8.00016 1.33301ZM8.00016 4.66634C9.1515 4.66634 10.0002 5.51434 10.0002 6.66634C10.0002 7.81834 9.1515 8.66634 8.00016 8.66634C6.8495 8.66634 6.00016 7.81834 6.00016 6.66634C6.00016 5.51434 6.8495 4.66634 8.00016 4.66634ZM4.59616 11.181C5.19416 10.301 6.1915 9.71434 7.3335 9.71434H8.66683C9.8095 9.71434 10.8062 10.301 11.4042 11.181C10.5522 12.093 9.3435 12.6663 8.00016 12.6663C6.65683 12.6663 5.44816 12.093 4.59616 11.181Z" fill={color} fillOpacity={opacity} />
+  </Svg>
+);
+
+const BiSolidUserCircle32Icon = ({ color = "#F4F4F4", size = 32, opacity = 1 }: { color?: string, size?: number, opacity?: number }) => (
   <Svg width={size} height={size} viewBox="0 0 32 32" fill="none">
     <Circle cx="16" cy="16" r="13.33" stroke={color} strokeWidth={2} strokeOpacity={opacity} />
     <Circle cx="16" cy="12" r="4" fill={color} fillOpacity={opacity} />
     <Path d="M16 21.33C12.33 21.33 8.87 23.16 7.47 26.13C9.64 28.16 12.63 29.33 16 29.33C19.37 29.33 22.36 28.16 24.53 26.13C23.13 23.16 19.67 21.33 16 21.33Z" fill={color} fillOpacity={opacity} />
-  </Svg>
-);
-
-// 16x16 version for smaller contexts like brand tabs
-const BiSolidUserCircle16Icon = ({ color = "#F4F4F4" }: { color?: string }) => (
-  <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
-    <Path d="M8.00016 1.33301C4.38616 1.33301 1.3335 4.38567 1.3335 7.99967C1.3335 11.6137 4.38616 14.6663 8.00016 14.6663C11.6142 14.6663 14.6668 11.6137 14.6668 7.99967C14.6668 4.38567 11.6142 1.33301 8.00016 1.33301ZM8.00016 4.66634C9.1515 4.66634 10.0002 5.51434 10.0002 6.66634C10.0002 7.81834 9.1515 8.66634 8.00016 8.66634C6.8495 8.66634 6.00016 7.81834 6.00016 6.66634C6.00016 5.51434 6.8495 4.66634 8.00016 4.66634ZM4.59616 11.181C5.19416 10.301 6.1915 9.71434 7.3335 9.71434H8.66683C9.8095 9.71434 10.8062 10.301 11.4042 11.181C10.5522 12.093 9.3435 12.6663 8.00016 12.6663C6.65683 12.6663 5.44816 12.093 4.59616 11.181Z" fill={color} />
   </Svg>
 );
 
@@ -95,9 +95,9 @@ const SculptIcon = ({ color = "#F4F4F4" }: { color?: string }) => (
   </Svg>
 );
 
-const ApertureIcon = ({ color = "#F4F4F4" }: { color?: string }) => (
+const CameraLensIcon = ({ color = "#F4F4F4" }: { color?: string }) => (
   <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
-    <Path d="M12.7757 3.22688C11.8317 2.28292 10.629 1.64009 9.31963 1.37967C8.01027 1.11926 6.65309 1.25295 5.41972 1.76386C4.18634 2.27476 3.13216 3.13993 2.39048 4.24995C1.6488 5.35997 1.25293 6.665 1.25293 8C1.25293 9.33501 1.6488 10.64 2.39048 11.7501C3.13216 12.8601 4.18634 13.7252 5.41972 14.2361C6.65309 14.7471 8.01027 14.8808 9.31963 14.6203C10.629 14.3599 11.8317 13.7171 12.7757 12.7731C13.4072 12.1489 13.9086 11.4057 14.2508 10.5863C14.5929 9.767 14.7691 8.88791 14.7691 8C14.7691 7.11209 14.5929 6.23301 14.2508 5.41368C13.9086 4.59435 13.4072 3.85106 12.7757 3.22688ZM11.7132 4.28938C11.9149 4.49005 12.0999 4.70681 12.2664 4.9375L10.5626 6.94313L9.10637 2.8675C10.0949 3.07835 11.0009 3.57165 11.7145 4.2875L11.7132 4.28938ZM4.28512 4.28938C5.1414 3.42876 6.27111 2.89386 7.4795 2.77688L8.3645 5.255L4.107 4.47563C4.16512 4.41188 4.2245 4.34938 4.28637 4.2875L4.28512 4.28938ZM3.00012 9.60625C2.60414 8.36674 2.67981 7.02465 3.21262 5.8375L5.80262 6.3125L3.00012 9.60625ZM4.2845 11.7125C4.08364 11.5111 3.89949 11.2937 3.73387 11.0625L5.43762 9.05688L6.89387 13.1325C5.90559 12.9215 4.99978 12.4282 4.28637 11.7125H4.2845ZM6.557 7.73688L7.50575 6.62125L8.947 6.88438L9.4395 8.26313L8.49137 9.37875L7.05012 9.11563L6.557 7.73688ZM11.7126 11.7125C10.8562 12.5729 9.72656 13.1078 8.51825 13.225L7.6345 10.75L11.8932 11.5275C11.8351 11.5881 11.7757 11.6506 11.7145 11.7125H11.7126ZM10.1976 9.6875L13.0001 6.39375C13.3962 7.63331 13.3203 8.97551 12.787 10.1625L10.1976 9.6875Z" fill={color} />
+    <Path d="M6.55167 14.5085L9.53976 9.33301L11.8944 13.4113C10.7988 14.2011 9.45383 14.6663 8.00016 14.6663C7.5027 14.6663 7.01803 14.6119 6.55167 14.5085ZM5.26006 14.079C3.54116 13.303 2.21027 11.8195 1.6387 9.99967H7.61523L5.26006 14.079ZM1.36642 8.66634C1.34464 8.44707 1.3335 8.22467 1.3335 7.99967C1.3335 6.26157 1.99865 4.67881 3.0883 3.49207L6.07566 8.66634H1.36642ZM4.10594 2.58801C5.20148 1.79827 6.54649 1.33301 8.00016 1.33301C8.49763 1.33301 8.9823 1.38749 9.44863 1.49081L6.46056 6.66634L4.10594 2.58801ZM10.7402 1.92035C12.4592 2.69631 13.79 4.17986 14.3616 5.99967H8.3851L10.7402 1.92035ZM14.6339 7.33301C14.6557 7.55227 14.6668 7.77467 14.6668 7.99967C14.6668 9.73781 14.0017 11.3205 12.912 12.5073L9.9247 7.33301H14.6339Z" fill={color} />
   </Svg>
 );
 
@@ -131,16 +131,52 @@ const TbProgressCheckIcon = ({ color = "#F4F4F4" }: { color?: string }) => (
   </Svg>
 );
 
-const SpinnerIcon = ({ color = "#FFFFFF" }: { color?: string }) => (
-  <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
-    <Path opacity="0.2" fillRule="evenodd" clipRule="evenodd" d="M8.00016 12.6663C10.5775 12.6663 12.6668 10.577 12.6668 7.99967C12.6668 5.42235 10.5775 3.33301 8.00016 3.33301C5.42284 3.33301 3.3335 5.42235 3.3335 7.99967C3.3335 10.577 5.42284 12.6663 8.00016 12.6663ZM8.00016 14.6663C11.682 14.6663 14.6668 11.6815 14.6668 7.99967C14.6668 4.31777 11.682 1.33301 8.00016 1.33301C4.31826 1.33301 1.3335 4.31777 1.3335 7.99967C1.3335 11.6815 4.31826 14.6663 8.00016 14.6663Z" fill={color} />
-    <Path d="M1.3335 7.99967C1.3335 4.31777 4.31826 1.33301 8.00016 1.33301V3.33301C5.42284 3.33301 3.3335 5.42235 3.3335 7.99967H1.3335Z" fill={color} />
-  </Svg>
-);
+const SpinnerIcon = ({ color = "#FFFFFF" }: { color?: string }) => {
+  const spinValue = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.timing(spinValue, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, [spinValue]);
+
+  const spin = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <Animated.View style={{ transform: [{ rotate: spin }] }}>
+      <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+        <Path opacity="0.2" fillRule="evenodd" clipRule="evenodd" d="M8.00016 12.6663C10.5775 12.6663 12.6668 10.577 12.6668 7.99967C12.6668 5.42235 10.5775 3.33301 8.00016 3.33301C5.42284 3.33301 3.3335 5.42235 3.3335 7.99967C3.3335 10.577 5.42284 12.6663 8.00016 12.6663ZM8.00016 14.6663C11.682 14.6663 14.6668 11.6815 14.6668 7.99967C14.6668 4.31777 11.682 1.33301 8.00016 1.33301C4.31826 1.33301 1.3335 4.31777 1.3335 7.99967C1.3335 11.6815 4.31826 14.6663 8.00016 14.6663Z" fill={color} />
+        <Path d="M1.3335 7.99967C1.3335 4.31777 4.31826 1.33301 8.00016 1.33301V3.33301C5.42284 3.33301 3.3335 5.42235 3.3335 7.99967H1.3335Z" fill={color} />
+      </Svg>
+    </Animated.View>
+  );
+};
 
 const CloseIcon = ({ color = "#FFFFFF" }: { color?: string }) => (
   <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
     <Path d="M9 3L3 9M3 3L9 9" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
+// --- Figma Component Icons ---
+
+const ShareIcon = ({ color = "#FFFFFF" }: { color?: string }) => (
+  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+    <Path d="M18 8C19.6569 8 21 6.65685 21 5C21 3.34315 19.6569 2 18 2C16.3431 2 15 3.34315 15 5C15 5.12548 15.0077 5.24917 15.0227 5.37061L8.08261 8.84066C7.46211 8.31165 6.66773 8 5.8 8C4.14315 8 2.8 9.34315 2.8 11C2.8 12.6569 4.14315 14 5.8 14C6.66773 14 7.46211 13.6883 8.08261 13.1593L15.0227 16.6294C15.0077 16.7508 15 16.8745 15 17C15 18.6569 16.3431 20 18 20C19.6569 20 21 18.6569 21 17C21 15.3431 19.6569 14 18 14C17.1323 14 16.3379 14.3117 15.7174 14.8407L8.7773 11.3706C8.79227 11.2492 8.8 11.1255 8.8 11C8.8 10.8745 8.79227 10.7508 8.7773 10.6294L15.7174 7.15934C16.3379 7.68835 17.1323 8 18 8Z" fill={color} />
+  </Svg>
+);
+
+const ToSourceIcon = ({ color = "#FFFFFF" }: { color?: string }) => (
+  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+    <Path d="M12 4V1L8 5L12 9V6C15.31 6 18 8.69 18 12C18 15.31 15.31 18 12 18C8.69 18 6 15.31 6 12H4C4 16.42 7.58 20 12 20C16.42 20 20 16.42 20 12C20 7.58 16.42 4 12 4Z" fill={color} />
   </Svg>
 );
 
@@ -183,7 +219,7 @@ const ConceptNavTab = ({ activeType, onTypeChange }: { activeType: DesignerType;
   const tabs: { id: DesignerType; label: string; Icon: any }[] = [
     { id: 'sketch', label: 'Sketch', Icon: DrawIcon },
     { id: 'miniature', label: 'Sculpt', Icon: SculptIcon },
-    { id: 'pro-shot', label: 'Photoshoot', Icon: ApertureIcon }
+    { id: 'pro-shot', label: 'Photoshoot', Icon: CameraLensIcon }
   ];
 
   return (
@@ -211,20 +247,21 @@ const ProBadge = ({ isPro, onToggle }: { isPro: boolean; onToggle: () => void })
     style={[styles.proBadge, isPro ? styles.proBadgeActive : styles.proBadgeInactive]}
     activeOpacity={0.7}
   >
-    <TbProgressCheckIcon color={isPro ? "#1D1D1D" : "#FFFFFF"} />
-    <Text style={[styles.proBadgeText, isPro ? styles.proTextActive : styles.proTextInactive]}>Pro</Text>
+    <TbProgressCheckIcon color="#F4F4F4" />
+    <Text style={[styles.proBadgeText, styles.proTextInactive]}>Pro</Text>
   </TouchableOpacity>
 );
 
 export default function StudioScreen() {
   const { loading: authLoading } = useAuth();
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<ToolMode>('designer');
   const [designerType, setDesignerType] = useState<DesignerType>('sketch');
   const [selectedStyle, setSelectedStyle] = useState<StyleOption>(PAINTING_STYLES[0]);
   const [isNMMEnabled, setIsNMMEnabled] = useState(false);
   const [isOSLEnabled, setIsOSLEnabled] = useState(false);
   const [isPaletteEnabled, setIsPaletteEnabled] = useState(false);
-  const [selectedBrand, setSelectedBrand] = useState('Citadel');
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
 
   const [designerPrompt, setDesignerPrompt] = useState('');
   const [painterPrompt, setPainterPrompt] = useState('');
@@ -233,11 +270,12 @@ export default function StudioScreen() {
   const [sourceImages, setSourceImages] = useState<ImageFile[]>([]);
   const [activePreviewImage, setActivePreviewImage] = useState<string | null>(null);
   const [generationHistory, setGenerationHistory] = useState<HistoryItem[]>([]);
-  const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [selectedColors, setSelectedColors] = useState<{ name: string, hex: string }[]>([]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [isResultsDrawerOpen, setIsResultsDrawerOpen] = useState(false);
+  const [isPaintExplorerOpen, setIsPaintExplorerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { pickMultipleImages } = useImagePicker();
@@ -264,7 +302,13 @@ export default function StudioScreen() {
         const promptParts: string[] = [selectedStyle.prompt, painterPrompt];
         if (isNMMEnabled) promptParts.push("using the Non-Metallic Metal (NMM) technique for all metallic parts");
         if (isOSLEnabled) promptParts.push("Integrate Object Source Lighting (OSL) showing realistic colored light emanating from specific points");
-        if (isPaletteEnabled && selectedColors.length > 0) promptParts.push(`strictly using this color palette: ${selectedColors.join(', ')}`);
+        if (isPaletteEnabled) {
+          if (selectedColors.length > 0) {
+            promptParts.push(`strictly using this color palette: ${selectedColors.map(c => `${c.name} (${c.hex})`).join(', ')}`);
+          } else if (selectedBrands.length > 0) {
+            promptParts.push(`using paints from these brands: ${selectedBrands.join(', ')}`);
+          }
+        }
         promptParts.push("GENERATE THE IMAGE NOW. Do not output conversational text.");
         const finalPrompt = promptParts.filter(Boolean).join(' ');
         images = await generatePaintedMiniature(sourceImages, finalPrompt, 1, model);
@@ -286,7 +330,7 @@ export default function StudioScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [sourceImages, activeTab, designerPrompt, designerType, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPaletteEnabled, selectedColors]);
+  }, [sourceImages, activeTab, designerPrompt, designerType, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPaletteEnabled, selectedColors, selectedBrands]);
 
   const handleCancelGeneration = useCallback(() => {
     cancelGeneration();
@@ -314,6 +358,18 @@ export default function StudioScreen() {
     if (success) Alert.alert('Success', 'Image saved to your photo library!');
   }, [activePreviewImage, saveImage]);
 
+  const handleShare = useCallback(async () => {
+    if (!activePreviewImage) return;
+    try {
+      await Share.share({
+        url: activePreviewImage,
+        message: 'Check out this generated miniature from MiniPainterStudio!',
+      });
+    } catch (error: any) {
+      Alert.alert(error.message);
+    }
+  }, [activePreviewImage]);
+
   const handleUseAsSource = useCallback(() => {
     if (!activePreviewImage) return;
     const newImage: ImageFile = { base64: activePreviewImage, mimeType: 'image/png' };
@@ -321,8 +377,25 @@ export default function StudioScreen() {
     setIsResultsDrawerOpen(false);
   }, [activePreviewImage]);
 
-  const toggleColor = (color: string) => {
-    setSelectedColors(prev => prev.includes(color) ? prev.filter(c => c !== color) : [...prev, color]);
+  const toggleColor = (colorName: string, hexCode?: string) => {
+    setSelectedColors(prev => {
+      const exists = prev.find(c => c.name === colorName);
+      if (exists) {
+        return prev.filter(c => c.name !== colorName);
+      } else {
+        return [...prev, { name: colorName, hex: hexCode || '#FFFFFF' }];
+      }
+    });
+  };
+
+  const toggleBrand = (brand: string) => {
+    setSelectedBrands(prev => {
+      if (prev.includes(brand)) {
+        return prev.filter(b => b !== brand);
+      } else {
+        return [...prev, brand];
+      }
+    });
   };
 
   if (authLoading) return <View style={styles.centered}><ActivityIndicator size="large" color="#0058DB" /></View>;
@@ -339,268 +412,303 @@ export default function StudioScreen() {
     { id: 'grimdark', name: 'Grimdark' },
   ];
 
-  const brandTabs = ['My Paints', 'Army Painter', 'Citadel', 'Scale 75', 'Duncan', 'Vallejo'];
+  const brandTabs = ['My Paints', 'Army Painter', 'Citadel Colour', 'Scale75', 'Duncan', 'Vallejo'];
+
+
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+    <View style={styles.screenContainer}>
+      <View style={[styles.statusBarBackground, { height: insets.top }]} />
+      <StatusBar barStyle="light-content" backgroundColor="#12121F" />
+      <View style={styles.container}>
 
-      {/* Top Navigation */}
-      <View style={styles.topNav}>
-        <View style={styles.topNavSide}>
-          <ProBadge isPro={isPro} onToggle={() => setIsPro(!isPro)} />
-        </View>
-        <View style={styles.topNavTitle}>
-          <AppTitleIcon />
-        </View>
-        <TouchableOpacity onPress={() => router.push('/settings')} style={[styles.topNavSide, styles.userIconContainer]} activeOpacity={0.7}>
-          <BiSolidUserCircleIcon size={32} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Main Content Area */}
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <MainNavTab activeTab={activeTab} onTabChange={setActiveTab} />
-
-        {/* Input Container */}
-        <View style={styles.inputContainer}>
-          <View style={styles.sourceInfo}>
-            <Text style={styles.inputLabel}>{activeTab === 'painter' ? 'SOURCE' : 'Input'}</Text>
-            <Text style={styles.inputSubtitle}>
-              {hasImageLoaded ? 'Image to Image Generation' : 'Choose an image'}
-            </Text>
+        {/* Top Navigation */}
+        <View style={styles.topNav}>
+          <View style={styles.topNavSide}>
+            <ProBadge isPro={isPro} onToggle={() => setIsPro(!isPro)} />
           </View>
-
-          {hasImageLoaded ? (
-            <View style={styles.sourceImageWrapper}>
-              <Image source={{ uri: sourceImages[0].base64 }} style={styles.sourceImage} />
-              <TouchableOpacity onPress={() => setSourceImages([])} style={styles.removeImageOverlay}>
-                <Text style={styles.removeImageTextSmall}>×</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.optionsRow}>
-              <TouchableOpacity style={styles.optionButton} onPress={() => router.push('/camera')} activeOpacity={0.8}>
-                <PhotoCameraIcon />
-                <Text style={styles.optionButtonText}>Photo</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.optionButton} onPress={handlePickImage} activeOpacity={0.8}>
-                <PhotoLibraryIcon />
-                <Text style={styles.optionButtonText}>Files</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          <View style={styles.topNavTitle}>
+            <AppTitleIcon />
+          </View>
+          <TouchableOpacity onPress={() => router.push('/settings')} style={[styles.topNavSide, styles.userIconContainer]} activeOpacity={0.7}>
+            <BiSolidUserCircle32Icon />
+          </TouchableOpacity>
         </View>
 
-        {/* DESIGN/PAINT STEP Section */}
-        {hasImageLoaded && (
-          <View style={styles.modeContent}>
-            {activeTab === 'designer' ? (
-              <View style={styles.designStepSection}>
-                <View style={styles.sectionHeader}>
-                  <BuildIcon color="#F4F4F4" opacity={0.4} />
-                  <Text style={styles.sectionHeaderText}>DESIGN STEP</Text>
-                </View>
-                <ConceptNavTab activeType={designerType} onTypeChange={setDesignerType} />
+        {/* Main Content Area */}
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <MainNavTab activeTab={activeTab} onTabChange={setActiveTab} />
 
-                {/* Prompt container - below Design Step */}
-                <View style={styles.promptContainer}>
-                  <TextInput
-                    value={designerPrompt}
-                    onChangeText={setDesignerPrompt}
-                    placeholder="You can add more details to the default prompt..."
-                    placeholderTextColor="rgba(244, 244, 244, 0.4)"
-                    multiline
-                    textAlignVertical="top"
-                    style={styles.promptInput}
-                  />
-                </View>
+          {/* Input Container */}
+          <View style={styles.inputContainer}>
+            <View style={styles.sourceInfo}>
+              <Text style={styles.inputLabel}>SOURCE</Text>
+              <Text style={styles.inputSubtitle}>
+                {hasImageLoaded ? 'Image to Image' : 'Choose an image'}
+              </Text>
+            </View>
+
+            {hasImageLoaded ? (
+              <View style={styles.sourceImageWrapper}>
+                <Image source={{ uri: sourceImages[0].base64 }} style={styles.sourceImage} />
+                <TouchableOpacity onPress={() => setSourceImages([])} style={styles.removeImageOverlay}>
+                  <Text style={styles.removeImageTextSmall}>×</Text>
+                </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.paintStepSection}>
-                {/* Style Section */}
-                <View style={styles.sectionHeader}>
-                  <RiPaintFillIcon color="#F4F4F4" opacity={0.4} />
-                  <Text style={styles.sectionHeaderText}>CHOOSE A STYLE</Text>
-                </View>
-                <View style={styles.styleGrid}>
-                  {paintStyles.map((style) => (
-                    <TouchableOpacity
-                      key={style.id}
-                      onPress={() => setSelectedStyle(PAINTING_STYLES.find(s => s.id === style.id) || PAINTING_STYLES[0])}
-                      style={[styles.styleButton, selectedStyle.id === style.id && styles.styleButtonActive]}
-                    >
-                      <Text style={[styles.styleButtonText, selectedStyle.id === style.id ? styles.styleTextActive : styles.styleTextInactive]}>
-                        {style.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Prompt container - below Choose Style */}
-                <View style={styles.promptContainer}>
-                  <TextInput
-                    value={painterPrompt}
-                    onChangeText={setPainterPrompt}
-                    placeholder="You can add more details to the default prompt..."
-                    placeholderTextColor="rgba(244, 244, 244, 0.4)"
-                    multiline
-                    textAlignVertical="top"
-                    style={styles.promptInput}
-                  />
-                </View>
-
-                {/* Effects Section */}
-                <View style={styles.sectionHeader}>
-                  <MagicWandIcon color="rgba(244, 244, 244, 0.4)" />
-                  <Text style={styles.sectionHeaderText}>ADD EFFECTS</Text>
-                </View>
-                <View style={styles.optionItem}>
-                  <Text style={styles.optionLabel}>NNM - Non Metallic Metal</Text>
-                  <ToggleButton value={isNMMEnabled} onToggle={() => setIsNMMEnabled(!isNMMEnabled)} />
-                </View>
-                <View style={styles.optionItem}>
-                  <Text style={styles.optionLabel}>OSL - Object Source Lighting</Text>
-                  <ToggleButton value={isOSLEnabled} onToggle={() => setIsOSLEnabled(!isOSLEnabled)} />
-                </View>
-
-                {/* Palette Section */}
-                <View style={styles.sectionHeader}>
-                  <IoMdColorPaletteIcon color="#F4F4F4" opacity={0.4} />
-                  <Text style={styles.sectionHeaderText}>COLOR PALETTE</Text>
-                </View>
-                <View style={styles.optionItem}>
-                  <Text style={styles.optionLabel}>Use a color palette</Text>
-                  <ToggleButton value={isPaletteEnabled} onToggle={() => setIsPaletteEnabled(!isPaletteEnabled)} />
-                </View>
-
-                {isPaletteEnabled && (
-                  <>
-                    {selectedColors.length > 0 ? (
-                      <View style={styles.paletteContainer}>
-                        <View style={styles.paletteHeader}>
-                          <Text style={styles.paletteTitle}>{selectedColors.length} Colors Selected</Text>
-                          <TouchableOpacity onPress={() => setSelectedColors([])}><Text style={styles.clearAllText}>Clear All</Text></TouchableOpacity>
-                        </View>
-                        <View style={styles.colorGrid}>
-                          {selectedColors.map((color) => (
-                            <View key={color} style={styles.colorItem}>
-                              <View style={styles.colorRow}>
-                                <View style={[styles.colorCircle, { backgroundColor: '#FFD700' }]} />
-                                <Text style={styles.colorName}>{color}</Text>
-                              </View>
-                              <TouchableOpacity onPress={() => toggleColor(color)}><CloseIcon color="#F4F4F4" /></TouchableOpacity>
-                            </View>
-                          ))}
-                        </View>
-                      </View>
-                    ) : (
-                      <View style={styles.brandContainer}>
-                        <View style={styles.brandTabs}>
-                          {brandTabs.map((brand) => (
-                            <TouchableOpacity
-                              key={brand}
-                              onPress={() => setSelectedBrand(brand)}
-                              style={[styles.brandButton, selectedBrand === brand && styles.brandButtonActive]}
-                            >
-                              {brand === 'My Paints' && <BiSolidUserCircle16Icon color={selectedBrand === brand ? '#1D1D1D' : '#F4F4F4'} />}
-                              <Text style={[styles.brandText, selectedBrand === brand ? styles.styleTextActive : styles.styleTextInactive]}>{brand}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                        <TouchableOpacity style={styles.explorerButton}>
-                          <Text style={styles.explorerButtonText}>Palette Explorer</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </>
-                )}
+              <View style={styles.optionsRow}>
+                <TouchableOpacity style={styles.optionButton} onPress={() => router.push('/camera')} activeOpacity={0.8}>
+                  <PhotoCameraIcon />
+                  <Text style={styles.optionButtonText}>Photo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.optionButton} onPress={handlePickImage} activeOpacity={0.8}>
+                  <PhotoLibraryIcon />
+                  <Text style={styles.optionButtonText}>Files</Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
-        )}
-      </ScrollView>
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        <View style={styles.bottomButtonsRow}>
-          <TouchableOpacity style={[styles.galleryButton, !hasContentToView && styles.buttonDisabled]} disabled={!hasContentToView} onPress={() => setIsResultsDrawerOpen(true)} activeOpacity={0.7}>
-            <Text style={styles.galleryButtonText}>Gallery</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.createButton, isLoading && styles.cancelButton]} onPress={isLoading ? handleCancelGeneration : handleGenerate} activeOpacity={0.8}>
-            <View style={styles.createButtonContent}>
-              {!isLoading && <MagicWandIcon color="#F4F4F4" />}
-              {isLoading && <SpinnerIcon color="#FFFFFF" />}
-              <Text style={[styles.createButtonText, isLoading && styles.cancelButtonText]}>{isLoading ? 'Cancel' : 'Create'}</Text>
+          {/* Mode-Specific Content */}
+          {hasImageLoaded && (
+            <View style={styles.modeContent}>
+              {activeTab === 'designer' ? (
+                <>
+                  <View style={styles.designStepSection}>
+                    <View style={styles.sectionHeader}>
+                      <BuildIcon color="rgba(244, 244, 244, 0.4)" />
+                      <Text style={styles.sectionHeaderText}>DESIGN STEP</Text>
+                    </View>
+                    <ConceptNavTab activeType={designerType} onTypeChange={setDesignerType} />
+                  </View>
+                  <View style={styles.promptContainer}>
+                    <TextInput
+                      value={designerPrompt}
+                      onChangeText={setDesignerPrompt}
+                      placeholder="Add more details to the default prompt..."
+                      placeholderTextColor="rgba(244, 244, 244, 0.4)"
+                      multiline
+                      textAlignVertical="top"
+                      style={styles.promptInput}
+                    />
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.paintStepSection}>
+                    <View style={styles.sectionHeader}>
+                      <RiPaintFillIcon color="rgba(244, 244, 244, 0.4)" />
+                      <Text style={styles.sectionHeaderText}>CHOOSE A STYLE</Text>
+                    </View>
+                    <View style={styles.styleGrid}>
+                      {paintStyles.map((style) => (
+                        <TouchableOpacity
+                          key={style.id}
+                          onPress={() => setSelectedStyle(PAINTING_STYLES.find(s => s.id === style.id) || PAINTING_STYLES[0])}
+                          style={[styles.styleButton, selectedStyle.id === style.id && styles.styleButtonActive]}
+                        >
+                          <Text style={[styles.styleButtonText, selectedStyle.id === style.id ? styles.styleTextActive : styles.styleTextInactive]}>
+                            {style.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.promptContainer}>
+                    <TextInput
+                      value={painterPrompt}
+                      onChangeText={setPainterPrompt}
+                      placeholder="Add more details to the default prompt..."
+                      placeholderTextColor="rgba(244, 244, 244, 0.4)"
+                      multiline
+                      textAlignVertical="top"
+                      style={styles.promptInput}
+                    />
+                  </View>
+
+                  <View style={styles.paintStepSection}>
+                    <View style={styles.sectionHeader}>
+                      <MagicWandIcon color="rgba(244, 244, 244, 0.4)" />
+                      <Text style={styles.sectionHeaderText}>ADD EFFECTS</Text>
+                    </View>
+                    <TouchableOpacity style={styles.optionItem} onPress={() => setIsNMMEnabled(!isNMMEnabled)} activeOpacity={0.7}>
+                      <Text style={[styles.optionLabel, isNMMEnabled && styles.optionLabelActive]}>NNM - Non Metallic Metal</Text>
+                      <ToggleButton value={isNMMEnabled} onToggle={() => setIsNMMEnabled(!isNMMEnabled)} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.optionItem} onPress={() => setIsOSLEnabled(!isOSLEnabled)} activeOpacity={0.7}>
+                      <Text style={[styles.optionLabel, isOSLEnabled && styles.optionLabelActive]}>OSL - Object Source Lighting</Text>
+                      <ToggleButton value={isOSLEnabled} onToggle={() => setIsOSLEnabled(!isOSLEnabled)} />
+                    </TouchableOpacity>
+
+                    <View style={styles.sectionHeader}>
+                      <IoMdColorPaletteIcon color="rgba(244, 244, 244, 0.4)" />
+                      <Text style={styles.sectionHeaderText}>COLOR PALETTE</Text>
+                    </View>
+                    <TouchableOpacity style={styles.optionItem} onPress={() => setIsPaletteEnabled(!isPaletteEnabled)} activeOpacity={0.7}>
+                      <Text style={[styles.optionLabel, isPaletteEnabled && styles.optionLabelActive]}>Choose from Brands and Paints</Text>
+                      <ToggleButton value={isPaletteEnabled} onToggle={() => setIsPaletteEnabled(!isPaletteEnabled)} />
+                    </TouchableOpacity>
+
+                    {isPaletteEnabled && (
+                      <>
+                        {/* Brand Selection Tabs */}
+                        <View style={styles.brandTabs}>
+                          {brandTabs.map((brand) => {
+                            const isSelected = selectedBrands.includes(brand);
+                            return (
+                              <TouchableOpacity
+                                key={brand}
+                                onPress={() => toggleBrand(brand)}
+                                style={[styles.brandButton, isSelected && styles.brandButtonActive]}
+                              >
+                                {brand === 'My Paints' && <BiSolidUserCircleIcon size={16} color={isSelected ? '#1D1D1D' : '#F4F4F4'} opacity={1} />}
+                                <Text style={[styles.brandText, isSelected ? styles.styleTextActive : styles.styleTextInactive]}>{brand}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+
+                        {/* Paint Selection Container */}
+                        <View style={styles.paintSelectionContainer}>
+                          {selectedColors.length > 0 ? (
+                            <>
+                              {/* Header with count and clear */}
+                              <View style={styles.paintSelectionHeader}>
+                                <Text style={styles.paintSelectionCount}>{selectedColors.length} Colors Selected</Text>
+                                <TouchableOpacity onPress={() => setSelectedColors([])}>
+                                  <Text style={styles.clearAllText}>Clear All</Text>
+                                </TouchableOpacity>
+                              </View>
+                              {/* Color chips */}
+                              <View style={styles.colorChipsGrid}>
+                                {selectedColors.map((color) => (
+                                  <View key={color.name} style={styles.colorChip}>
+                                    <View style={[styles.colorChipCircle, { backgroundColor: color.hex }]} />
+                                    <Text style={styles.colorChipName} numberOfLines={1}>{color.name}</Text>
+                                    <TouchableOpacity onPress={() => toggleColor(color.name)} style={styles.colorChipClose}>
+                                      <CloseIcon color="#F4F4F4" />
+                                    </TouchableOpacity>
+                                  </View>
+                                ))}
+                              </View>
+                            </>
+                          ) : (
+                            <View style={styles.paintSelectionEmpty}>
+                              <Text style={styles.paintSelectionHint}>
+                                {selectedBrands.length > 0
+                                  ? `${selectedBrands.length} ${selectedBrands.length === 1 ? 'Brand' : 'Brands'} Selected`
+                                  : 'When no specific Brand or Paint is selected, the AI can use any of them to create.'}
+                              </Text>
+                            </View>
+                          )}
+                          {/* Paint Selection button - always visible */}
+                          <TouchableOpacity style={styles.paintSelectionButton} onPress={() => setIsPaintExplorerOpen(true)} activeOpacity={0.8}>
+                            <Text style={styles.paintSelectionButtonText}>Paint Selection</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    )}
+                  </View>
+                </>
+              )}
             </View>
-          </TouchableOpacity>
-        </View>
-      </View>
+          )}
+        </ScrollView>
 
-      <Modal visible={isResultsDrawerOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsResultsDrawerOpen(false)}>
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}><Text style={styles.modalTitle}>RESULTS</Text><TouchableOpacity onPress={() => setIsResultsDrawerOpen(false)}><XMarkIcon size={24} color="#F4F4F4" /></TouchableOpacity></View>
-          <ScrollView style={styles.modalContent}>
-            {activePreviewImage && (
-              <View style={styles.activeResultContainer}>
-                <Image source={{ uri: activePreviewImage }} style={styles.activeResultImage} resizeMode="contain" />
-                <View style={styles.resultActions}>
-                  <TouchableOpacity onPress={handleDownload} style={styles.actionIcon}><DownloadIcon size={20} color="#F4F4F4" /></TouchableOpacity>
-                  <TouchableOpacity onPress={handleUpscale} disabled={isUpscaling} style={styles.actionIcon}>{isUpscaling ? <ActivityIndicator size="small" color="#F4F4F4" /> : <ArrowsPointingOutIcon size={20} color="#F4F4F4" />}</TouchableOpacity>
-                  <TouchableOpacity onPress={handleUseAsSource} style={styles.actionIcon}><RefreshIcon size={20} color="#F4F4F4" /></TouchableOpacity>
-                </View>
+        {/* Bottom Navigation */}
+        <View style={styles.footerContainer}>
+          <View style={styles.bottomButtonsRow}>
+            <TouchableOpacity style={[styles.galleryButton, !hasContentToView && styles.buttonDisabled]} disabled={!hasContentToView} onPress={() => setIsResultsDrawerOpen(true)} activeOpacity={0.7}>
+              <Text style={styles.galleryButtonText}>Gallery</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.createButton, isLoading && styles.cancelButton]} onPress={isLoading ? handleCancelGeneration : handleGenerate} activeOpacity={0.8}>
+              <View style={styles.createButtonContent}>
+                {!isLoading && <MagicWandIcon color="#F4F4F4" />}
+                {isLoading && <SpinnerIcon color="#FFFFFF" />}
+                <Text style={[styles.createButtonText, isLoading && styles.cancelButtonText]}>{isLoading ? 'Cancel' : 'Create'}</Text>
               </View>
-            )}
-            <Text style={styles.historyLabel}>History</Text>
-            <View style={styles.galleryGrid}>
-              {generationHistory.map((item, i) => (
-                <TouchableOpacity key={i} style={styles.galleryItem} onPress={() => setActivePreviewImage(item.url)}><Image source={{ uri: item.url }} style={styles.galleryImage} /></TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-    </SafeAreaView>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <Modal visible={isResultsDrawerOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsResultsDrawerOpen(false)}>
+          <SafeAreaView style={styles.modalContainer} edges={['top']}>
+            <View style={styles.grabberContainer}><View style={styles.grabber} /></View>
+            <View style={styles.modalHeader}><View style={styles.modalHeaderSide} /><Text style={styles.modalTitle}>Results</Text><TouchableOpacity onPress={() => setIsResultsDrawerOpen(false)} style={styles.modalHeaderSide}><Text style={styles.doneButtonText}>Done</Text></TouchableOpacity></View>
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+              {activePreviewImage && (
+                <View style={styles.resultContainer}>
+                  <Image source={{ uri: activePreviewImage }} style={styles.activeResultImage} resizeMode="cover" />
+                  <View style={styles.resultActions}>
+                    <TouchableOpacity onPress={handleUseAsSource} style={styles.resultActionButton}><ToSourceIcon color="#F4F4F4" /><Text style={styles.resultActionText}>To Source</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={handleDownload} style={styles.resultActionButton}><DownloadIcon size={12} color="#F4F4F4" /><Text style={styles.resultActionText}>Download</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={handleShare} style={styles.resultActionButton}><ShareIcon color="#F4F4F4" /><Text style={styles.resultActionText}>Share</Text></TouchableOpacity>
+                  </View>
+                </View>
+              )}
+              <View style={styles.historyContainer}><Text style={styles.historyTitle}>History</Text><View style={styles.historyGrid}>
+                {generationHistory.map((item, i) => (
+                  <TouchableOpacity key={i} style={[styles.historyItem, activePreviewImage === item.url && styles.historyItemActive]} onPress={() => setActivePreviewImage(item.url)}><Image source={{ uri: item.url }} style={styles.historyImage} /></TouchableOpacity>
+                ))}
+              </View></View>
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
+
+        {/* Paint Explorer Modal */}
+        <PaintExplorerModal
+          visible={isPaintExplorerOpen}
+          onClose={() => setIsPaintExplorerOpen(false)}
+          selectedBrands={selectedBrands}
+          selectedColors={selectedColors}
+          onToggleColor={toggleColor}
+          triggerLoad={isPaletteEnabled}
+        />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenContainer: { flex: 1, backgroundColor: '#12121F' },
+  statusBarBackground: { height: 0, backgroundColor: '#12121F' },
   container: { flex: 1, backgroundColor: '#1E1E2B' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1E1E2B' },
-  topNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 54, paddingHorizontal: 0, marginTop: 8 },
+  topNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 64, paddingHorizontal: 0, backgroundColor: '#12121F' },
   topNavSide: { width: 91, alignItems: 'center', justifyContent: 'center' },
   topNavTitle: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   userIconContainer: { alignItems: 'flex-end', paddingRight: 16 },
   proBadge: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, borderColor: '#0058DB' },
-  proBadgeInactive: { backgroundColor: '#003583' },
+  proBadgeInactive: { backgroundColor: '#002761' },
   proBadgeActive: { backgroundColor: '#0058DB' },
   proBadgeText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontWeight: '500', fontSize: 14, letterSpacing: -0.41, marginLeft: 4 },
   proTextInactive: { color: '#F4F4F4' },
-  proTextActive: { color: '#1D1D1D' },
+  proTextActive: { color: '#F4F4F4' },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 150 },
-  navTabContainer: { flexDirection: 'row', width: '100%', backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: 8, padding: 6, marginBottom: 7 },
+  navTabContainer: { flexDirection: 'row', alignSelf: 'stretch', backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: 8, padding: 6, marginBottom: 7 },
   tabButton: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: 6 },
   tabButtonActive: { backgroundColor: '#0058DB' },
   tabButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 14, marginLeft: 4 },
   tabTextActive: { color: '#F4F4F4' },
   tabTextInactive: { color: 'rgba(244, 244, 244, 0.4)' },
-  inputContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 8, paddingLeft: 16 },
+  inputContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 8, paddingLeft: 16 },
   sourceInfo: { justifyContent: 'center' },
   inputLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '700', fontSize: 12, color: 'rgba(244, 244, 244, 0.4)' },
   inputSubtitle: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 13, color: '#F4F4F4', marginTop: 2 },
   optionsRow: { flexDirection: 'row', alignItems: 'center' },
   optionButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 17, paddingHorizontal: 16, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 4, marginLeft: 8 },
   optionButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 13, color: '#F4F4F4', marginLeft: 8 },
-  sourceImageWrapper: { width: 50, height: 50, borderRadius: 6, borderWidth: 2, borderColor: '#0058DB', overflow: 'hidden' },
+  sourceImageWrapper: { width: 50, height: 50, borderRadius: 6, borderWidth: 3, borderColor: '#0058DB', overflow: 'hidden' },
   sourceImage: { width: '100%', height: '100%' },
   removeImageOverlay: { position: 'absolute', top: 0, right: 0, width: 15, height: 15, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   removeImageTextSmall: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
-  modeContent: { marginTop: 12, gap: 12 },
+  modeContent: { marginTop: 5, gap: 5, alignSelf: 'stretch' },
   promptContainer: { alignSelf: 'stretch', backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: 8, padding: 16, minHeight: 102 },
   promptInput: { flex: 1, fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontSize: 14, color: '#F4F4F4', lineHeight: 20 },
   designStepSection: { gap: 5 },
-  paintStepSection: { gap: 8 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 8, padding: 8 },
+  paintStepSection: { gap: 5 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 8, padding: 8, marginTop: 12 },
   sectionHeaderText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 13, color: 'rgba(244, 244, 244, 0.4)' },
   conceptTabContainer: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', gap: 4 },
   conceptTabButton: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, paddingVertical: 12, borderRadius: 8, backgroundColor: 'rgba(0, 0, 0, 0.3)', height: 40 },
@@ -611,53 +719,75 @@ const styles = StyleSheet.create({
   styleGrid: { flexDirection: 'row', alignSelf: 'stretch', flexWrap: 'wrap', gap: 4 },
   styleButton: { justifyContent: 'center', alignItems: 'center', padding: 12, borderRadius: 4, backgroundColor: 'rgba(0, 0, 0, 0.3)' },
   styleButtonActive: { backgroundColor: '#F4F4F4' },
-  styleButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 13 },
-  styleTextActive: { color: '#1D1D1D' },
+  styleButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 13 },
+  styleTextActive: { color: '#1D1D1D', fontWeight: '600' },
   styleTextInactive: { color: '#F4F4F4' },
-  optionItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 4, backgroundColor: 'rgba(255, 255, 255, 0.05)' },
-  optionLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 13, color: 'rgba(244, 244, 244, 0.4)' },
-  toggleContainer: { width: 46, height: 24, borderRadius: 16, padding: 4, justifyContent: 'center' },
+  optionItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 4, backgroundColor: 'rgba(255, 255, 255, 0.05)' },
+  optionLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 14, color: '#F4F4F4' },
+  optionLabelActive: { color: '#F4F4F4' },
+  toggleContainer: { width: 46, height: 24, padding: 3, borderRadius: 12, justifyContent: 'center' },
   toggleOn: { backgroundColor: '#F4F4F4' },
   toggleOff: { backgroundColor: 'rgba(244, 244, 244, 0.4)' },
   toggleCircle: { width: 18, height: 18, borderRadius: 9 },
   toggleCircleActive: { alignSelf: 'flex-end', backgroundColor: '#0058DB' },
   toggleCircleInactive: { alignSelf: 'flex-start', backgroundColor: '#1D1D1D' },
-  paletteContainer: { padding: 12, borderRadius: 8, borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.05)', backgroundColor: 'transparent', gap: 12 },
+  paletteContainer: { padding: 12, borderRadius: 8, borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.05)', backgroundColor: 'transparent', gap: 12, alignSelf: 'stretch' },
   paletteHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   paletteTitle: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 13, color: 'rgba(244, 244, 244, 0.4)' },
   clearAllText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 13, color: '#FF5050' },
+  // Paint Selection Component Styles
+  paintSelectionContainer: { borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, padding: 12, gap: 4, alignSelf: 'stretch', overflow: 'hidden' },
+  paintSelectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4, paddingBottom: 8 },
+  paintSelectionCount: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 13, color: 'rgba(244, 244, 244, 0.4)', lineHeight: 14 },
+  paintSelectionEmpty: { paddingTop: 4, paddingBottom: 8 },
+  paintSelectionHint: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 14, color: '#F4F4F4', lineHeight: 16 },
+  paintSelectionButton: { alignSelf: 'stretch', padding: 16, backgroundColor: '#F4F4F4', borderRadius: 4, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  paintSelectionButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 16, color: '#1D1D1D', letterSpacing: -0.408 },
+  colorChipsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  colorChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 8, backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: 4 },
+  colorChipCircle: { width: 16, height: 16, borderRadius: 8 },
+  colorChipName: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 13, color: '#F4F4F4', maxWidth: 100 },
+  colorChipClose: { marginLeft: 4 },
+  // Legacy styles (can be removed if not used elsewhere)
   colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   colorItem: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 8, backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: 4 },
   colorRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   colorCircle: { width: 16, height: 16, borderRadius: 8 },
   colorName: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 14, color: '#FFFFFF' },
-  brandContainer: { gap: 8 },
+  brandContainer: { gap: 8, alignSelf: 'stretch' },
   brandTabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   brandButton: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 12, borderRadius: 4, backgroundColor: 'rgba(0, 0, 0, 0.3)' },
   brandButtonActive: { backgroundColor: '#F4F4F4' },
-  brandText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 13 },
-  explorerButton: { width: '100%', padding: 16, backgroundColor: '#F4F4F4', borderRadius: 4, alignItems: 'center' },
+  brandText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 13 },
+  explorerButton: { alignSelf: 'stretch', padding: 16, backgroundColor: '#F4F4F4', borderRadius: 4, alignItems: 'center' },
   explorerButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 14, color: '#1D1D1D' },
-  bottomNav: { position: 'absolute', bottom: 0, width: SCREEN_WIDTH, backgroundColor: '#12121F', paddingTop: 24, paddingHorizontal: 16, paddingBottom: 40, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 20 },
-  bottomButtonsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-  galleryButton: { flex: 1, height: 40, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 4 },
+  footerContainer: { alignSelf: 'stretch', backgroundColor: '#12121F', paddingTop: 32, paddingHorizontal: 16, paddingBottom: 40, height: 130, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 20 },
+  bottomButtonsRow: { flexDirection: 'row', alignSelf: 'stretch', gap: 8 },
+  galleryButton: { flex: 1, height: 52, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
   galleryButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: '#F4F4F4' },
-  createButton: { flex: 1, height: 40, backgroundColor: '#0058DB', borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginLeft: 4 },
+  createButton: { flex: 1, height: 52, backgroundColor: '#0058DB', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
   createButtonContent: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   createButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: '#F4F4F4' },
   cancelButton: { backgroundColor: '#1D1D1D' },
   cancelButtonText: { color: '#F4F4F4', opacity: 0.3 },
   buttonDisabled: { opacity: 0.5 },
-  modalContainer: { flex: 1, backgroundColor: '#1E1E2B' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
-  modalTitle: { color: '#F4F4F4', fontSize: 18, fontWeight: 'bold' },
-  modalContent: { flex: 1, padding: 16 },
-  activeResultContainer: { width: '100%', aspectRatio: 1, backgroundColor: '#000', borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
-  activeResultImage: { width: '100%', height: '100%' },
-  resultActions: { flexDirection: 'row', position: 'absolute', bottom: 16, right: 16, gap: 8 },
-  actionIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  historyLabel: { color: 'rgba(244, 244, 244, 0.4)', fontSize: 12, fontWeight: 'bold', marginBottom: 12, textTransform: 'uppercase' },
-  galleryGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  galleryItem: { width: (SCREEN_WIDTH - 48) / 3, aspectRatio: 1, borderRadius: 8, overflow: 'hidden', backgroundColor: '#000', marginRight: 8, marginBottom: 8 },
-  galleryImage: { width: '100%', height: '100%' },
+  modalContainer: { flex: 1, backgroundColor: '#12121F' },
+  grabberContainer: { width: '100%', height: 24, alignItems: 'center', justifyContent: 'center' },
+  grabber: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,0.2)' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 16, paddingHorizontal: 24, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
+  modalHeaderSide: { width: 50, justifyContent: 'center' },
+  modalTitle: { flex: 1, textAlign: 'center', color: '#F4F4F4', fontSize: 16, fontFamily: 'SF Pro Display', fontWeight: '700', letterSpacing: -0.41 },
+  doneButtonText: { color: '#0058DB', fontSize: 16, fontWeight: '600', textAlign: 'right' },
+  modalContent: { flex: 1, padding: 24 },
+  resultContainer: { alignSelf: 'stretch', gap: 8, marginBottom: 32 },
+  activeResultImage: { width: '100%', height: 345, borderRadius: 8, backgroundColor: '#000' },
+  resultActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, alignSelf: 'stretch' },
+  resultActionButton: { flex: 1, minWidth: 100, height: 40, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 12 },
+  resultActionText: { color: '#F4F4F4', fontSize: 13, fontFamily: 'SF Pro Display', fontWeight: '400', letterSpacing: -0.41 },
+  historyContainer: { alignSelf: 'stretch', gap: 9 },
+  historyTitle: { color: '#F4F4F4', fontSize: 16, fontFamily: 'SF Pro Display', fontWeight: '700', letterSpacing: -0.41 },
+  historyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5.67, alignSelf: 'stretch' },
+  historyItem: { width: 82, height: 82, borderRadius: 8, overflow: 'hidden' },
+  historyItemActive: { borderWidth: 2, borderColor: '#0058DB' },
+  historyImage: { width: '100%', height: '100%' },
 });
