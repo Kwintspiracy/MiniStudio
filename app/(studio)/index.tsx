@@ -143,7 +143,7 @@ export default function StudioScreen() {
   const [isPaintExplorerOpen, setIsPaintExplorerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { pickMultipleImages } = useImagePicker();
+  const { pickMultipleImages, pickDocument } = useImagePicker();
   const { saveImage } = useMediaSave();
 
   // Load example assets into Gallery history when available
@@ -174,9 +174,28 @@ export default function StudioScreen() {
   const handlePickImage = useCallback(async () => {
     const images = await pickMultipleImages();
     if (images.length > 0) {
-      setSourceImages(prev => [...prev, ...images]);
+      setSourceImages(images);
     }
   }, [pickMultipleImages]);
+
+  const handleDocumentPick = useCallback(async () => {
+    const doc = await pickDocument();
+    if (doc) {
+      setSourceImages([doc]);
+    }
+  }, [pickDocument]);
+
+  const handleFilesPress = useCallback(() => {
+    Alert.alert(
+      'Select Image Source',
+      'Choose where to load your image from',
+      [
+        { text: 'Photo Library', onPress: handlePickImage },
+        { text: 'Browse Documents', onPress: handleDocumentPick },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  }, [handlePickImage, handleDocumentPick]);
 
   const handleGenerate = useCallback(async () => {
     if (sourceImages.length === 0) {
@@ -193,10 +212,22 @@ export default function StudioScreen() {
         const promptParts: string[] = [promptToUse, painterPrompt];
 
         const nmmEffect = effectPrompts['effect.nmm'];
-        if (isNMMEnabled && nmmEffect) promptParts.push(isPro ? nmmEffect.pro : nmmEffect.default);
+        if (isNMMEnabled && nmmEffect) {
+          promptParts.push(isPro ? nmmEffect.pro : nmmEffect.default);
+        } else if (nmmEffect) {
+          // Negative Prompts
+          const neg = isPro ? nmmEffect.negative_pro : nmmEffect.negative_default;
+          if (neg) promptParts.push(neg);
+        }
 
         const oslEffect = effectPrompts['effect.osl'];
-        if (isOSLEnabled && oslEffect) promptParts.push(isPro ? oslEffect.pro : oslEffect.default);
+        if (isOSLEnabled && oslEffect) {
+          promptParts.push(isPro ? oslEffect.pro : oslEffect.default);
+        } else if (oslEffect) {
+          // Negative Prompts
+          const neg = isPro ? oslEffect.negative_pro : oslEffect.negative_default;
+          if (neg) promptParts.push(neg);
+        }
         if (isPaletteEnabled) {
           if (selectedColors.length > 0) {
             promptParts.push(`strictly using this color palette: ${selectedColors.map(c => `${c.name} (${c.hex})`).join(', ')}`);
@@ -206,6 +237,7 @@ export default function StudioScreen() {
         }
         promptParts.push("GENERATE THE IMAGE NOW. Do not output conversational text.");
         const finalPrompt = promptParts.filter(Boolean).join(' ');
+        console.log(finalPrompt);
         images = await generatePaintedMiniature(sourceImages, finalPrompt, 1, model);
       } else if (activeTab === 'designer') {
         const characterDesc = designerPrompt.trim() || 'character';
@@ -213,6 +245,7 @@ export default function StudioScreen() {
         const templateConfig = designerTemplates[typeToUse];
         const template = isPro ? templateConfig.pro : templateConfig.default;
         const prompt = template.replace(/{input}/g, characterDesc);
+        console.log(prompt);
         images = await generateImageFromImage(sourceImages, prompt, model);
       }
       if (images && images.length > 0) {
@@ -387,18 +420,9 @@ export default function StudioScreen() {
         </View>
 
         {/* Main Content Area */}
+        <MainNavTab activeTab={activeTab} onTabChange={setActiveTab} />
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <MainNavTab activeTab={activeTab} onTabChange={setActiveTab} />
-
-          {/* Input Container */}
           <View style={styles.inputContainer}>
-            <View style={styles.sourceInfo}>
-              <Text style={styles.inputLabel}>SOURCE</Text>
-              <Text style={styles.inputSubtitle}>
-                {hasImageLoaded ? 'Image to Image' : 'Choose an image'}
-              </Text>
-            </View>
-
             {hasImageLoaded ? (
               <View style={styles.sourceImageWrapper}>
                 <Image source={{ uri: sourceImages[0].base64 }} style={styles.sourceImage} />
@@ -407,20 +431,27 @@ export default function StudioScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.optionsRow}>
-                <TouchableOpacity style={styles.optionButton} onPress={() => router.push('/camera')} activeOpacity={0.8}>
-                  <PhotoCameraIcon />
-                  <Text style={styles.optionButtonText}>Photo</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.optionButton} onPress={handlePickImage} activeOpacity={0.8}>
-                  <PhotoLibraryIcon />
-                  <Text style={styles.optionButtonText}>Files</Text>
-                </TouchableOpacity>
+              <View style={styles.sourceInfo}>
+                <Text style={styles.inputLabel}>SOURCE</Text>
+                <Text style={styles.inputSubtitle}>
+                  Choose an image
+                </Text>
               </View>
             )}
+
+            <View style={styles.optionsRow}>
+              <TouchableOpacity style={styles.optionButton} onPress={() => router.push('/camera')} activeOpacity={0.8}>
+                <PhotoCameraIcon />
+                <Text style={styles.optionButtonText}>Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.optionButton} onPress={handleFilesPress} activeOpacity={0.8}>
+                <PhotoLibraryIcon />
+                <Text style={styles.optionButtonText}>Files</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {/* Mode-Specific Content */}
+          {/* DESIGN: Mode-Specific Content */}
           {hasImageLoaded && (
             <View style={styles.modeContent}>
               {activeTab === 'designer' ? (
@@ -436,8 +467,8 @@ export default function StudioScreen() {
                     <TextInput
                       value={designerPrompt}
                       onChangeText={setDesignerPrompt}
-                      placeholder="Add more details to the default prompt..."
-                      placeholderTextColor="rgba(244, 244, 244, 0.4)"
+                      placeholder="Optional: add more details to the default prompt..."
+                      placeholderTextColor={colors.text.secondary}
                       multiline
                       textAlignVertical="top"
                       style={styles.promptInput}
@@ -637,66 +668,66 @@ export default function StudioScreen() {
 }
 
 const styles = StyleSheet.create({
-  screenContainer: { flex: 1, backgroundColor: '#12121F' },
-  statusBarBackground: { height: 0, backgroundColor: '#12121F' },
-  container: { flex: 1, backgroundColor: '#1E1E2B' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1E1E2B' },
-  topNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 64, paddingHorizontal: 0, backgroundColor: '#12121F' },
+  screenContainer: { flex: 1, backgroundColor: colors.background.secondary },
+  statusBarBackground: { height: 0, backgroundColor: colors.background.secondary },
+  container: { flex: 1, backgroundColor: colors.background.primary },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background.primary },
+  topNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 64, paddingHorizontal: 0, backgroundColor: colors.background.secondary },
   topNavSide: { width: 91, alignItems: 'center', justifyContent: 'center' },
   topNavTitle: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   userIconContainer: { alignItems: 'flex-end', paddingRight: 16 },
-  proBadge: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, borderColor: '#0058DB' },
+  proBadge: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, borderColor: colors.button.primary },
   proBadgeInactive: { backgroundColor: '#002761' },
-  proBadgeActive: { backgroundColor: '#0058DB' },
+  proBadgeActive: { backgroundColor: colors.button.primary },
   proBadgeText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontWeight: '500', fontSize: 14, letterSpacing: -0.41, marginLeft: 4 },
-  proTextInactive: { color: '#F4F4F4' },
-  proTextActive: { color: '#F4F4F4' },
+  proTextInactive: { color: colors.text.primary },
+  proTextActive: { color: colors.text.primary },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 150 },
-  navTabContainer: { flexDirection: 'row', alignSelf: 'stretch', backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: 8, padding: 6, marginBottom: 7 },
+  navTabContainer: { flexDirection: 'row', alignSelf: 'stretch', backgroundColor: colors.background.secondary, paddingHorizontal: 16, paddingVertical: 8 },
   tabButton: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: 6 },
-  tabButtonActive: { backgroundColor: '#0058DB' },
+  tabButtonActive: { backgroundColor: colors.button.primary },
   tabButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 14, marginLeft: 4 },
-  tabTextActive: { color: '#F4F4F4' },
+  tabTextActive: { color: colors.text.primary },
   tabTextInactive: { color: colors.text.secondary },
-  inputContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 8, paddingLeft: 16 },
+  inputContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch', backgroundColor: colors.background.tertiary, borderRadius: 8, borderWidth: 2, borderColor: colors.border.strong, borderStyle: 'dashed', paddingVertical: 8, paddingHorizontal: 8 },
   sourceInfo: { justifyContent: 'center' },
   inputLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '700', fontSize: 12, color: colors.text.secondary },
-  inputSubtitle: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 13, color: '#F4F4F4', marginTop: 2 },
+  inputSubtitle: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 13, color: colors.text.primary, marginTop: 2 },
   optionsRow: { flexDirection: 'row', alignItems: 'center' },
   optionButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 17, paddingHorizontal: 16, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 4, marginLeft: 8 },
-  optionButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 13, color: '#F4F4F4', marginLeft: 8 },
-  sourceImageWrapper: { width: 50, height: 50, borderRadius: 6, borderWidth: 3, borderColor: '#0058DB', overflow: 'hidden' },
+  optionButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 13, color: colors.text.primary, marginLeft: 8 },
+  sourceImageWrapper: { width: 50, height: 50, borderRadius: 6, borderWidth: 3, borderColor: colors.button.primary, overflow: 'hidden' },
   sourceImage: { width: '100%', height: '100%' },
   removeImageOverlay: { position: 'absolute', top: 0, right: 0, width: 15, height: 15, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   removeImageTextSmall: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
-  modeContent: { marginTop: 5, gap: 5, alignSelf: 'stretch' },
-  promptContainer: { alignSelf: 'stretch', backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: 8, padding: 16, minHeight: 102 },
-  promptInput: { flex: 1, fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontSize: 14, color: '#F4F4F4', lineHeight: 20 },
+  modeContent: { marginTop: 8, gap: 5, alignSelf: 'stretch' },
+  promptContainer: { alignSelf: 'stretch', backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 12, minHeight: 200 },
+  promptInput: { flex: 1, fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontSize: 14, color: colors.text.primary, lineHeight: 20 },
   designStepSection: { gap: 5 },
   paintStepSection: { gap: 5 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 8, padding: 8, marginTop: 12 },
   sectionHeaderText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 13, color: colors.text.secondary },
   conceptTabContainer: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', gap: 4 },
   conceptTabButton: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, paddingVertical: 12, borderRadius: 8, backgroundColor: 'rgba(0, 0, 0, 0.3)', height: 40 },
-  conceptTabButtonActive: { backgroundColor: '#F4F4F4' },
+  conceptTabButtonActive: { backgroundColor: colors.button.white },
   conceptTabText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 13 },
-  conceptTabTextActive: { color: '#1D1D1D' },
-  conceptTabTextInactive: { color: '#F4F4F4' },
+  conceptTabTextActive: { color: colors.text.dark },
+  conceptTabTextInactive: { color: colors.text.primary },
   styleGrid: { flexDirection: 'row', alignSelf: 'stretch', flexWrap: 'wrap', gap: 4 },
   styleButton: { justifyContent: 'center', alignItems: 'center', padding: 12, borderRadius: 4, backgroundColor: 'rgba(0, 0, 0, 0.3)' },
-  styleButtonActive: { backgroundColor: '#F4F4F4' },
+  styleButtonActive: { backgroundColor: colors.button.white },
   styleButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 13 },
-  styleTextActive: { color: '#1D1D1D', fontWeight: '600' },
-  styleTextInactive: { color: '#F4F4F4' },
+  styleTextActive: { color: colors.text.dark, fontWeight: '600' },
+  styleTextInactive: { color: colors.text.primary },
   optionItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 4, backgroundColor: 'rgba(255, 255, 255, 0.05)' },
-  optionLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 14, color: '#F4F4F4' },
-  optionLabelActive: { color: '#F4F4F4' },
+  optionLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 14, color: colors.text.primary },
+  optionLabelActive: { color: colors.text.primary },
   toggleContainer: { width: 46, height: 24, padding: 3, borderRadius: 12, justifyContent: 'center' },
-  toggleOn: { backgroundColor: '#F4F4F4' },
+  toggleOn: { backgroundColor: colors.button.white },
   toggleOff: { backgroundColor: colors.text.secondary },
   toggleCircle: { width: 18, height: 18, borderRadius: 9 },
-  toggleCircleActive: { alignSelf: 'flex-end', backgroundColor: '#0058DB' },
-  toggleCircleInactive: { alignSelf: 'flex-start', backgroundColor: '#1D1D1D' },
+  toggleCircleActive: { alignSelf: 'flex-end', backgroundColor: colors.button.primary },
+  toggleCircleInactive: { alignSelf: 'flex-start', backgroundColor: colors.text.dark },
   paletteContainer: { padding: 12, borderRadius: 8, borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.05)', backgroundColor: 'transparent', gap: 12, alignSelf: 'stretch' },
   paletteHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   paletteTitle: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 13, color: colors.text.secondary },
@@ -706,51 +737,51 @@ const styles = StyleSheet.create({
   paintSelectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4, paddingBottom: 8 },
   paintSelectionCount: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 13, color: colors.text.secondary, lineHeight: 14 },
   paintSelectionEmpty: { paddingTop: 4, paddingBottom: 8 },
-  paintSelectionHint: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 14, color: '#F4F4F4', lineHeight: 18 },
-  paintSelectionButton: { alignSelf: 'stretch', padding: 16, backgroundColor: '#F4F4F4', borderRadius: 4, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
-  paintSelectionButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 16, color: '#1D1D1D', letterSpacing: -0.408 },
+  paintSelectionHint: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 14, color: colors.text.primary, lineHeight: 18 },
+  paintSelectionButton: { alignSelf: 'stretch', padding: 16, backgroundColor: colors.button.white, borderRadius: 4, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  paintSelectionButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 16, color: colors.text.dark, letterSpacing: -0.408 },
   colorChipsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   colorChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 8, backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: 4 },
   colorChipCircle: { width: 16, height: 16, borderRadius: 8 },
-  colorChipName: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 13, color: '#F4F4F4', maxWidth: 100 },
+  colorChipName: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 13, color: colors.text.primary, maxWidth: 100 },
   colorChipClose: { marginLeft: 4 },
   brandTabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   brandButton: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 12, borderRadius: 4, backgroundColor: 'rgba(0, 0, 0, 0.3)' },
-  brandButtonActive: { backgroundColor: '#F4F4F4' },
+  brandButtonActive: { backgroundColor: colors.button.white },
   brandText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 13 },
-  explorerButton: { alignSelf: 'stretch', padding: 16, backgroundColor: '#F4F4F4', borderRadius: 4, alignItems: 'center' },
-  explorerButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 14, color: '#1D1D1D' },
-  footerContainer: { alignSelf: 'stretch', backgroundColor: '#12121F', paddingTop: 32, paddingHorizontal: 16, paddingBottom: 50, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 20 },
+  explorerButton: { alignSelf: 'stretch', padding: 16, backgroundColor: colors.button.white, borderRadius: 4, alignItems: 'center' },
+  explorerButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 14, color: colors.text.dark },
+  footerContainer: { alignSelf: 'stretch', backgroundColor: colors.background.secondary, paddingTop: 32, paddingHorizontal: 16, paddingBottom: 50, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 20 },
   bottomButtonsRow: { flexDirection: 'row', alignSelf: 'stretch', gap: 8 },
-  galleryButton: { flex: 1, height: 52, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
-  galleryButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: '#F4F4F4' },
-  createButton: { flex: 1, height: 52, backgroundColor: '#0058DB', borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  galleryButton: { flex: 1, height: 52, backgroundColor: 'transparent', borderWidth: 2, borderColor: colors.border.strong, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  galleryButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: colors.text.secondary },
+  createButton: { flex: 1, height: 52, backgroundColor: colors.button.primary, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
   createButtonContent: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  createButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: '#F4F4F4' },
-  cancelButton: { backgroundColor: '#1D1D1D' },
-  cancelButtonText: { color: '#F4F4F4', opacity: 0.3 },
+  createButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: colors.text.primary },
+  cancelButton: { backgroundColor: colors.text.dark },
+  cancelButtonText: { color: colors.text.primary, opacity: 0.3 },
   buttonDisabled: { opacity: 0.5 },
-  modalContainer: { flex: 1, backgroundColor: '#12121F' },
+  modalContainer: { flex: 1, backgroundColor: colors.background.secondary },
   grabberContainer: { width: '100%', height: 24, alignItems: 'center', justifyContent: 'center' },
   grabber: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,0.2)' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 16, paddingHorizontal: 24, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
   modalHeaderSide: { width: 50, justifyContent: 'center' },
-  modalTitle: { flex: 1, textAlign: 'center', color: '#F4F4F4', fontSize: 16, fontFamily: 'SF Pro Display', fontWeight: '700', letterSpacing: -0.41 },
-  doneButtonText: { color: '#0058DB', fontSize: 16, fontWeight: '600', textAlign: 'right' },
+  modalTitle: { flex: 1, textAlign: 'center', color: colors.text.primary, fontSize: 16, fontFamily: 'SF Pro Display', fontWeight: '700', letterSpacing: -0.41 },
+  doneButtonText: { color: colors.button.primary, fontSize: 16, fontWeight: '600', textAlign: 'right' },
   closeButton: { paddingVertical: 12, paddingHorizontal: 16, justifyContent: 'center', alignItems: 'flex-end' },
   modalContent: { flex: 1, padding: 24 },
   resultContainer: { alignSelf: 'stretch', gap: 8, marginBottom: 32 },
   activeResultImage: { width: '100%', aspectRatio: undefined, borderRadius: 8, backgroundColor: '#000' },
   resultActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, alignSelf: 'stretch' },
   resultActionButton: { flex: 1, minWidth: 100, height: 40, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 12 },
-  resultActionButtonPrimary: { backgroundColor: '#F4F4F4' },
-  resultActionText: { color: '#F4F4F4', fontSize: 14, fontFamily: 'SF Pro Display', fontWeight: '500', letterSpacing: -0.41 },
-  resultActionTextDark: { color: '#1D1D1D' },
+  resultActionButtonPrimary: { backgroundColor: colors.button.white },
+  resultActionText: { color: colors.text.primary, fontSize: 14, fontFamily: 'SF Pro Display', fontWeight: '500', letterSpacing: -0.41 },
+  resultActionTextDark: { color: colors.text.dark },
   resultActionButtonIcon: { height: 40, paddingHorizontal: 24, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   historyContainer: { alignSelf: 'stretch', gap: 9, paddingBottom: 60 },
-  historyTitle: { color: '#F4F4F4', fontSize: 16, fontFamily: 'SF Pro Display', fontWeight: '700', letterSpacing: -0.41 },
+  historyTitle: { color: colors.text.primary, fontSize: 16, fontFamily: 'SF Pro Display', fontWeight: '700', letterSpacing: -0.41 },
   historyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: '2%', alignSelf: 'stretch' },
   historyItem: { width: '23.5%', aspectRatio: 1, minWidth: 82, minHeight: 82, borderRadius: 8, overflow: 'hidden' },
-  historyItemActive: { borderWidth: 2, borderColor: '#0058DB' },
+  historyItemActive: { borderWidth: 2, borderColor: colors.button.primary },
   historyImage: { width: '100%', height: '100%' },
 });

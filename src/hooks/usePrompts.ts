@@ -6,7 +6,7 @@ import { StyleOption, DesignerType } from '../types';
 interface PromptsState {
     styles: (StyleOption & { promptPro?: string })[];
     templates: Record<string, { default: string; pro: string }>;
-    effects: Record<string, { default: string; pro: string }>;
+    effects: Record<string, { default: string; pro: string; negative_default?: string; negative_pro?: string }>;
     shareMessage: string;
     exampleAssets: string[]; // URLs
     loading: boolean;
@@ -75,14 +75,24 @@ export function usePrompts() {
 
             // Update Effects
             const updatedEffects = { ...state.effects };
-            const newEffects: Record<string, { default: string; pro: string }> = {};
+            const newEffects: Record<string, { default: string; pro: string; negative_default?: string; negative_pro?: string }> = {};
 
-            newEffects['effect.nmm'] = remotePrompts['effect.nmm'] || {
+            newEffects['effect.nmm'] = remotePrompts['effect.nmm'] ? {
+                default: remotePrompts['effect.nmm'].default,
+                pro: remotePrompts['effect.nmm'].pro,
+                negative_default: remotePrompts['effect.nmm'].negative_default,
+                negative_pro: remotePrompts['effect.nmm'].negative_pro
+            } : {
                 default: 'using the Non-Metallic Metal (NMM) technique for all metallic parts',
                 pro: 'using the Non-Metallic Metal (NMM) technique for all metallic parts'
             };
 
-            newEffects['effect.osl'] = remotePrompts['effect.osl'] || {
+            newEffects['effect.osl'] = remotePrompts['effect.osl'] ? {
+                default: remotePrompts['effect.osl'].default,
+                pro: remotePrompts['effect.osl'].pro,
+                negative_default: remotePrompts['effect.osl'].negative_default,
+                negative_pro: remotePrompts['effect.osl'].negative_pro
+            } : {
                 default: 'Integrate Object Source Lighting (OSL) showing realistic colored light emanating from specific points',
                 pro: 'Integrate Object Source Lighting (OSL) showing realistic colored light emanating from specific points'
             };

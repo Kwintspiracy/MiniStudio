@@ -14,6 +14,8 @@ export default function AdminDashboard() {
     const [editVersionLabel, setEditVersionLabel] = useState('');
     const [editTemplate, setEditTemplate] = useState('');
     const [editTemplatePro, setEditTemplatePro] = useState('');
+    const [editNegativeTemplate, setEditNegativeTemplate] = useState('');
+    const [editNegativeTemplatePro, setEditNegativeTemplatePro] = useState('');
 
     // New Key State
     const [isCreatingKey, setIsCreatingKey] = useState(false);
@@ -69,6 +71,8 @@ export default function AdminDashboard() {
         setEditVersionLabel(`v${versions.length + 1}.0`);
         setEditTemplate(latest?.template || '');
         setEditTemplatePro(latest?.template_pro || latest?.template || '');
+        setEditNegativeTemplate(latest?.negative_template || '');
+        setEditNegativeTemplatePro(latest?.negative_template_pro || latest?.negative_template || '');
         setIsEditing(true);
     };
 
@@ -77,47 +81,72 @@ export default function AdminDashboard() {
         setEditVersionLabel(version.version_label);
         setEditTemplate(version.template);
         setEditTemplatePro(version.template_pro || version.template);
+        setEditNegativeTemplate(version.negative_template || '');
+        setEditNegativeTemplatePro(version.negative_template_pro || version.negative_template || '');
         setIsEditing(true);
     };
 
     const handleSaveVersion = async () => {
-        const keyToUse = isCreatingKey ? newKeyName : selectedKey;
-        if (!keyToUse) return;
+        try {
+            console.log('handleSaveVersion started');
+            const keyToUse = isCreatingKey ? newKeyName : selectedKey;
 
-        const versions = groupedPrompts[keyToUse] || [];
-        const latest = versions[0];
-        const nameToUse = latest?.name || keyToUse;
+            if (!keyToUse) {
+                Alert.alert('Error', 'No Key selected or created');
+                return;
+            }
 
-        let error;
-        if (editingId) {
-            // Update existing
-            const result = await adminUpdatePrompt(editingId, {
-                version_label: editVersionLabel,
-                template: editTemplate,
-                template_pro: editTemplatePro,
-                name: nameToUse
-            });
-            error = result.error;
-        } else {
-            // Create new
-            const result = await adminCreatePromptVersion(
-                keyToUse,
-                nameToUse,
-                editVersionLabel,
-                editTemplate,
-                editTemplatePro
-            );
-            error = result.error;
-        }
+            const versions = groupedPrompts[keyToUse] || [];
+            const latest = versions[0];
+            const nameToUse = latest?.name || keyToUse;
 
-        if (error) {
-            Alert.alert('Error', error.message);
-        } else {
-            setIsEditing(false);
-            setIsCreatingKey(false); // Reset
-            setEditingId(null);
-            if (isCreatingKey) setSelectedKey(keyToUse); // Select the new key
-            await fetchData();
+            let error;
+            if (editingId) {
+                // Update existing
+                console.log('[Admin] Updating', editingId, {
+                    version_label: editVersionLabel,
+                    template: editTemplate,
+                    template_pro: editTemplatePro,
+                    neg: editNegativeTemplate,
+                    negPro: editNegativeTemplatePro
+                });
+                const result = await adminUpdatePrompt(editingId, {
+                    version_label: editVersionLabel,
+                    template: editTemplate,
+                    template_pro: editTemplatePro,
+                    negative_template: editNegativeTemplate,
+                    negative_template_pro: editNegativeTemplatePro,
+                    name: nameToUse
+                });
+                error = result.error;
+            } else {
+                // Create new
+                const result = await adminCreatePromptVersion(
+                    keyToUse,
+                    nameToUse,
+                    editVersionLabel,
+                    editTemplate,
+                    editTemplatePro,
+                    editNegativeTemplate,
+                    editNegativeTemplatePro
+                );
+                error = result.error;
+            }
+
+            if (error) {
+                console.error('Operation Error', error);
+                Alert.alert('Error', error.message);
+            } else {
+                setIsEditing(false);
+                setIsCreatingKey(false); // Reset
+                setEditingId(null);
+                if (isCreatingKey) setSelectedKey(keyToUse); // Select the new key
+                Alert.alert('Success', 'Version saved successfully');
+                await fetchData();
+            }
+        } catch (e: any) {
+            console.error('handleSaveVersion Exception', e);
+            Alert.alert('Exception', e.message || 'Unknown error occurred');
         }
     };
 
@@ -392,6 +421,26 @@ export default function AdminDashboard() {
                                     multiline
                                 />
 
+                                <Text style={styles.label}>Negative (Default) - optional</Text>
+                                <TextInput
+                                    style={[styles.input, styles.textArea]}
+                                    value={editNegativeTemplate}
+                                    onChangeText={setEditNegativeTemplate}
+                                    multiline
+                                    placeholder="Text to append when effect is OFF"
+                                    placeholderTextColor="#555"
+                                />
+
+                                <Text style={styles.label}>Negative (Pro) - optional</Text>
+                                <TextInput
+                                    style={[styles.input, styles.textArea]}
+                                    value={editNegativeTemplatePro}
+                                    onChangeText={setEditNegativeTemplatePro}
+                                    multiline
+                                    placeholder="Text to append when effect is OFF"
+                                    placeholderTextColor="#555"
+                                />
+
                                 <View style={styles.editorActions}>
                                     <TouchableOpacity style={styles.cancelButton} onPress={() => setIsEditing(false)}>
                                         <Text style={styles.actionButtonText}>Cancel</Text>
@@ -493,6 +542,14 @@ export default function AdminDashboard() {
                                             <Text style={[styles.sectionLabel, { color: '#0058DB' }]}>Pro:</Text>
                                             <Text style={styles.templateText}>{version.template_pro}</Text>
                                         </View>
+
+                                        {(version.negative_template || version.negative_template_pro) && (
+                                            <View style={[styles.templateSection, { marginTop: 12, borderColor: '#522' }]}>
+                                                <Text style={[styles.sectionLabel, { color: '#e55' }]}>Negative:</Text>
+                                                {version.negative_template ? <Text style={styles.templateText}>[Def] {version.negative_template}</Text> : null}
+                                                {version.negative_template_pro ? <Text style={styles.templateText}>[Pro] {version.negative_template_pro}</Text> : null}
+                                            </View>
+                                        )}
                                     </View>
                                 ))}
                             </ScrollView>
@@ -559,6 +616,8 @@ const styles = StyleSheet.create({
     cancelButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 6, backgroundColor: '#30363D' },
     saveButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 6, backgroundColor: '#238636' },
     actionButtonText: { color: '#FFFFFF', fontWeight: 'bold' },
+
+
 
     sidebarHeaderContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
     addKeyButton: { backgroundColor: '#30363D', width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },

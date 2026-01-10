@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
 import { AuthProvider } from '../src/context/AuthContext';
 import { ImageProvider } from '../src/context/ImageContext';
+import { colors } from '../src/theme';
 import '../global.css';
 
 // Polyfill/Suppression for SSR warnings
@@ -29,7 +30,7 @@ export default function RootLayout() {
             <Stack
               screenOptions={{
                 headerShown: false,
-              contentStyle: { backgroundColor: '#1E1E2B' },
+                contentStyle: { backgroundColor: colors.background.primary },
                 animation: 'slide_from_right',
               }}
             >

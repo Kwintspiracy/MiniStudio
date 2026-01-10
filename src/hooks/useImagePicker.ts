@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as DocumentPicker from 'expo-document-picker';
 import type { ImageFile } from '../types';
 
 interface UseImagePickerResult {
   pickImage: () => Promise<ImageFile | null>;
   pickMultipleImages: () => Promise<ImageFile[]>;
+  pickDocument: () => Promise<ImageFile | null>;
   isLoading: boolean;
   error: string | null;
 }
@@ -145,9 +147,35 @@ export function useImagePicker(): UseImagePickerResult {
     }
   }, [convertToImageFile]);
 
+  const pickDocument = useCallback(async (): Promise<ImageFile | null> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return null;
+      }
+
+      const asset = result.assets[0];
+      return await convertToImageFile(asset.uri);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to pick document';
+      setError(message);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [convertToImageFile]);
+
   return {
     pickImage,
     pickMultipleImages,
+    pickDocument,
     isLoading,
     error,
   };

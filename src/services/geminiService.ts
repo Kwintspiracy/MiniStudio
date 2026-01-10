@@ -207,7 +207,7 @@ export async function upscaleImage(
     }
   }));
 
-  const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+  const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
   if (part?.inlineData) {
     return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
   }

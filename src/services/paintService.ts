@@ -68,9 +68,9 @@ export async function fetchUserPaints(): Promise<PaletteColor[]> {
     .select('paints ( * )') // Correct syntax for joining
     .eq('status', 'owned'); // Filter for paints in 'Collection'
 
-  console.log("Fetching User Paints...");
+  if (__DEV__) console.log("Fetching User Paints...");
   if (error) {
-    console.warn("Could not fetch user paints (table might not exist or schema mismatch):", error.message);
+    if (__DEV__) console.warn("Could not fetch user paints (table might not exist or schema mismatch):", error.message);
     return [];
   }
 
@@ -78,9 +78,9 @@ export async function fetchUserPaints(): Promise<PaletteColor[]> {
   // We need to extract the inner object.
   const paints = data?.map((item: any) => item.paints).filter((p: any) => p !== null) || [];
 
-  console.log(`Fetched ${paints.length} user paints.`);
+  if (__DEV__) console.log(`Fetched ${paints.length} user paints.`);
   if (paints.length > 0) {
-    console.log("Sample User Paint (Flattened):", JSON.stringify(paints[0], null, 2));
+    if (__DEV__) console.log("Sample User Paint (Flattened):", JSON.stringify(paints[0], null, 2));
     // Tag them so PaletteManager knows to put them in "User Library"
     return paints.map((p: any) => ({ ...p, _isUserPaint: true }));
   }

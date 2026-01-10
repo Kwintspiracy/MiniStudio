@@ -8,25 +8,25 @@
 export const colors = {
     // Background colors
     background: {
-        primary: '#1E1E2B',
-        secondary: '#12121F',
-        tertiary: 'rgba(255, 255, 255, 0.05)',
-        bottom: 'rgba(255, 255, 255, 0.05)',
+        primary: '#12141C',
+        secondary: '#0B0C0E',
+        tertiary: '#202332',
+        bottom: '#0B0C0E',
     },
 
     // Text colors
     text: {
         primary: '#F4F4F4',
-        secondary: 'rgba(244, 244, 244, 0.4)',
+        secondary: '#ACACAC',
         dark: '#1D1D1D',
     },
 
     // Button colors
     button: {
-        primary: '#0058DB',
+        primary: '#1645FF',
         danger: '#FA0439',
         secondary: 'rgba(255, 255, 255, 0.05)',
-        dark: 'rgba(0, 0, 0, 0.3)',
+        dark: '#0B0C0E',
         white: '#F4F4F4',
     },
 
@@ -39,6 +39,7 @@ export const colors = {
     // Border colors
     border: {
         subtle: 'rgba(255, 255, 255, 0.05)',
+        strong: '#66666B',
     },
 } as const;
 

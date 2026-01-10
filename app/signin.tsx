@@ -161,6 +161,8 @@ export default function SignInScreen() {
                     autoCapitalize="none"
                     autoCorrect={false}
                     keyboardType="email-address"
+                    accessibilityLabel="Email address"
+                    accessibilityHint="Enter your email address"
                     style={styles.input}
                   />
                   <TextInput
@@ -169,6 +171,8 @@ export default function SignInScreen() {
                     placeholder="Password"
                     placeholderTextColor={colors.text.secondary}
                     secureTextEntry
+                    accessibilityLabel="Password"
+                    accessibilityHint="Enter your password"
                     style={styles.input}
                   />
                 </View>
@@ -179,6 +183,10 @@ export default function SignInScreen() {
                 <TouchableOpacity
                   onPress={handleSignIn}
                   disabled={isSubmitting}
+                  accessibilityLabel="Sign in"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: isSubmitting }}
+                  accessibilityHint="Signs you in with email and password"
                   style={styles.primaryButton}
                   activeOpacity={0.8}
                 >
@@ -198,6 +206,9 @@ export default function SignInScreen() {
                 {/* Google Sign In */}
                 <TouchableOpacity
                   onPress={handleGoogleSignIn}
+                  accessibilityLabel="Continue with Google"
+                  accessibilityRole="button"
+                  accessibilityHint="Signs you in using your Google account"
                   style={styles.googleButton}
                   activeOpacity={0.9}
                 >
@@ -208,6 +219,9 @@ export default function SignInScreen() {
                 {/* Apple Sign In */}
                 <TouchableOpacity
                   onPress={handleAppleSignIn}
+                  accessibilityLabel="Continue with Apple"
+                  accessibilityRole="button"
+                  accessibilityHint="Signs you in using your Apple account"
                   style={styles.appleButton}
                   activeOpacity={0.9}
                 >
@@ -226,6 +240,10 @@ export default function SignInScreen() {
               <TouchableOpacity
                 onPress={handleCreateAccount}
                 disabled={isSubmitting}
+                accessibilityLabel="Create an account"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: isSubmitting }}
+                accessibilityHint="Creates a new account with your email and password"
                 style={styles.createAccountButton}
                 activeOpacity={0.8}
               >
@@ -235,6 +253,9 @@ export default function SignInScreen() {
               {/* Forgot Password */}
               <TouchableOpacity
                 onPress={handleForgotPassword}
+                accessibilityLabel="Forgot password"
+                accessibilityRole="link"
+                accessibilityHint="Opens email to request password reset"
                 style={styles.forgotPasswordButton}
                 activeOpacity={0.7}
               >

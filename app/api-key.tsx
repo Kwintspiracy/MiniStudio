@@ -13,48 +13,11 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../src/context/AuthContext';
 import { setApiKey } from '../src/services/storageService';
+import { KeyIcon } from '../src/components/Icons';
+import { colors } from '../src/theme';
 
-// Design System Colors
-const colors = {
-  background: {
-    primary: '#1E1E2B',
-    secondary: '#12121F',
-    tertiary: 'rgba(255, 255, 255, 0.05)',
-  },
-  text: {
-    primary: '#F4F4F4',
-    secondary: 'rgba(244, 244, 244, 0.4)',
-    dark: '#1D1D1D',
-  },
-  button: {
-    primary: '#0058DB',
-    danger: '#FA0439',
-    secondary: 'rgba(255, 255, 255, 0.05)',
-  },
-  accent: {
-    blue: '#518CFF',
-    red: '#FA0439',
-  },
-  border: {
-    subtle: 'rgba(255, 255, 255, 0.05)',
-  },
-};
-
-// Key Icon for API screen
-const KeyIcon = ({ size = 16, color = '#518CFF' }: { size?: number; color?: string }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Path
-      d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"
-      stroke={color}
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </Svg>
-);
 
 export default function ApiKeyScreen() {
   const { signOut } = useAuth();

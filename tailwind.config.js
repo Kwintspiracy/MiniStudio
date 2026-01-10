@@ -12,12 +12,12 @@ module.exports = {
         background: {
           primary: '#1E1E2B',
           secondary: '#12121F',
-          tertiary: 'rgba(255, 255, 255, 0.05)',
-          bottom: 'rgba(255, 255, 255, 0.05)',
+          tertiary: '#8B8B91',
+          bottom: '#8B8B91',
         },
         text: {
           primary: '#F4F4F4',
-          secondary: 'rgba(244, 244, 244, 0.4)',
+          secondary: '#8B8B91',
           dark: '#1D1D1D',
         },
         button: {

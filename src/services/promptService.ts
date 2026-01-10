@@ -13,12 +13,14 @@ export interface PromptConfig {
     version_label: string;
     template: string;
     template_pro: string;
+    negative_template?: string; // Optional
+    negative_template_pro?: string; // Optional
     is_active: boolean;
     created_at: string;
 }
 
-// { default: "...", pro: "..." }
-export type PromptDictionary = Record<string, { default: string; pro: string }>;
+// { default: "...", pro: "...", negative_default?: "...", negative_pro?: "..." }
+export type PromptDictionary = Record<string, { default: string; pro: string; negative_default?: string; negative_pro?: string }>;
 
 // --- Client Methods ---
 
@@ -33,17 +35,19 @@ export async function fetchActivePrompts(): Promise<PromptDictionary> {
     try {
         const { data, error } = await supabase
             .from('prompt_configs')
-            .select('key, template, template_pro')
+            .select('key, template, template_pro, negative_template, negative_template_pro')
             .eq('is_active', true);
 
         if (error) throw error;
 
         // Convert array to dictionary
         const prompts: PromptDictionary = {};
-        data?.forEach((row: { key: string; template: string; template_pro: string }) => {
+        data?.forEach((row: { key: string; template: string; template_pro: string; negative_template?: string; negative_template_pro?: string }) => {
             prompts[row.key] = {
                 default: row.template,
-                pro: row.template_pro || row.template // Fallback to normal template if pro missing
+                pro: row.template_pro || row.template,
+                negative_default: row.negative_template,
+                negative_pro: row.negative_template_pro
             };
         });
 
@@ -88,12 +92,23 @@ export async function adminCreatePromptVersion(
     name: string,
     versionLabel: string,
     template: string,
-    templatePro: string
+    templatePro: string,
+    negativeTemplate?: string,
+    negativeTemplatePro?: string
 ): Promise<{ data: PromptConfig | null; error: PostgrestError | null }> {
     const { data, error } = await supabase
         .from('prompt_configs')
         .insert([
-            { key, name, version_label: versionLabel, template, template_pro: templatePro, is_active: false }
+            {
+                key,
+                name,
+                version_label: versionLabel,
+                template,
+                template_pro: templatePro,
+                negative_template: negativeTemplate,
+                negative_template_pro: negativeTemplatePro,
+                is_active: false
+            }
         ])
         .select()
         .single();
@@ -135,6 +150,12 @@ export async function adminUpdatePrompt(
         .eq('id', id)
         .select()
         .single();
+
+    if (error) {
+        console.error('[PromptService] Update Error:', error);
+    } else {
+        console.log('[PromptService] Update Success:', data);
+    }
 
     return { data, error };
 }

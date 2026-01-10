@@ -3,6 +3,7 @@ import { View, ActivityIndicator, StyleSheet, StatusBar } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { hasApiKey } from '../src/services/storageService';
+import { colors } from '../src/theme';
 
 export default function Index() {
   const { session, loading } = useAuth();
@@ -38,7 +39,7 @@ export default function Index() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <ActivityIndicator size="large" color="#0058DB" />
+      <ActivityIndicator size="large" color={colors.button.primary} />
     </View>
   );
 }
@@ -46,7 +47,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E2B',
+    backgroundColor: colors.background.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
