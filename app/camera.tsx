@@ -2,13 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { XMarkIcon, CameraIcon, RefreshIcon } from '../src/components/Icons';
 import type { ImageFile } from '../src/types';
 import * as FileSystem from 'expo-file-system/legacy';
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
+  const insets = useSafeAreaInsets();
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [isCapturing, setIsCapturing] = useState(false);
   const cameraRef = useRef<CameraView>(null);
@@ -62,7 +63,7 @@ export default function CameraScreen() {
 
   if (!permission.granted) {
     return (
-      <SafeAreaView className="flex-1 bg-[#0D1117]">
+      <View className="flex-1 bg-[#0D1117]" style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}>
         <View className="flex-1 items-center justify-center px-8">
           <Text className="text-white text-lg font-bold text-center mb-4">
             Camera Access Required
@@ -87,7 +88,7 @@ export default function CameraScreen() {
             </Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -98,9 +99,9 @@ export default function CameraScreen() {
         style={{ flex: 1 }}
         facing={facing}
       >
-        <SafeAreaView className="flex-1">
+        <View className="flex-1" style={{ paddingTop: insets.top }}>
           {/* Header */}
-          <View className="flex-row items-center justify-between px-4 py-2">
+          <View className="flex-row items-center justify-between px-4 py-4">
             <TouchableOpacity
               onPress={() => router.back()}
               className="w-10 h-10 bg-black/50 rounded-full items-center justify-center"
@@ -128,12 +129,12 @@ export default function CameraScreen() {
             <TouchableOpacity
               onPress={handleCapture}
               disabled={isCapturing}
-              className="w-20 h-20 rounded-full border-4 border-white items-center justify-center"
+              className="w-24 h-24 rounded-full border-4 border-white items-center justify-center"
             >
               {isCapturing ? (
                 <ActivityIndicator size="large" color="#ffffff" />
               ) : (
-                <View className="w-16 h-16 bg-white rounded-full" />
+                <View className="w-20 h-20 bg-white rounded-full" />
               )}
             </TouchableOpacity>
 
@@ -141,7 +142,7 @@ export default function CameraScreen() {
               Tap to capture
             </Text>
           </View>
-        </SafeAreaView>
+        </View>
       </CameraView>
     </View>
   );

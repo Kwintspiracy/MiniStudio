@@ -1,50 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  TextInput, 
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  TextInput,
   ActivityIndicator,
   StyleSheet,
   StatusBar,
   Platform,
   Linking,
-  SafeAreaView,
   KeyboardAvoidingView,
   ScrollView
 } from 'react-native';
 import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../src/context/AuthContext';
 import { hasApiKey } from '../src/services/storageService';
-
-// Design System Colors from Figma
-const colors = {
-  background: {
-    primary: '#1E1E2B',
-    secondary: '#12121F',
-    tertiary: 'rgba(255, 255, 255, 0.05)',
-  },
-  text: {
-    primary: '#F4F4F4',
-    secondary: 'rgba(244, 244, 244, 0.4)',
-    dark: '#1D1D1D',
-  },
-  button: {
-    primary: '#0058DB',
-    danger: '#FA0439',
-    secondary: 'rgba(255, 255, 255, 0.05)',
-    dark: 'rgba(0, 0, 0, 0.3)',
-    white: '#F4F4F4',
-  },
-  accent: {
-    blue: '#518CFF',
-    red: '#FA0439',
-  },
-  border: {
-    subtle: 'rgba(255, 255, 255, 0.05)',
-  },
-};
+import { colors } from '../src/theme';
 
 // Google Icon Component
 const GoogleIcon = ({ size = 15 }: { size?: number }) => (
@@ -73,10 +46,12 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasNavigated = useRef(false);
 
   // Monitor Session and navigate appropriately
   useEffect(() => {
-    if (!loading && session) {
+    if (!loading && session && !hasNavigated.current) {
+      hasNavigated.current = true;
       checkApiKeyAndNavigate();
     }
   }, [session, loading]);
@@ -155,11 +130,11 @@ export default function SignInScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoid}
       >
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -290,7 +265,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
-  
+
   // Main Content - Frame 1998: column, center, gap=32px, padding=0 40px
   mainContent: {
     flex: 1,
@@ -313,7 +288,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text.primary,
     letterSpacing: -0.41,
-    lineHeight: 32,
+    lineHeight: 38,
     textAlign: 'left',
   },
   headerSubtitle: {

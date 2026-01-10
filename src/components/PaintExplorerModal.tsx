@@ -9,21 +9,19 @@ import {
     StyleSheet,
     Platform,
     Dimensions,
+    FlatList,
+    ListRenderItem,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
+import { CloseCircleIcon } from './Icons';
 import { PaletteColor, fetchAllPaints, fetchUserPaints } from '../services/paintService';
+import { colors, borderRadius, spacing } from '../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ITEM_WIDTH = (SCREEN_WIDTH - 48 - 12) / 2; // 24px padding each side, 12px gap
 
-// Close circle icon matching Figma
-const CloseCircleIcon = ({ size = 24, color = '#F4F4F4' }: { size?: number; color?: string }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth="1.5" strokeOpacity={0.4} />
-        <Path d="M15 9L9 15M9 9L15 15" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-    </Svg>
-);
+
 
 interface PaintExplorerModalProps {
     visible: boolean;
@@ -85,9 +83,11 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
     // Group colors by brand and type/set
     const groupedColors = useMemo(() => {
         // Debug: log unique brands in database
-        const uniqueBrands = [...new Set(dbColors.map(c => c.brand?.trim()))];
-        console.log('PaintExplorer: Available brands in database:', uniqueBrands);
-        console.log('PaintExplorer: Selected brands:', selectedBrands);
+        if (__DEV__) {
+            const uniqueBrands = [...new Set(dbColors.map(c => c.brand?.trim()))];
+            console.log('PaintExplorer: Available brands in database:', uniqueBrands);
+            console.log('PaintExplorer: Selected brands:', selectedBrands);
+        }
 
         const normalizedSelectedBrands = selectedBrands.map(b => b.toLowerCase().trim());
         const hasSelection = normalizedSelectedBrands.length > 0;
@@ -111,7 +111,9 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
             return normalizedSelectedBrands.some(selected => selected !== 'my paints' && paintBrand === selected);
         });
 
-        console.log(`PaintExplorer: Found ${brandPaints.length} paints for brands "${selectedBrands.join(', ')}"`);
+        if (__DEV__) {
+            console.log(`PaintExplorer: Found ${brandPaints.length} paints for brands "${selectedBrands.join(', ')}"`);
+        }
 
         // Group by set/type
         const groups = brandPaints.reduce((acc, color) => {
@@ -129,6 +131,46 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
     }, [groupedColors]);
 
     const isColorSelected = (colorName: string) => selectedColors.some(c => c.name === colorName);
+
+    const renderSection: ListRenderItem<[string, PaletteColor[]]> = ({ item: [setName, colors] }) => (
+        <View style={styles.typeSection}>
+            {/* Type Header */}
+            <View style={styles.typeHeader}>
+                <View style={styles.typeAccentBar} />
+                <Text style={styles.typeName}>{setName.toUpperCase()}</Text>
+                <Text style={styles.typeCount}>{colors.length} tones</Text>
+            </View>
+
+            {/* Paint Grid */}
+            <View style={styles.paintGrid}>
+                {colors.map((color, idx) => {
+                    // Use a stable key combinator as paint ids might not be unique across public/user paints
+                    const paintKey = color.id || `${color.brand}-${color.name}-${idx}`;
+                    const selected = isColorSelected(color.name);
+                    return (
+                        <TouchableOpacity
+                            key={paintKey}
+                            style={[styles.paintItem, selected && styles.paintItemSelected]}
+                            onPress={() => onToggleColor(color.name, color.hex || '#FFFFFF')}
+                            activeOpacity={0.7}
+                        >
+                            <View
+                                style={[styles.paintSwatch, { backgroundColor: color.hex || '#D9D9D9' }]}
+                            />
+                            <View style={styles.paintInfo}>
+                                <Text style={styles.paintName} numberOfLines={1}>
+                                    {color.name || 'Unknown'}
+                                </Text>
+                                <Text style={styles.paintCode} numberOfLines={1}>
+                                    {color.code || color.hex || ''}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+        </View>
+    );
 
     return (
         <Modal
@@ -155,66 +197,40 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
                         </View>
                     </View>
                     <TouchableOpacity onPress={onClose} style={styles.closeButton} activeOpacity={0.7}>
+                        {/* 
+                          Using imported CloseCircleIcon. 
+                          Ideally we should update its prop interface to match others if needed, 
+                          but typically size/color are standard.
+                        */}
                         <CloseCircleIcon size={24} color="#F4F4F4" />
                     </TouchableOpacity>
                 </View>
 
                 {/* Content */}
-                <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                    {isLoading ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" color="#0058DB" />
-                            <Text style={styles.loadingText}>Loading paints...</Text>
-                        </View>
-                    ) : Object.keys(groupedColors).length === 0 ? (
-                        <View style={styles.emptyContainer}>
-                            <Text style={styles.emptyTitle}>No paints found</Text>
-                            <Text style={styles.emptySubtitle}>
-                                {selectedBrands.includes('My Paints') && selectedBrands.length === 1
-                                    ? 'Download MiniPainterDB to track your paint collection.'
-                                    : 'No paints available for these brands.'}
-                            </Text>
-                        </View>
-                    ) : (
-                        Object.entries(groupedColors).map(([setName, colors]) => (
-                            <View key={setName} style={styles.typeSection}>
-                                {/* Type Header */}
-                                <View style={styles.typeHeader}>
-                                    <View style={styles.typeAccentBar} />
-                                    <Text style={styles.typeName}>{setName.toUpperCase()}</Text>
-                                    <Text style={styles.typeCount}>{colors.length} tones</Text>
-                                </View>
-
-                                {/* Paint Grid */}
-                                <View style={styles.paintGrid}>
-                                    {colors.map((color, idx) => {
-                                        const selected = isColorSelected(color.name);
-                                        return (
-                                            <TouchableOpacity
-                                                key={color.id || `${color.brand}-${color.name}-${idx}`}
-                                                style={[styles.paintItem, selected && styles.paintItemSelected]}
-                                                onPress={() => onToggleColor(color.name, color.hex || '#FFFFFF')}
-                                                activeOpacity={0.7}
-                                            >
-                                                <View
-                                                    style={[styles.paintSwatch, { backgroundColor: color.hex || '#D9D9D9' }]}
-                                                />
-                                                <View style={styles.paintInfo}>
-                                                    <Text style={styles.paintName} numberOfLines={1}>
-                                                        {color.name || 'Unknown'}
-                                                    </Text>
-                                                    <Text style={styles.paintCode} numberOfLines={1}>
-                                                        {color.code || color.hex || ''}
-                                                    </Text>
-                                                </View>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                </View>
-                            </View>
-                        ))
-                    )}
-                </ScrollView>
+                {isLoading ? (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color="#0058DB" />
+                        <Text style={styles.loadingText}>Loading paints...</Text>
+                    </View>
+                ) : Object.keys(groupedColors).length === 0 ? (
+                    <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyTitle}>No paints found</Text>
+                        <Text style={styles.emptySubtitle}>
+                            {selectedBrands.includes('My Paints') && selectedBrands.length === 1
+                                ? 'Download MiniPainterDB to track your paint collection.'
+                                : 'No paints available for these brands.'}
+                        </Text>
+                    </View>
+                ) : (
+                    <FlatList
+                        data={Object.entries(groupedColors)}
+                        renderItem={renderSection}
+                        keyExtractor={([setName]) => setName}
+                        style={styles.content}
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={{ paddingBottom: 40 }}
+                    />
+                )}
             </SafeAreaView>
         </Modal>
     );
@@ -269,7 +285,7 @@ const styles = StyleSheet.create({
         fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
         fontWeight: '400',
         fontSize: 14,
-        color: 'rgba(244, 244, 244, 0.4)',
+        color: colors.text.secondary,
         marginLeft: 8,
     },
     closeButton: {
@@ -288,7 +304,7 @@ const styles = StyleSheet.create({
         fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
         fontWeight: '400',
         fontSize: 14,
-        color: 'rgba(244, 244, 244, 0.4)',
+        color: colors.text.secondary,
     },
     emptyContainer: {
         paddingVertical: 60,
@@ -305,7 +321,7 @@ const styles = StyleSheet.create({
         fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
         fontWeight: '400',
         fontSize: 14,
-        color: 'rgba(244, 244, 244, 0.4)',
+        color: colors.text.secondary,
         textAlign: 'center',
         paddingHorizontal: 24,
     },
@@ -329,14 +345,14 @@ const styles = StyleSheet.create({
         fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
         fontWeight: '600',
         fontSize: 13,
-        color: 'rgba(244, 244, 244, 0.4)',
+        color: colors.text.secondary,
         letterSpacing: 0.5,
     },
     typeCount: {
         fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
         fontWeight: '400',
         fontSize: 13,
-        color: 'rgba(244, 244, 244, 0.4)',
+        color: colors.text.secondary,
     },
     paintGrid: {
         flexDirection: 'row',
@@ -378,7 +394,7 @@ const styles = StyleSheet.create({
         fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
         fontWeight: '600',
         fontSize: 13,
-        color: 'rgba(244, 244, 244, 0.4)',
+        color: colors.text.secondary,
         lineHeight: 13,
     },
 });

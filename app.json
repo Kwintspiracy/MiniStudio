@@ -1,30 +1,30 @@
 {
   "expo": {
-    "name": "MiniStudio",
-    "slug": "ministudio",
+    "name": "MiniPainterStudio",
+    "slug": "minipainterstudio",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "ministudio",
+    "scheme": "minipainterstudio",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0D1117",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ministudio.app",
+      "bundleIdentifier": "com.minipainterstudio.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "MiniStudio needs camera access to capture photos of your miniatures.",
-        "NSPhotoLibraryUsageDescription": "MiniStudio needs photo library access to import miniature images.",
-        "NSPhotoLibraryAddUsageDescription": "MiniStudio needs permission to save generated images to your photo library.",
+        "NSCameraUsageDescription": "MiniPainterStudio needs camera access to capture photos of your miniatures.",
+        "NSPhotoLibraryUsageDescription": "MiniPainterStudio needs photo library access to import miniature images.",
+        "NSPhotoLibraryAddUsageDescription": "MiniMiniPainterStudioStudio needs permission to save generated images to your photo library.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "4"
+      "buildNumber": "5"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0D1117"
       },
-      "package": "com.ministudio.app",
+      "package": "com.minipainterstudio.app",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -43,20 +43,20 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow MiniStudio to access your camera to capture miniature photos."
+          "cameraPermission": "Allow MiniPainterStudio to access your camera to capture miniature photos."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow MiniStudio to access your photos to import miniature images."
+          "photosPermission": "Allow MiniPainterStudio to access your photos to import miniature images."
         }
       ],
       [
         "expo-media-library",
         {
-          "photosPermission": "Allow MiniStudio to save generated images to your photo library.",
-          "savePhotosPermission": "Allow MiniStudio to save photos to your library.",
+          "photosPermission": "Allow MiniPainterStudio to save generated images to your photo library.",
+          "savePhotosPermission": "Allow MiniPainterStudio to save photos to your library.",
           "isAccessMediaLocationEnabled": true
         }
       ],
@@ -73,9 +73,9 @@
       "supabaseUrl": "https://gmbhkvpcebnwnzygcedi.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtYmhrdnBjZWJud256eWdjZWRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzNzE1NjksImV4cCI6MjA4MTk0NzU2OX0.vIokR84ICXfhCY40Hd0OLq4IsTr7HnGZ0ZJnGQjEH08",
       "eas": {
-        "projectId": "3b98bcbb-2ca8-4586-a4ea-35dadf760c76"
+        "projectId": "5591c1f5-fd27-4bdd-af41-ca04df9ce583"
       }
     },
-    "owner": "kwintspiracy"
+    "owner": "kwint"
   }
 }

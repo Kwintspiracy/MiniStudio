@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, ActivityIndicator, StyleSheet, StatusBar } from 'react-native';
 import { router } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
@@ -6,9 +6,13 @@ import { hasApiKey } from '../src/services/storageService';
 
 export default function Index() {
   const { session, loading } = useAuth();
+  const hasNavigated = useRef(false);
 
   useEffect(() => {
     if (loading) return;
+    if (hasNavigated.current) return;
+
+    hasNavigated.current = true;
 
     if (!session) {
       router.replace('/signin');

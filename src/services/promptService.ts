@@ -1,5 +1,8 @@
 import { supabase } from './supabase';
 import { PostgrestError } from '@supabase/supabase-js';
+import { storeData, getData } from './storageService';
+
+const PROMPTS_CACHE_KEY = 'ministudio_prompts_cache';
 
 // --- Types ---
 
@@ -20,8 +23,11 @@ export type PromptDictionary = Record<string, { default: string; pro: string }>;
 // --- Client Methods ---
 
 /**
- * Fetches all currently active prompts from Supabase to override local defaults.
- * Returns a dictionary mapping keys to their active template strings.
+ * Fetches active prompts.
+ * Strategy: Network First, Fallback to Cache.
+ * 1. Try to fetch from Supabase.
+ * 2. If successful, save to cache and return.
+ * 3. If failed (offline), try to return cached version.
  */
 export async function fetchActivePrompts(): Promise<PromptDictionary> {
     try {
@@ -30,10 +36,7 @@ export async function fetchActivePrompts(): Promise<PromptDictionary> {
             .select('key, template, template_pro')
             .eq('is_active', true);
 
-        if (error) {
-            console.error('Error fetching active prompts:', error);
-            return {};
-        }
+        if (error) throw error;
 
         // Convert array to dictionary
         const prompts: PromptDictionary = {};
@@ -44,9 +47,22 @@ export async function fetchActivePrompts(): Promise<PromptDictionary> {
             };
         });
 
+        // Save to offline cache
+        await storeData(PROMPTS_CACHE_KEY, prompts);
+        if (__DEV__) console.log('[PromptService] Prompts fetched and cached.');
+
         return prompts;
     } catch (err) {
-        console.warn('Network error or unexpected issue fetching prompts:', err);
+        console.warn('[PromptService] Network fetch failed, trying offline cache:', err);
+
+        // Fallback to cache
+        const cached = await getData<PromptDictionary>(PROMPTS_CACHE_KEY);
+        if (cached) {
+            if (__DEV__) console.log('[PromptService] Loaded prompts from offline cache.');
+            return cached;
+        }
+
+        // If no cache, return empty (app might not function fully but won't crash)
         return {};
     }
 }

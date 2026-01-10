@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  TextInput, 
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  TextInput,
   ActivityIndicator,
   StyleSheet,
   StatusBar,
   Platform,
   Linking,
-  SafeAreaView,
   KeyboardAvoidingView
 } from 'react-native';
 import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../src/context/AuthContext';
 import { setApiKey } from '../src/services/storageService';
@@ -86,8 +86,8 @@ export default function ApiKeyScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
         <View style={styles.apiKeyContent}>
@@ -112,10 +112,10 @@ export default function ApiKeyScreen() {
               style={styles.apiKeyInput}
             />
             {error && <Text style={styles.errorText}>{error}</Text>}
-            <TouchableOpacity 
-              onPress={handleSubmitApiKey} 
-              disabled={isSubmitting} 
-              style={styles.apiKeyButton} 
+            <TouchableOpacity
+              onPress={handleSubmitApiKey}
+              disabled={isSubmitting}
+              style={styles.apiKeyButton}
               activeOpacity={0.8}
             >
               {isSubmitting ? (

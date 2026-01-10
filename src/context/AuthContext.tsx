@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Alert, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { Session, User } from '@supabase/supabase-js';
@@ -38,6 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [session, setSession] = useState<Session | null>(null);
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
+    const lastAuthUrlRef = useRef<string | null>(null);
 
     useEffect(() => {
         // 1. Initial Session Check
@@ -59,13 +60,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setSession(session);
                 setUser(session?.user ?? null);
             } catch (error: any) {
-                console.warn("Auth check failed:", error);
+                if (__DEV__) console.warn("Auth check failed:", error);
 
                 // If Refresh Token is invalid, we MUST clear the session to prevent infinite loops
                 if (error?.message?.includes('Refresh Token Not Found') ||
                     error?.message?.includes('Invalid Refresh Token')) {
-                    console.log("Clearing invalid session...");
-                    await supabase.auth.signOut();
+                    if (__DEV__) console.log("Clearing invalid session (local only)...");
+                    // Use { scope: 'local' } to only clear local storage, not hit the server.
+                    // This prevents "Auth session missing!" errors during subsequent signOut calls.
+                    await supabase.auth.signOut({ scope: 'local' });
                     setSession(null);
                     setUser(null);
                 }
@@ -78,11 +81,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // 2. Auth State Listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log("Auth State Change:", event);
+            if (__DEV__) console.log("Auth State Change:", event);
 
             // Handle token refresh issues if relevant, otherwise just rely on standard events
             if (event === ('TOKEN_REFRESH_NOT_UPDATED' as any)) {
-                console.warn("Token refresh failed, forcing sign out");
+                if (__DEV__) console.warn("Token refresh failed, forcing sign out");
                 setSession(null);
                 setUser(null);
                 setLoading(false);
@@ -112,7 +115,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // On Web, Supabase handles the session via detectSessionInUrl: true
         if (Platform.OS === 'web') return;
 
-        console.log("[AUTH] Handling result URL:", url);
+        if (__DEV__) console.log("[AUTH] Handling result URL:", url);
+
+        // Deduplication Check
+        if (lastAuthUrlRef.current === url) {
+            if (__DEV__) console.log("[AUTH] Duplicate URL detected, skipping processing.");
+            return;
+        }
+        lastAuthUrlRef.current = url;
 
         try {
             // 1. Parse URL to handle both hash and query params
@@ -134,11 +144,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const refreshToken = params.refresh_token;
             const errorDesc = params.error_description || params.error;
 
-            console.log("[AUTH] Token Extraction Details:", {
-                hasAccessToken: !!accessToken,
-                hasRefreshToken: !!refreshToken,
-                error: errorDesc
-            });
+            if (__DEV__) {
+                console.log("[AUTH] Token Extraction Details:", {
+                    hasAccessToken: !!accessToken,
+                    hasRefreshToken: !!refreshToken,
+                    error: errorDesc
+                });
+            }
 
             if (errorDesc) {
                 Alert.alert("Auth Error", errorDesc);
@@ -146,25 +158,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (accessToken && refreshToken) {
-                console.log("[AUTH] Final Attempt: setSession...");
+                if (__DEV__) console.log("[AUTH] Final Attempt: setSession...");
                 const { data, error } = await supabase.auth.setSession({
                     access_token: accessToken,
                     refresh_token: refreshToken,
                 });
 
                 if (error) {
-                    console.error("[AUTH] setSession Failed:", error.message);
+                    if (__DEV__) console.error("[AUTH] setSession Failed:", error.message);
                     if (!error.message.includes('signature is invalid')) {
                         Alert.alert("Session Error", error.message);
                     }
                 } else {
-                    console.log("[AUTH] setSession Success for:", data.session?.user?.email);
+                    if (__DEV__) console.log("[AUTH] setSession Success for:", data.session?.user?.email);
                 }
             } else {
-                console.log("[AUTH] No tokens found in this URL.");
+                if (__DEV__) console.log("[AUTH] No tokens found in this URL.");
             }
         } catch (e: any) {
-            console.error("[AUTH] Extraction Exception:", e);
+            if (__DEV__) console.error("[AUTH] Extraction Exception:", e);
         }
     };
 
@@ -200,14 +212,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } else {
                 // Native Flow: Use Expo Auth Session
                 // Native Flow: Use Expo Auth Session to handle Expo Go vs Standalone differences
-                const redirectUrl = AuthSession.makeRedirectUri({
-                    path: 'google-auth',
-                });
+                // Native Flow: Use Explicit Scheme Redirect
+                const scheme = Constants.expoConfig?.scheme;
+                const redirectUrl = `${scheme}://google-auth`;
 
-                console.log("--- AUTH DEBUG START ---");
-                console.log("[AUTH] Redirect URL Generated:", redirectUrl);
-                console.log("[AUTH] Scheme detected:", Constants.expoConfig?.scheme);
-                console.log("--- AUTH DEBUG END ---");
+                if (__DEV__) {
+                    console.log("--- AUTH DEBUG START ---");
+                    console.log("[AUTH] Explicit Redirect URL Generated:", redirectUrl);
+                    console.log("[AUTH] Using Scheme:", scheme);
+                    console.log("--- AUTH DEBUG END ---");
+                }
 
                 const { data, error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
@@ -220,12 +234,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (error) throw error;
 
                 if (data?.url) {
-                    console.log("[AUTH] Opening Browser Flow...");
+                    if (__DEV__) console.log("[AUTH] Opening Browser Flow...");
                     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-                    console.log("[AUTH] WebBrowser Result:", result.type);
+                    if (__DEV__) console.log("[AUTH] WebBrowser Result:", result.type);
 
                     if (result.type === 'success' && result.url) {
-                        console.log("[AUTH] WebBrowser Success URL captured.");
+                        if (__DEV__) console.log("[AUTH] WebBrowser Success URL captured.");
                         handleAuthResult(result.url);
                     }
                 }
@@ -279,18 +293,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const signOut = async () => {
         setLoading(true); // Start loading to prevent race conditions in UI checks
         try {
+            // Check if we even have a session to sign out from
             const { error } = await supabase.auth.signOut();
+
             if (error) {
-                console.error("Sign Out Error:", error.message);
-                // Alert.alert("Sign Out Error", error.message);
+                // Ignore "Auth session missing!" as it means we are already signed out
+                if (error.message.includes("Auth session missing!")) {
+                    if (__DEV__) console.warn("Supabase SignOut: Session was already missing.");
+                } else {
+                    if (__DEV__) console.error("Sign Out Error:", error.message);
+                }
             }
-            // Explicitly clear state
+        } catch (e: any) {
+            // Also catch unexpected exceptions
+            if (e?.message?.includes("Auth session missing!")) {
+                if (__DEV__) console.warn("Supabase SignOut Exception: Session was already missing.");
+            } else {
+                if (__DEV__) console.error("Sign Out Exception:", e);
+                Alert.alert("Sign Out Exception", e.message);
+            }
+        } finally {
+            // Always clear local state
             setSession(null);
             setUser(null);
-        } catch (e: any) {
-            console.error("Sign Out Exception:", e);
-            Alert.alert("Sign Out Exception", e.message);
-        } finally {
             setLoading(false);
         }
     };

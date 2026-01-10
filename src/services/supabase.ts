@@ -3,9 +3,17 @@ import Constants from 'expo-constants';
 import 'react-native-url-polyfill/auto';
 import { Platform } from 'react-native';
 
-// Parse the URL to get the project ID subdomain if needed, or just use the full URL
-const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || 'https://gmbhkvpcebnwnzygcedi.supabase.co';
-const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtYmhrdnBjZWJud256eWdjZWRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzNzE1NjksImV4cCI6MjA4MTk0NzU2OX0.vIokR84ICXfhCY40Hd0OLq4IsTr7HnGZ0ZJnGQjEH08';
+// Get Supabase credentials from app.json extra config
+// CRITICAL: These must be configured in app.json -> expo.extra
+const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl;
+const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey;
+
+// Validate required credentials at startup
+if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+        'Missing Supabase configuration. Please ensure supabaseUrl and supabaseAnonKey are set in app.json -> expo.extra'
+    );
+}
 
 // Check if we're running on server (SSR) - window is not available during SSR
 const isServer = typeof window === 'undefined';
