@@ -35,7 +35,12 @@ export default function RootLayout() {
               }}
             >
               <Stack.Screen name="index" />
-              <Stack.Screen name="(studio)" />
+              <Stack.Screen 
+                name="(studio)" 
+                options={{
+                    title: 'Studio',
+                }}
+              />
               <Stack.Screen
                 name="camera"
                 options={{
@@ -46,8 +51,7 @@ export default function RootLayout() {
               <Stack.Screen
                 name="settings"
                 options={{
-                  presentation: 'modal',
-                  animation: 'slide_from_bottom',
+                  animation: 'slide_from_right',
                 }}
               />
             </Stack>

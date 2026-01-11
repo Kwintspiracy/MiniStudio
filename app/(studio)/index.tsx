@@ -12,17 +12,19 @@ import {
   BuildIcon, RiPaintFillIcon, AiFillFireIcon, DrawIcon, PaintIcon, MagicWandIcon, SculptIcon,
   CameraLensIcon, PhotoCameraIcon, PhotoLibraryIcon, CloseIcon, ToSourceIcon,
   FileDownloadIcon as MdFileDownloadIcon, SpinnerIcon, TbProgressCheckIcon, ShareIcon
-} from '../../src/components/Icons';
-import type { ImageFile, ToolMode, DesignerType, HistoryItem, StyleOption } from '../../src/types';
-import { usePrompts } from '../../src/hooks/usePrompts';
-import { generatePaintedMiniature, generateImageFromImage, upscaleImage, cancelGeneration } from '../../src/services/geminiService';
-import { fetchAllPaints, fetchUserPaints, PaletteColor } from '../../src/services/paintService';
-import { useImagePicker } from '../../src/hooks/useImagePicker';
-import { useMediaSave } from '../../src/hooks/useMediaSave';
-import { useAuth } from '../../src/context/AuthContext';
-import { PaintExplorerModal } from '../../src/components/PaintExplorerModal';
-import { colors, spacing, borderRadius, fontFamily, textStyles } from '../../src/theme';
+} from '@/components/Icons';
+import type { ImageFile, ToolMode, DesignerType, HistoryItem, StyleOption } from '@/types';
+import { usePrompts } from '@/hooks/usePrompts';
+import { generatePaintedMiniature, generateImageFromImage, upscaleImage, cancelGeneration } from '@/services/geminiService';
+import { fetchAllPaints, fetchUserPaints, PaletteColor } from '@/services/paintService';
+import { useImagePicker } from '@/hooks/useImagePicker';
+import { useMediaSave } from '@/hooks/useMediaSave';
+import { useAuth } from '@/context/AuthContext';
+import { useImageContext } from '@/context/ImageContext';
+import { PaintExplorerModal } from '@/components/PaintExplorerModal';
+import { colors, spacing, borderRadius, fontFamily, textStyles } from '@/theme';
 import * as FileSystem from 'expo-file-system/legacy';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { shareAsync, isAvailableAsync } from 'expo-sharing';
 
 // Get screen dimensions
@@ -110,7 +112,16 @@ const ProBadge = ({ isPro, onToggle }: { isPro: boolean; onToggle: () => void })
 
 export default function StudioScreen() {
   const { loading: authLoading } = useAuth();
+  const { selectedImage, setSelectedImage } = useImageContext();
   const insets = useSafeAreaInsets();
+
+  // Handle Camera Capture Return
+  useEffect(() => {
+    if (selectedImage) {
+      setSourceImages([{ base64: selectedImage, mimeType: 'image/jpeg' }]);
+      setSelectedImage(null); // Clear it so we don't re-trigger
+    }
+  }, [selectedImage]);
 
   const { styles: paintStylesList, templates: designerTemplates, effects: effectPrompts, shareMessage, exampleAssets, loading: promptsLoading } = usePrompts();
 
@@ -143,8 +154,22 @@ export default function StudioScreen() {
   const [isPaintExplorerOpen, setIsPaintExplorerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Batch Deletion State
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedHistoryItems, setSelectedHistoryItems] = useState<Set<string>>(new Set());
+  const [hiddenDemoAssets, setHiddenDemoAssets] = useState<string[]>([]);
+
   const { pickMultipleImages, pickDocument } = useImagePicker();
   const { saveImage } = useMediaSave();
+
+  // Load hidden demo assets from storage
+  useEffect(() => {
+    AsyncStorage.getItem('hidden_demo_assets').then(stored => {
+      if (stored) {
+        setHiddenDemoAssets(JSON.parse(stored));
+      }
+    });
+  }, []);
 
   // Load example assets into Gallery history when available
   useEffect(() => {
@@ -159,9 +184,9 @@ export default function StudioScreen() {
           timestamp: 0, // Mark as demo with timestamp 0
         }));
 
-        // Filter out duplicates based on URL
+        // Filter out duplicates based on URL and hidden assets
         const newItems = exampleHistoryItems.filter(
-          newItem => !prev.some(existingItem => existingItem.url === newItem.url)
+          newItem => !prev.some(existingItem => existingItem.url === newItem.url) && !hiddenDemoAssets.includes(newItem.url)
         );
 
         if (newItems.length === 0) return prev;
@@ -169,7 +194,7 @@ export default function StudioScreen() {
         return [...prev, ...newItems];
       });
     }
-  }, [exampleAssets]);
+  }, [exampleAssets, hiddenDemoAssets]);
 
   const handlePickImage = useCallback(async () => {
     const images = await pickMultipleImages();
@@ -367,6 +392,62 @@ export default function StudioScreen() {
     setSourceImages([newImage]);
     setIsResultsDrawerOpen(false);
   }, [activePreviewImage]);
+
+  const toggleSelectionMode = () => {
+    setIsSelectionMode(!isSelectionMode);
+    setSelectedHistoryItems(new Set());
+  };
+
+  const toggleSelection = (url: string) => {
+    setSelectedHistoryItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(url)) {
+        newSet.delete(url);
+      } else {
+        newSet.add(url);
+      }
+      return newSet;
+    });
+  };
+
+  const deleteSelectedItems = async () => {
+    Alert.alert(
+      'Delete Items',
+      `Are you sure you want to delete ${selectedHistoryItems.size} items?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const itemsToDelete = Array.from(selectedHistoryItems);
+            
+            // Find demo items to hide
+            const demosToHide = generationHistory
+              .filter(item => itemsToDelete.includes(item.url) && item.modelName === 'demo')
+              .map(item => item.url);
+
+            // Update persistent storage for demos
+            if (demosToHide.length > 0) {
+              const newHidden = [...hiddenDemoAssets, ...demosToHide];
+              setHiddenDemoAssets(newHidden);
+              await AsyncStorage.setItem('hidden_demo_assets', JSON.stringify(newHidden));
+            }
+
+            // Remove from state
+            setGenerationHistory(prev => prev.filter(item => !selectedHistoryItems.has(item.url)));
+            
+            // cleanup
+            if (activePreviewImage && selectedHistoryItems.has(activePreviewImage)) {
+              setActivePreviewImage(null);
+            }
+            setIsSelectionMode(false);
+            setSelectedHistoryItems(new Set());
+          }
+        }
+      ]
+    );
+  };
 
   const toggleColor = (colorName: string, hexCode?: string) => {
     setSelectedColors(prev => {
@@ -632,7 +713,21 @@ export default function StudioScreen() {
         <Modal visible={isResultsDrawerOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsResultsDrawerOpen(false)}>
           <SafeAreaView style={styles.modalContainer} edges={['top']}>
             <View style={styles.grabberContainer}><View style={styles.grabber} /></View>
-            <View style={styles.modalHeader}><View style={styles.modalHeaderSide} /><Text style={styles.modalTitle}>Results</Text><TouchableOpacity onPress={() => setIsResultsDrawerOpen(false)} style={styles.closeButton}><Text style={styles.doneButtonText}>Close</Text></TouchableOpacity></View>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={toggleSelectionMode} style={[styles.modalHeaderSide, { alignItems: 'flex-start' }]}>
+                <Text style={styles.headerButtonText}>{isSelectionMode ? 'Cancel' : 'Select'}</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Results</Text>
+              <TouchableOpacity 
+                onPress={isSelectionMode ? deleteSelectedItems : () => setIsResultsDrawerOpen(false)} 
+                style={[styles.modalHeaderSide, { alignItems: 'flex-end' }]}
+                disabled={isSelectionMode && selectedHistoryItems.size === 0}
+              >
+                <Text style={[styles.doneButtonText, isSelectionMode && selectedHistoryItems.size === 0 && { opacity: 0.5 }, isSelectionMode && { color: '#FF5050' }]}>
+                  {isSelectionMode ? `Delete (${selectedHistoryItems.size})` : 'Close'}
+                </Text>
+              </TouchableOpacity>
+            </View>
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
               {activePreviewImage && (
                 <View style={styles.resultContainer}>
@@ -645,9 +740,30 @@ export default function StudioScreen() {
                 </View>
               )}
               <View style={[styles.historyContainer, { paddingBottom: 80 + insets.bottom }]}><Text style={styles.historyTitle}>History</Text><View style={styles.historyGrid}>
-                {generationHistory.map((item, i) => (
-                  <TouchableOpacity key={i} style={[styles.historyItem, activePreviewImage === item.url && styles.historyItemActive]} onPress={() => setActivePreviewImage(item.url)}><Image source={{ uri: item.url }} style={styles.historyImage} /></TouchableOpacity>
-                ))}
+                {generationHistory.map((item, i) => {
+                  const isSelected = selectedHistoryItems.has(item.url);
+                  return (
+                    <TouchableOpacity 
+                      key={i} 
+                      style={[
+                        styles.historyItem, 
+                        activePreviewImage === item.url && !isSelectionMode && styles.historyItemActive,
+                        isSelected && styles.historyItemSelected
+                      ]} 
+                      onPress={() => isSelectionMode ? toggleSelection(item.url) : setActivePreviewImage(item.url)}
+                      activeOpacity={0.7}
+                    >
+                      <Image source={{ uri: item.url }} style={[styles.historyImage, isSelected && { opacity: 0.7 }]} />
+                      {isSelectionMode && (
+                        <View style={styles.selectionOverlay}>
+                          <View style={[styles.selectionCheck, isSelected ? styles.selectionCheckActive : styles.selectionCheckInactive]}>
+                            {isSelected && <CheckIcon size={12} color="#FFF" />}
+                          </View>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View></View>
             </ScrollView>
           </SafeAreaView>
@@ -765,7 +881,7 @@ const styles = StyleSheet.create({
   grabberContainer: { width: '100%', height: 24, alignItems: 'center', justifyContent: 'center' },
   grabber: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,0.2)' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 16, paddingHorizontal: 24, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
-  modalHeaderSide: { width: 50, justifyContent: 'center' },
+  modalHeaderSide: { width: 80, justifyContent: 'center' },
   modalTitle: { flex: 1, textAlign: 'center', color: colors.text.primary, fontSize: 16, fontFamily: 'SF Pro Display', fontWeight: '700', letterSpacing: -0.41 },
   doneButtonText: { color: colors.button.primary, fontSize: 16, fontWeight: '600', textAlign: 'right' },
   closeButton: { paddingVertical: 12, paddingHorizontal: 16, justifyContent: 'center', alignItems: 'flex-end' },
@@ -783,5 +899,11 @@ const styles = StyleSheet.create({
   historyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: '2%', alignSelf: 'stretch' },
   historyItem: { width: '23.5%', aspectRatio: 1, minWidth: 82, minHeight: 82, borderRadius: 8, overflow: 'hidden' },
   historyItemActive: { borderWidth: 2, borderColor: colors.button.primary },
+  historyItemSelected: { borderWidth: 2, borderColor: colors.button.primary },
+  headerButtonText: { color: colors.text.primary, fontSize: 16, fontFamily: 'SF Pro Display', fontWeight: '400' },
+  selectionOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.2)', alignItems: 'flex-end', justifyContent: 'flex-start', padding: 4 },
+  selectionCheck: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
+  selectionCheckActive: { backgroundColor: colors.button.primary, borderColor: colors.button.primary },
+  selectionCheckInactive: { backgroundColor: 'rgba(0,0,0,0.3)' },
   historyImage: { width: '100%', height: '100%' },
 });

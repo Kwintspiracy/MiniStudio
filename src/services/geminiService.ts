@@ -1,215 +1,135 @@
-import { GoogleGenAI } from "@google/genai";
+import { supabase } from './supabase';
 import type { ImageFile } from '../types';
-import { getApiKey } from './storageService';
 
 let abortController: AbortController | null = null;
 
 export const cancelGeneration = () => {
-  if (abortController) {
-    abortController.abort();
-    abortController = null;
-  }
+    if (abortController) {
+        abortController.abort();
+        abortController = null;
+    }
 };
 
 /**
- * Creates a fresh AI client using the stored API key.
+ * Prepares image data for the Edge Function.
  */
-const createAiClient = async () => {
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    throw new Error("API_KEY not found. Please set your Gemini API key in settings.");
-  }
-  return new GoogleGenAI({ apiKey });
-};
+const prepareImagePayload = (image: ImageFile) => {
+    const base64Data = image.base64.includes(',')
+        ? image.base64.split(',')[1]
+        : image.base64;
 
-/**
- * Retry helper with exponential backoff for transient API failures.
- * @param fn - Async function to retry
- * @param maxRetries - Maximum number of retries (default: 3)
- * @param baseDelayMs - Base delay in milliseconds (default: 1000)
- */
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelayMs: number = 1000
-): Promise<T> {
-  let lastError: Error | null = null;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error: any) {
-      lastError = error;
-
-      // Don't retry if aborted or if it's a user/auth error
-      if (error.name === 'AbortError') throw error;
-      if (error.message?.includes('API_KEY')) throw error;
-      if (error.message?.includes('PERMISSION_DENIED')) throw error;
-      if (error.message?.includes('INVALID_ARGUMENT')) throw error;
-
-      // Only retry on transient errors (rate limit, network, server errors)
-      const isRetryable =
-        error.message?.includes('429') ||
-        error.message?.includes('500') ||
-        error.message?.includes('503') ||
-        error.message?.includes('RESOURCE_EXHAUSTED') ||
-        error.message?.includes('network') ||
-        error.message?.includes('timeout');
-
-      if (!isRetryable || attempt === maxRetries) {
-        throw error;
-      }
-
-      // Exponential backoff with jitter
-      const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 500;
-      if (__DEV__) {
-        console.log(`[Gemini] Retry attempt ${attempt + 1}/${maxRetries} after ${Math.round(delay)}ms`);
-      }
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-
-  throw lastError;
-}
-
-const dataUrlToGeminiPart = (image: ImageFile) => {
-  // Handle both data URL format and raw base64
-  const base64Data = image.base64.includes(',')
-    ? image.base64.split(',')[1]
-    : image.base64;
-
-  return {
-    inlineData: {
-      mimeType: image.mimeType,
-      data: base64Data
-    }
-  };
+    return {
+        mimeType: image.mimeType,
+        data: base64Data
+    };
 };
 
 export async function generatePaintedMiniature(
-  baseImages: ImageFile | ImageFile[] | null,
-  prompt: string,
-  numberOfImages: number,
-  model: 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001' | 'gemini-3-pro-image-preview'
+    baseImages: ImageFile | ImageFile[] | null,
+    prompt: string,
+    numberOfImages: number,
+    model: 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001' | 'gemini-3-pro-image-preview'
 ): Promise<string[]> {
-  const ai = await createAiClient();
-  abortController = new AbortController();
-  const imagesToProcess = Array.isArray(baseImages) ? baseImages : (baseImages ? [baseImages] : []);
-  const isPro = model === 'gemini-3-pro-image-preview';
+    const imagesToProcess = Array.isArray(baseImages) ? baseImages : (baseImages ? [baseImages] : []);
+    const baseImagePayload = imagesToProcess.length > 0 ? prepareImagePayload(imagesToProcess[0]) : undefined;
 
-  if (model === 'imagen-4.0-generate-001') {
-    const response = await withRetry(() => ai.models.generateImages({
-      model: model,
-      prompt: `Masterpiece painted miniature: ${prompt}`,
-      config: { numberOfImages: 1, aspectRatio: '1:1' },
+    abortController = new AbortController();
+
+    console.log("[Gemini Proxy] Sending request to Supabase Edge Function...");
+    console.log(`[Gemini Proxy] Model: ${model}, Prompt Length: ${prompt.length}, Has Image: ${!!baseImagePayload}`);
+
+    // Get current session to ensure we pass the fresh token
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    if (!token) {
+        console.warn("[Gemini Proxy] No active session token found!");
+    }
+
+    // Call Supabase Edge Function with explicit Auth header
+    const { data, error } = await supabase.functions.invoke('generate-miniature', {
+        body: {
+            prompt,
+            baseImage: baseImagePayload,
+            model,
+            action: 'generate'
+        },
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    });
+
+    console.log("[Gemini Proxy] Response received:", JSON.stringify({
+        hasError: !!error,
+        errorMsg: error?.message,
+        hasData: !!data,
+        dataError: data?.error,
+        hasOutput: !!data?.output,
+        outputLength: data?.output?.length
     }));
-    return response.generatedImages?.[0] ? [`data:image/png;base64,${response.generatedImages[0].image?.imageBytes}`] : [];
-  }
 
-  const imageParts = imagesToProcess.map(img => dataUrlToGeminiPart(img));
-
-  const response = await withRetry(() => ai.models.generateContent({
-    model: model,
-    contents: {
-      parts: [
-        ...imageParts,
-        { text: isPro ? `[ADVANCED REASONING MODE] Focus on technical precision and material accuracy for this miniature: ${prompt}` : prompt }
-      ]
-    },
-    config: {
-      imageConfig: {
-        aspectRatio: "1:1",
-        ...(isPro ? { imageSize: "1K" } : {})
-      },
-      ...(isPro ? {
-        tools: [{ googleSearch: {} }],
-        thinkingConfig: { thinkingBudget: 32768 }
-      } : {})
+    if (error) {
+        console.error("Edge Function Network/Server Error:", error);
+        throw new Error(error.message || "Failed to connect to the AI service. Please check your connection.");
     }
-  }));
 
-  const generatedImages: string[] = [];
-  const parts = response.candidates?.[0]?.content?.parts;
-  if (parts) {
-    for (const part of parts) {
-      if (part.inlineData) {
-        generatedImages.push(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
-      }
+    if (data?.error) {
+        console.error("Edge Function Logic Error:", data.error);
+        throw new Error(data.error);
     }
-  }
-  return generatedImages;
+
+    // The Edge Function returns { output: "base64..." or "text..." }
+    const result = data.output;
+
+    if (result) {
+        return [result.startsWith('data:') ? result : `data:image/png;base64,${result}`];
+    }
+
+    console.warn("[Gemini Proxy] No output in response");
+    return [];
 }
 
 export async function generateImageFromImage(
-  baseImages: ImageFile | ImageFile[],
-  prompt: string,
-  model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview'
+    baseImages: ImageFile | ImageFile[],
+    prompt: string,
+    model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview'
 ): Promise<string[]> {
-  const ai = await createAiClient();
-  abortController = new AbortController();
-  const imagesToProcess = Array.isArray(baseImages) ? baseImages : [baseImages];
-  const imageParts = imagesToProcess.map(img => dataUrlToGeminiPart(img));
-  const isPro = model === 'gemini-3-pro-image-preview';
-
-  const response = await withRetry(() => ai.models.generateContent({
-    model: model,
-    contents: {
-      parts: [
-        ...imageParts,
-        { text: isPro ? `[DESIGN SYNTHESIS MODE] Analyze these references and generate a new high-detail concept: ${prompt}` : prompt }
-      ]
-    },
-    config: {
-      imageConfig: {
-        aspectRatio: "1:1",
-        ...(isPro ? { imageSize: "1K" } : {})
-      },
-      ...(isPro ? {
-        tools: [{ googleSearch: {} }],
-        thinkingConfig: { thinkingBudget: 32768 }
-      } : {})
-    }
-  }));
-
-  const parts = response.candidates?.[0]?.content?.parts;
-  if (parts) {
-    for (const part of parts) {
-      if (part.inlineData) {
-        return [`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`];
-      }
-    }
-  }
-  throw new Error("No image generated. Please check your prompt and try again.");
+    return generatePaintedMiniature(baseImages, prompt, 1, model);
 }
 
 export async function upscaleImage(
-  baseImage: ImageFile,
-  model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview' = 'gemini-2.5-flash-image'
+    baseImage: ImageFile,
+    model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview' = 'gemini-2.5-flash-image'
 ): Promise<string> {
-  const ai = await createAiClient();
-  const imagePart = dataUrlToGeminiPart(baseImage);
-  const isPro = model === 'gemini-3-pro-image-preview';
+    const baseImagePayload = prepareImagePayload(baseImage);
 
-  const response = await withRetry(() => ai.models.generateContent({
-    model: model,
-    contents: {
-      parts: [
-        imagePart,
-        { text: isPro ? "Enhance and upscale this miniature image to 4K resolution. Use ultra-high-definition rendering to refine every texture and sharpen every edge." : "Refine and enhance the details of this miniature image, improving clarity and texture definitions." }
-      ]
-    },
-    config: {
-      imageConfig: {
-        aspectRatio: "1:1",
-        ...(isPro ? { imageSize: "4K" } : {})
-      },
-      ...(isPro ? { thinkingConfig: { thinkingBudget: 32768 } } : {})
-    }
-  }));
+    abortController = new AbortController();
 
-  const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-  if (part?.inlineData) {
-    return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-  }
-  throw new Error("Upscale process failed to return image data.");
+    console.log("[Gemini Proxy] Upscale request...");
+
+    // Get current session to ensure we pass the fresh token
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    const { data, error } = await supabase.functions.invoke('generate-miniature', {
+        body: {
+            prompt: "Upscale this image",
+            baseImage: baseImagePayload,
+            model,
+            action: 'upscale'
+        },
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    });
+
+    console.log("[Gemini Proxy] Upscale response:", { hasError: !!error, hasOutput: !!data?.output });
+
+    if (error) throw new Error(error.message);
+    if (data?.error) throw new Error(data.error);
+
+    const result = data.output;
+    if (!result) throw new Error("Upscale failed to return data.");
+
+    return result.startsWith('data:') ? result : `data:image/png;base64,${result}`;
 }
