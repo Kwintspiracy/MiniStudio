@@ -98,15 +98,15 @@ const styles = StyleSheet.create({
     title: {
         fontFamily: 'SF Pro Display',
         fontWeight: '700',
-        fontSize: 18,
+        fontSize: 20,
         color: '#F4F4F4',
     },
     message: {
         fontFamily: 'SF Pro Display',
         fontWeight: '400',
-        fontSize: 12,
+        fontSize: 16,
         color: '#B6B6B6',
-        lineHeight: 16,
+        lineHeight: 21,
     },
     buttonContainer: {
         flexDirection: 'row',

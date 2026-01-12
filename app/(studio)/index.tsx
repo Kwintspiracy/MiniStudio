@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, Image, TextInput,
   ActivityIndicator, Alert, Modal, StyleSheet, Platform, Dimensions, StatusBar, Share, Animated, Easing
@@ -22,10 +22,12 @@ import { useMediaSave } from '@/hooks/useMediaSave';
 import { useAuth } from '@/context/AuthContext';
 import { useImageContext } from '@/context/ImageContext';
 import { PaintExplorerModal } from '@/components/PaintExplorerModal';
+import { AppModal } from '@/components/AppModal';
 import { colors, spacing, borderRadius, fontFamily, textStyles } from '@/theme';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { shareAsync, isAvailableAsync } from 'expo-sharing';
+import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 
 // Get screen dimensions
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -37,6 +39,11 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 
 
+
+// --- Figma Component: Section Accent ---
+const SectionAccent = () => (
+    <View style={{ width: 4, height: 16, backgroundColor: colors.button.primary, borderRadius: 0 }} />
+);
 
 // --- Figma Component: Toggle-button ---
 const ToggleButton = ({ value, onToggle }: { value: boolean, onToggle: () => void }) => (
@@ -76,8 +83,7 @@ const MainNavTab = ({ activeTab, onTabChange }: { activeTab: ToolMode; onTabChan
 const ConceptNavTab = ({ activeType, onTypeChange }: { activeType: DesignerType; onTypeChange: (type: DesignerType) => void }) => {
   const tabs: { id: DesignerType; label: string; Icon: any }[] = [
     { id: 'sketch', label: 'Sketch', Icon: DrawIcon },
-    { id: 'miniature', label: 'Sculpt', Icon: SculptIcon },
-    { id: 'pro-shot', label: 'Photoshoot', Icon: CameraLensIcon }
+    { id: 'miniature', label: 'Sculpt', Icon: SculptIcon }
   ];
 
   return (
@@ -86,11 +92,11 @@ const ConceptNavTab = ({ activeType, onTypeChange }: { activeType: DesignerType;
         <TouchableOpacity
           key={tab.id}
           onPress={() => onTypeChange(tab.id)}
-          style={[styles.conceptTabButton, activeType === tab.id && styles.conceptTabButtonActive]}
+          style={[styles.unifiedOptionButton, { flex: 1 }, activeType === tab.id && styles.unifiedOptionButtonActive]}
           activeOpacity={0.8}
         >
           <tab.Icon color={activeType === tab.id ? '#1D1D1D' : '#F4F4F4'} />
-          <Text style={[styles.conceptTabText, activeType === tab.id ? styles.conceptTabTextActive : styles.conceptTabTextInactive]}>
+          <Text style={[styles.unifiedOptionText, activeType === tab.id && styles.unifiedOptionTextActive]}>
             {tab.label}
           </Text>
         </TouchableOpacity>
@@ -111,7 +117,7 @@ const ProBadge = ({ isPro, onToggle }: { isPro: boolean; onToggle: () => void })
 );
 
 export default function StudioScreen() {
-  const { loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { selectedImage, setSelectedImage } = useImageContext();
   const insets = useSafeAreaInsets();
 
@@ -135,6 +141,7 @@ export default function StudioScreen() {
   }, [paintStylesList]);
   const [isNMMEnabled, setIsNMMEnabled] = useState(false);
   const [isOSLEnabled, setIsOSLEnabled] = useState(false);
+  const [isPhotoshootEnabled, setIsPhotoshootEnabled] = useState(false);
   const [isPaletteEnabled, setIsPaletteEnabled] = useState(false);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
 
@@ -146,30 +153,60 @@ export default function StudioScreen() {
   const [activePreviewImage, setActivePreviewImage] = useState<string | null>(null);
   const [previewAspectRatio, setPreviewAspectRatio] = useState(1);
   const [generationHistory, setGenerationHistory] = useState<HistoryItem[]>([]);
-  const [selectedColors, setSelectedColors] = useState<{ name: string, hex: string }[]>([]);
+  const [selectedColors, setSelectedColors] = useState<{ name: string, hex: string, finish?: string }[]>([]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isUpscaling, setIsUpscaling] = useState(false);
   const [isResultsDrawerOpen, setIsResultsDrawerOpen] = useState(false);
   const [isPaintExplorerOpen, setIsPaintExplorerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showMyPaintsAlert, setShowMyPaintsAlert] = useState(false);
 
   // Batch Deletion State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedHistoryItems, setSelectedHistoryItems] = useState<Set<string>>(new Set());
   const [hiddenDemoAssets, setHiddenDemoAssets] = useState<string[]>([]);
 
+  // FTUE State
+  const [isFirstTimeDrawerOpen, setIsFirstTimeDrawerOpen] = useState(false);
+  const ftueSheetRef = useRef<BottomSheet>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+
   const { pickMultipleImages, pickDocument } = useImagePicker();
   const { saveImage } = useMediaSave();
 
-  // Load hidden demo assets from storage
+  // Load hidden demo assets and generation history from storage
   useEffect(() => {
+    // DEV ONLY: Uncomment the next line to always see FTUE drawer
+    // AsyncStorage.removeItem('has_seen_drawer');
+    
     AsyncStorage.getItem('hidden_demo_assets').then(stored => {
       if (stored) {
         setHiddenDemoAssets(JSON.parse(stored));
       }
     });
+
+    // Load persisted generation history (user-generated images only)
+    AsyncStorage.getItem('generation_history').then(stored => {
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as HistoryItem[];
+          setGenerationHistory(parsed);
+        } catch (e) {
+          console.warn('Failed to parse generation history:', e);
+        }
+      }
+    });
   }, []);
+
+  // Auto-scroll when palette is enabled
+  useEffect(() => {
+    if (isPaletteEnabled) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [isPaletteEnabled]);
 
   // Load example assets into Gallery history when available
   useEffect(() => {
@@ -193,8 +230,28 @@ export default function StudioScreen() {
         // Add demo items at the end of history
         return [...prev, ...newItems];
       });
+
+      // FTUE: Open drawer on first launch when assets are available
+      AsyncStorage.getItem('has_seen_drawer').then(seen => {
+        if (!seen) {
+          setIsFirstTimeDrawerOpen(true);
+          AsyncStorage.setItem('has_seen_drawer', 'true');
+        }
+      });
     }
   }, [exampleAssets, hiddenDemoAssets]);
+
+  // Persist generation history (user-generated only, excluding demos) whenever it changes
+  useEffect(() => {
+    // Only persist items that are NOT demo items (timestamp !== 0)
+    const userGeneratedItems = generationHistory.filter(item => item.timestamp !== 0);
+    if (userGeneratedItems.length > 0) {
+      AsyncStorage.setItem('generation_history', JSON.stringify(userGeneratedItems));
+    } else {
+      // Clear storage if no user items remain
+      AsyncStorage.removeItem('generation_history');
+    }
+  }, [generationHistory]);
 
   const handlePickImage = useCallback(async () => {
     const images = await pickMultipleImages();
@@ -255,7 +312,13 @@ export default function StudioScreen() {
         }
         if (isPaletteEnabled) {
           if (selectedColors.length > 0) {
-            promptParts.push(`strictly using this color palette: ${selectedColors.map(c => `${c.name} (${c.hex})`).join(', ')}`);
+            promptParts.push(`strictly using this color palette: ${selectedColors.map(c => {
+              let name = c.name;
+              if (c.finish === 'Metallic') {
+                name = `${name} (Metallic)`;
+              }
+              return `${name} (${c.hex})`;
+            }).join(', ')}`);
           } else if (selectedBrands.length > 0) {
             promptParts.push(`using paints from these brands: ${selectedBrands.join(', ')}`);
           }
@@ -268,7 +331,15 @@ export default function StudioScreen() {
         const characterDesc = designerPrompt.trim() || 'character';
         const typeToUse = sourceImages.length > 1 ? 'combined' : designerType;
         const templateConfig = designerTemplates[typeToUse];
-        const template = isPro ? templateConfig.pro : templateConfig.default;
+        let template = isPro ? templateConfig.pro : templateConfig.default;
+
+        if (isPhotoshootEnabled) {
+            const photoEffect = effectPrompts['effect.photoshoot'];
+            if (photoEffect) {
+                template += ` ${isPro ? photoEffect.pro : photoEffect.default}`;
+            }
+        }
+
         const prompt = template.replace(/{input}/g, characterDesc);
         console.log(prompt);
         images = await generateImageFromImage(sourceImages, prompt, model);
@@ -284,7 +355,7 @@ export default function StudioScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [sourceImages, activeTab, designerPrompt, designerType, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPaletteEnabled, selectedColors, selectedBrands]);
+  }, [sourceImages, activeTab, designerPrompt, designerType, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPhotoshootEnabled, isPaletteEnabled, selectedColors, selectedBrands]);
 
   // Handle dynamic aspect ratio for the preview image
   useEffect(() => {
@@ -449,18 +520,26 @@ export default function StudioScreen() {
     );
   };
 
-  const toggleColor = (colorName: string, hexCode?: string) => {
+  const toggleColor = (colorName: string, hexCode?: string, finish?: string) => {
     setSelectedColors(prev => {
       const exists = prev.find(c => c.name === colorName);
       if (exists) {
         return prev.filter(c => c.name !== colorName);
       } else {
-        return [...prev, { name: colorName, hex: hexCode || '#FFFFFF' }];
+        return [...prev, { name: colorName, hex: hexCode || '#FFFFFF', finish }];
       }
     });
   };
 
-  const toggleBrand = (brand: string) => {
+  const handleToggleBrand = async (brand: string) => {
+    if (brand === 'My Paints' && !selectedBrands.includes(brand)) {
+        const userPaints = await fetchUserPaints();
+        if (userPaints.length === 0) {
+            setShowMyPaintsAlert(true);
+            return;
+        }
+    }
+
     setSelectedBrands(prev => {
       if (prev.includes(brand)) {
         return prev.filter(b => b !== brand);
@@ -496,13 +575,24 @@ export default function StudioScreen() {
             <AppTitleIcon />
           </View>
           <TouchableOpacity onPress={() => router.push('/settings')} style={[styles.topNavSide, styles.userIconContainer]} activeOpacity={0.7}>
-            <BiSolidUserCircle32Icon />
+            {user?.user_metadata?.avatar_url ? (
+              <Image 
+                source={{ uri: user.user_metadata.avatar_url }} 
+                style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: colors.button.primary }}
+              />
+            ) : (
+              <BiSolidUserCircle32Icon />
+            )}
           </TouchableOpacity>
         </View>
 
         {/* Main Content Area */}
         <MainNavTab activeTab={activeTab} onTabChange={setActiveTab} />
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+            ref={scrollViewRef}
+            contentContainerStyle={styles.scrollContent} 
+            showsVerticalScrollIndicator={false}
+        >
           <View style={styles.inputContainer}>
             {hasImageLoaded ? (
               <View style={styles.sourceImageWrapper}>
@@ -523,7 +613,7 @@ export default function StudioScreen() {
             <View style={styles.optionsRow}>
               <TouchableOpacity style={styles.optionButton} onPress={() => router.push('/camera')} activeOpacity={0.8}>
                 <PhotoCameraIcon />
-                <Text style={styles.optionButtonText}>Photo</Text>
+                <Text style={styles.optionButtonText}>Camera</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.optionButton} onPress={handleFilesPress} activeOpacity={0.8}>
                 <PhotoLibraryIcon />
@@ -539,8 +629,8 @@ export default function StudioScreen() {
                 <>
                   <View style={styles.designStepSection}>
                     <View style={styles.sectionHeader}>
-                      <BuildIcon color="rgba(244, 244, 244, 0.4)" />
-                      <Text style={styles.sectionHeaderText}>DESIGN STEP</Text>
+                      <SectionAccent />
+                      <Text style={styles.sectionHeaderText}>FROM SKETCH TO MINI</Text>
                     </View>
                     <ConceptNavTab activeType={designerType} onTypeChange={setDesignerType} />
                   </View>
@@ -552,15 +642,26 @@ export default function StudioScreen() {
                       placeholderTextColor={colors.text.secondary}
                       multiline
                       textAlignVertical="top"
-                      style={styles.promptInput}
+                      style={[styles.promptInput, !designerPrompt && { fontStyle: 'italic' }]}
                     />
+                  </View>
+
+                  <View style={styles.paintStepSection}>
+                    <View style={styles.sectionHeader}>
+                      <MagicWandIcon color="rgba(244, 244, 244, 0.4)" />
+                      <Text style={styles.sectionHeaderText}>ADD EFFECTS</Text>
+                    </View>
+                    <TouchableOpacity style={styles.optionItem} onPress={() => setIsPhotoshootEnabled(!isPhotoshootEnabled)} activeOpacity={0.7}>
+                      <Text style={[styles.optionLabel, isPhotoshootEnabled && styles.optionLabelActive]}>Photoshoot - Studio Lighting</Text>
+                      <ToggleButton value={isPhotoshootEnabled} onToggle={() => setIsPhotoshootEnabled(!isPhotoshootEnabled)} />
+                    </TouchableOpacity>
                   </View>
                 </>
               ) : (
                 <>
                   <View style={styles.paintStepSection}>
                     <View style={styles.sectionHeader}>
-                      <RiPaintFillIcon color="rgba(244, 244, 244, 0.4)" />
+                      <SectionAccent />
                       <Text style={styles.sectionHeaderText}>CHOOSE A STYLE</Text>
                     </View>
                     <View style={styles.styleGrid}>
@@ -568,9 +669,9 @@ export default function StudioScreen() {
                         <TouchableOpacity
                           key={style.id}
                           onPress={() => setSelectedStyle(paintStylesList.find(s => s.id === style.id) || paintStylesList[0])}
-                          style={[styles.styleButton, selectedStyle?.id === style.id && styles.styleButtonActive]}
+                          style={[styles.unifiedOptionButton, selectedStyle?.id === style.id && styles.unifiedOptionButtonActive]}
                         >
-                          <Text style={[styles.styleButtonText, selectedStyle?.id === style.id ? styles.styleTextActive : styles.styleTextInactive]}>
+                          <Text style={[styles.unifiedOptionText, selectedStyle?.id === style.id && styles.unifiedOptionTextActive]}>
                             {style.name}
                           </Text>
                         </TouchableOpacity>
@@ -578,7 +679,7 @@ export default function StudioScreen() {
                     </View>
                   </View>
 
-                  <View style={styles.promptContainer}>
+                  <View style={[styles.promptContainer, { minHeight: 110 }]}>
                     <TextInput
                       value={painterPrompt}
                       onChangeText={setPainterPrompt}
@@ -586,13 +687,13 @@ export default function StudioScreen() {
                       placeholderTextColor="rgba(244, 244, 244, 0.4)"
                       multiline
                       textAlignVertical="top"
-                      style={styles.promptInput}
+                      style={[styles.promptInput, !painterPrompt && { fontStyle: 'italic' }]}
                     />
                   </View>
 
                   <View style={styles.paintStepSection}>
                     <View style={styles.sectionHeader}>
-                      <MagicWandIcon color="rgba(244, 244, 244, 0.4)" />
+                      <SectionAccent />
                       <Text style={styles.sectionHeaderText}>ADD EFFECTS</Text>
                     </View>
                     <TouchableOpacity style={styles.optionItem} onPress={() => setIsNMMEnabled(!isNMMEnabled)} activeOpacity={0.7}>
@@ -605,7 +706,7 @@ export default function StudioScreen() {
                     </TouchableOpacity>
 
                     <View style={styles.sectionHeader}>
-                      <IoMdColorPaletteIcon color="rgba(244, 244, 244, 0.4)" />
+                      <SectionAccent />
                       <Text style={styles.sectionHeaderText}>COLOR PALETTE</Text>
                     </View>
                     <TouchableOpacity style={styles.optionItem} onPress={() => setIsPaletteEnabled(!isPaletteEnabled)} activeOpacity={0.7}>
@@ -622,11 +723,11 @@ export default function StudioScreen() {
                             return (
                               <TouchableOpacity
                                 key={brand}
-                                onPress={() => toggleBrand(brand)}
-                                style={[styles.brandButton, isSelected && styles.brandButtonActive]}
+                                onPress={() => handleToggleBrand(brand)}
+                                style={[styles.unifiedOptionButton, isSelected && styles.unifiedOptionButtonActive]}
                               >
                                 {brand === 'My Paints' && <BiSolidUserCircleIcon size={16} color={isSelected ? '#1D1D1D' : '#F4F4F4'} opacity={1} />}
-                                <Text style={[styles.brandText, isSelected ? styles.styleTextActive : styles.styleTextInactive]}>{brand}</Text>
+                                <Text style={[styles.unifiedOptionText, isSelected && styles.unifiedOptionTextActive]}>{brand}</Text>
                               </TouchableOpacity>
                             );
                           })}
@@ -717,7 +818,7 @@ export default function StudioScreen() {
               <TouchableOpacity onPress={toggleSelectionMode} style={[styles.modalHeaderSide, { alignItems: 'flex-start' }]}>
                 <Text style={styles.headerButtonText}>{isSelectionMode ? 'Cancel' : 'Select'}</Text>
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>Results</Text>
+              <Text style={styles.modalTitle}>Gallery</Text>
               <TouchableOpacity 
                 onPress={isSelectionMode ? deleteSelectedItems : () => setIsResultsDrawerOpen(false)} 
                 style={[styles.modalHeaderSide, { alignItems: 'flex-end' }]}
@@ -769,6 +870,58 @@ export default function StudioScreen() {
           </SafeAreaView>
         </Modal>
 
+        {/* FTUE Bottom Sheet */}
+        <BottomSheet
+          ref={ftueSheetRef}
+          index={isFirstTimeDrawerOpen ? 0 : -1}
+          snapPoints={['55%']}
+          enablePanDownToClose={true}
+          onChange={(index) => {
+            if (index === -1) {
+              setIsFirstTimeDrawerOpen(false);
+            }
+          }}
+          backdropComponent={(props) => (
+            <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.6} pressBehavior="none" />
+          )}
+          backgroundStyle={{ backgroundColor: colors.background.secondary }}
+          handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.3)', width: 36 }}
+        >
+          <BottomSheetView style={styles.ftueSheetContent}>
+            <View style={styles.modalHeader}>
+              <View style={[styles.modalHeaderSide, { alignItems: 'flex-start' }]} />
+              <Text style={styles.modalTitle}>Gallery</Text>
+              <TouchableOpacity 
+                onPress={() => ftueSheetRef.current?.close()}
+                style={[styles.modalHeaderSide, { alignItems: 'flex-end' }]}
+              >
+                <Text style={styles.doneButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+              <View style={[styles.historyContainer, { paddingBottom: 80 + insets.bottom }]}>
+                <Text style={styles.historyTitle}>History</Text>
+                <View style={styles.historyGrid}>
+                  {generationHistory.map((item, i) => (
+                    <TouchableOpacity 
+                      key={i} 
+                      style={styles.historyItem}
+                      onPress={() => {
+                        ftueSheetRef.current?.close();
+                        setActivePreviewImage(item.url);
+                        setIsResultsDrawerOpen(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Image source={{ uri: item.url }} style={styles.historyImage} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
+          </BottomSheetView>
+        </BottomSheet>
+
         {/* Paint Explorer Modal */}
         <PaintExplorerModal
           visible={isPaintExplorerOpen}
@@ -778,12 +931,27 @@ export default function StudioScreen() {
           onToggleColor={toggleColor}
           triggerLoad={isPaletteEnabled}
         />
+        
+        <AppModal
+          visible={showMyPaintsAlert}
+          onClose={() => setShowMyPaintsAlert(false)}
+          title="MiniPainterDB"
+          message="This feature links to your personal paint collection in MiniPainterDB. The app will be available soon!"
+          primaryAction={{
+            label: "OK",
+            onPress: () => setShowMyPaintsAlert(false)
+          }}
+        />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  unifiedOptionButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, padding: 12, borderRadius: 4, backgroundColor: colors.background.tertiary },
+  unifiedOptionButtonActive: { backgroundColor: colors.button.white },
+  unifiedOptionText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 13, color: colors.text.primary },
+  unifiedOptionTextActive: { fontWeight: '600', color: colors.text.dark },
   screenContainer: { flex: 1, backgroundColor: colors.background.secondary },
   statusBarBackground: { height: 0, backgroundColor: colors.background.secondary },
   container: { flex: 1, backgroundColor: colors.background.primary },
@@ -798,7 +966,7 @@ const styles = StyleSheet.create({
   proBadgeText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontWeight: '500', fontSize: 14, letterSpacing: -0.41, marginLeft: 4 },
   proTextInactive: { color: colors.text.primary },
   proTextActive: { color: colors.text.primary },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 150 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 50 },
   navTabContainer: { flexDirection: 'row', alignSelf: 'stretch', backgroundColor: colors.background.secondary, paddingHorizontal: 16, paddingVertical: 8 },
   tabButton: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: 6 },
   tabButtonActive: { backgroundColor: colors.button.primary },
@@ -810,32 +978,24 @@ const styles = StyleSheet.create({
   inputLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '700', fontSize: 12, color: colors.text.secondary },
   inputSubtitle: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 13, color: colors.text.primary, marginTop: 2 },
   optionsRow: { flexDirection: 'row', alignItems: 'center' },
-  optionButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 17, paddingHorizontal: 16, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 4, marginLeft: 8 },
+  optionButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 17, paddingHorizontal: 16, backgroundColor: colors.button.secondary, borderRadius: 4, marginLeft: 8 },
   optionButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 13, color: colors.text.primary, marginLeft: 8 },
   sourceImageWrapper: { width: 50, height: 50, borderRadius: 6, borderWidth: 3, borderColor: colors.button.primary, overflow: 'hidden' },
   sourceImage: { width: '100%', height: '100%' },
   removeImageOverlay: { position: 'absolute', top: 0, right: 0, width: 15, height: 15, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   removeImageTextSmall: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
   modeContent: { marginTop: 8, gap: 5, alignSelf: 'stretch' },
-  promptContainer: { alignSelf: 'stretch', backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 12, minHeight: 200 },
+  promptContainer: { alignSelf: 'stretch', backgroundColor: colors.text.textfieldbg, borderRadius: 4, paddingHorizontal: 16, paddingVertical: 12, minHeight: 110 },
   promptInput: { flex: 1, fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontSize: 14, color: colors.text.primary, lineHeight: 20 },
   designStepSection: { gap: 5 },
   paintStepSection: { gap: 5 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 8, padding: 8, marginTop: 12 },
   sectionHeaderText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 13, color: colors.text.secondary },
   conceptTabContainer: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', gap: 4 },
-  conceptTabButton: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, paddingVertical: 12, borderRadius: 8, backgroundColor: 'rgba(0, 0, 0, 0.3)', height: 40 },
-  conceptTabButtonActive: { backgroundColor: colors.button.white },
-  conceptTabText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 13 },
-  conceptTabTextActive: { color: colors.text.dark },
-  conceptTabTextInactive: { color: colors.text.primary },
+
   styleGrid: { flexDirection: 'row', alignSelf: 'stretch', flexWrap: 'wrap', gap: 4 },
-  styleButton: { justifyContent: 'center', alignItems: 'center', padding: 12, borderRadius: 4, backgroundColor: 'rgba(0, 0, 0, 0.3)' },
-  styleButtonActive: { backgroundColor: colors.button.white },
-  styleButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 13 },
-  styleTextActive: { color: colors.text.dark, fontWeight: '600' },
-  styleTextInactive: { color: colors.text.primary },
-  optionItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 4, backgroundColor: 'rgba(255, 255, 255, 0.05)' },
+
+  optionItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 4, backgroundColor: colors.background.tertiary },
   optionLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 14, color: colors.text.primary },
   optionLabelActive: { color: colors.text.primary },
   toggleContainer: { width: 46, height: 24, padding: 3, borderRadius: 12, justifyContent: 'center' },
@@ -862,9 +1022,7 @@ const styles = StyleSheet.create({
   colorChipName: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 13, color: colors.text.primary, maxWidth: 100 },
   colorChipClose: { marginLeft: 4 },
   brandTabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-  brandButton: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 12, borderRadius: 4, backgroundColor: 'rgba(0, 0, 0, 0.3)' },
-  brandButtonActive: { backgroundColor: colors.button.white },
-  brandText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 13 },
+
   explorerButton: { alignSelf: 'stretch', padding: 16, backgroundColor: colors.button.white, borderRadius: 4, alignItems: 'center' },
   explorerButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 14, color: colors.text.dark },
   footerContainer: { alignSelf: 'stretch', backgroundColor: colors.background.secondary, paddingTop: 32, paddingHorizontal: 16, paddingBottom: 50, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 20 },
@@ -906,4 +1064,6 @@ const styles = StyleSheet.create({
   selectionCheckActive: { backgroundColor: colors.button.primary, borderColor: colors.button.primary },
   selectionCheckInactive: { backgroundColor: 'rgba(0,0,0,0.3)' },
   historyImage: { width: '100%', height: '100%' },
+  // FTUE Bottom Sheet
+  ftueSheetContent: { flex: 1, backgroundColor: colors.background.secondary },
 });

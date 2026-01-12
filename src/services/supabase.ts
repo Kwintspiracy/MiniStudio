@@ -1,5 +1,4 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import 'react-native-url-polyfill/auto';
 import { Platform } from 'react-native';
@@ -9,15 +8,42 @@ const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || '';
 const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Missing Supabase configuration in app.json -> expo.extra');
+    console.warn('Missing Supabase configuration in app.json -> expo.extra');
 }
 
-// Simple, direct client creation (no proxy magic)
+// SSR Safe Detection
+const isServer = typeof window === 'undefined';
+
+// Conditional storage:
+// On server/build: use dummy storage
+// On client: use real AsyncStorage
+let storage;
+
+if (isServer) {
+    storage = {
+        getItem: () => Promise.resolve(null),
+        setItem: () => Promise.resolve(),
+        removeItem: () => Promise.resolve(),
+    };
+} else {
+    // Dynamically require to prevent top-level import during build
+    try {
+        storage = require('@react-native-async-storage/async-storage').default;
+    } catch (e) {
+        console.error('Failed to load AsyncStorage:', e);
+        storage = {
+            getItem: () => Promise.resolve(null),
+            setItem: () => Promise.resolve(),
+            removeItem: () => Promise.resolve(),
+        };
+    }
+}
+
 export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-        storage: AsyncStorage,
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: Platform.OS === 'web',
+        storage,
+        autoRefreshToken: !isServer,
+        persistSession: !isServer,
+        detectSessionInUrl: Platform.OS === 'web' && !isServer,
     },
 });

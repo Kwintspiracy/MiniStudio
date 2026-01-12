@@ -12,6 +12,7 @@ export interface PaletteColor {
   r: number | null;
   g: number | null;
   b: number | null;
+  finish?: string;
 }
 
 import { supabase } from './supabase';

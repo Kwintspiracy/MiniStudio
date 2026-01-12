@@ -112,7 +112,7 @@ export function useImagePicker(): UseImagePickerResult {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsMultipleSelection: true,
+        allowsMultipleSelection: false,
         quality: 0.8,
         base64: true,
       });

@@ -31,6 +31,10 @@ export function usePrompts() {
             'effect.osl': {
                 default: 'Integrate Object Source Lighting (OSL) showing realistic colored light emanating from specific points',
                 pro: 'Integrate Object Source Lighting (OSL) showing realistic colored light emanating from specific points'
+            },
+            'effect.photoshoot': {
+                default: 'Rendered as a professional studio product shot with soft diffused lighting on a seamless black background.',
+                pro: 'Rendered as a professional studio product shot with soft diffused lighting on a seamless black background.'
             }
         },
         shareMessage: 'Check out this generated miniature from MiniStudio!',
@@ -95,6 +99,16 @@ export function usePrompts() {
             } : {
                 default: 'Integrate Object Source Lighting (OSL) showing realistic colored light emanating from specific points',
                 pro: 'Integrate Object Source Lighting (OSL) showing realistic colored light emanating from specific points'
+            };
+
+            newEffects['effect.photoshoot'] = remotePrompts['effect.photoshoot'] ? {
+                default: remotePrompts['effect.photoshoot'].default,
+                pro: remotePrompts['effect.photoshoot'].pro,
+                negative_default: remotePrompts['effect.photoshoot'].negative_default,
+                negative_pro: remotePrompts['effect.photoshoot'].negative_pro
+            } : {
+                default: 'Rendered as a professional studio product shot with soft diffused lighting on a seamless black background.',
+                pro: 'Rendered as a professional studio product shot with soft diffused lighting on a seamless black background.'
             };
 
             // Share Message

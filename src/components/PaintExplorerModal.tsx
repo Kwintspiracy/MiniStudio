@@ -27,8 +27,8 @@ interface PaintExplorerModalProps {
     visible: boolean;
     onClose: () => void;
     selectedBrands: string[];
-    selectedColors: { name: string, hex: string }[];
-    onToggleColor: (colorName: string, hexCode: string) => void;
+    selectedColors: { name: string, hex: string, finish?: string }[];
+    onToggleColor: (colorName: string, hexCode: string, finish?: string) => void;
     onPaintsLoaded?: (paints: PaletteColor[]) => void;
     triggerLoad?: boolean;
 }
@@ -151,7 +151,7 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
                         <TouchableOpacity
                             key={paintKey}
                             style={[styles.paintItem, selected && styles.paintItemSelected]}
-                            onPress={() => onToggleColor(color.name, color.hex || '#FFFFFF')}
+                            onPress={() => onToggleColor(color.name, color.hex || '#FFFFFF', color.finish)}
                             activeOpacity={0.7}
                         >
                             <View

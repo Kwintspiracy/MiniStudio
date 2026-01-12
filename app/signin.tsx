@@ -16,7 +16,6 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../src/context/AuthContext';
-import { hasApiKey } from '../src/services/storageService';
 import { colors } from '../src/theme';
 
 // Google Icon Component
@@ -52,23 +51,9 @@ export default function SignInScreen() {
   useEffect(() => {
     if (!loading && session && !hasNavigated.current) {
       hasNavigated.current = true;
-      checkApiKeyAndNavigate();
+      router.replace('/(studio)');
     }
   }, [session, loading]);
-
-  const checkApiKeyAndNavigate = async () => {
-    try {
-      const hasKey = await hasApiKey();
-      if (hasKey) {
-        router.replace('/(studio)');
-      } else {
-        router.replace('/api-key');
-      }
-    } catch (err) {
-      console.error('Error checking API key:', err);
-      router.replace('/api-key');
-    }
-  };
 
   const handleSignIn = async () => {
     if (!email || !password) {

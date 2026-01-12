@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.21.0'
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -48,8 +48,25 @@ Deno.serve(async (req) => {
             return new Response("Missing prompt", { status: 400, headers: corsHeaders })
         }
 
-        // 3. User Entitlements (Simplified for Debugging)
-        const costUnits = 1;
+        // 3a. Authorize Generation (Check Limits)
+        const { data: authData, error: authCheckError } = await supabaseClient.rpc('authorize_generation', {
+            p_user_id: user.id,
+            p_model: model || 'gemini-2.5-flash-image'
+        });
+
+        if (authCheckError) {
+            console.error("[Edge] Auth RPC Error:", authCheckError);
+            // Fail open or closed? Failing closed for safety.
+            return new Response(JSON.stringify({ error: "System Error: Unable to verify limits." }), { status: 500, headers: corsHeaders });
+        }
+
+        console.log(`[Edge] Limit Check:`, authData);
+
+        if (authData && authData.allowed === false) {
+             return new Response(JSON.stringify({ 
+                 error: `Limit Reached. You have used ${authData.usage}/${authData.limit} ${authData.type} generations this month.` 
+             }), { status: 403, headers: corsHeaders });
+        }
 
         // 4. API Key Check
         const apiKey = Deno.env.get('GOOGLE_API_KEY')
@@ -129,14 +146,14 @@ Deno.serve(async (req) => {
             return new Response(JSON.stringify({ error: "AI returned no content. (Model may have refused)" }), { status: 200, headers: corsHeaders });
         }
 
-        // 6. Log Usage
+        // 6. Log Usage (Deduct User Token)
         try {
             await supabaseClient
                 .from('generation_logs')
                 .insert({
                     user_id: user.id,
                     model_used: targetModel,
-                    cost_units: costUnits,
+                    cost_units: 1,
                     action_type: action || 'generate'
                 });
         } catch (logError) {

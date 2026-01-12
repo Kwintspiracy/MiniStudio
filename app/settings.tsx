@@ -1,16 +1,26 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ScrollView, RefreshControl } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { colors } from '../src/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppModal } from '../src/components/AppModal';
 
+import { UsageTracker, UsageTrackerRef } from '../src/components/UsageTracker';
+
 export default function SettingsScreen() {
     const { user, signOut } = useAuth();
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+    const usageTrackerRef = useRef<UsageTrackerRef>(null);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await usageTrackerRef.current?.refresh();
+        setRefreshing(false);
+    };
 
     return (
         <View style={styles.container}>
@@ -27,17 +37,39 @@ export default function SettingsScreen() {
                         color: '#fff',
                     },
                     headerShadowVisible: false,
+                    headerLeft: () => (
+                        <TouchableOpacity 
+                            onPress={() => router.back()} 
+                            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                            style={{ paddingHorizontal: 8 }}
+                            accessibilityLabel="Go back"
+                            accessibilityRole="button"
+                        >
+                            <Text style={{ color: '#0A84FF', fontSize: 17 }}>{'‹ Back'}</Text>
+                        </TouchableOpacity>
+                    ),
                 }}
             />
 
-            <View style={styles.content}>
+            <ScrollView 
+                style={styles.content}
+                contentContainerStyle={styles.contentContainer}
+                refreshControl={
+                    <RefreshControl 
+                        refreshing={refreshing} 
+                        onRefresh={onRefresh}
+                        tintColor={colors.accent.blue}
+                        colors={[colors.accent.blue]}
+                    />
+                }
+            >
                 <View style={styles.profileCard}>
                     <View style={styles.profileInfo}>
                         <View style={styles.avatarContainer}>
                             {user?.user_metadata?.avatar_url ? (
-                                <Image 
-                                    source={{ uri: user.user_metadata.avatar_url }} 
-                                    style={styles.avatar} 
+                                <Image
+                                    source={{ uri: user.user_metadata.avatar_url }}
+                                    style={styles.avatar}
                                 />
                             ) : (
                                 <View style={[styles.avatar, styles.avatarPlaceholder]}>
@@ -53,7 +85,10 @@ export default function SettingsScreen() {
                         </View>
                     </View>
                 </View>
-            </View>
+
+                {/* Usage Tracker */}
+                <UsageTracker ref={usageTrackerRef} />
+            </ScrollView>
 
             <View style={[styles.footerContainer, Platform.OS === 'android' && { paddingBottom: 30 + insets.bottom }]}>
                 <View style={styles.bottomButtonsRow}>
@@ -97,7 +132,10 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         paddingHorizontal: 16,
+    },
+    contentContainer: {
         paddingTop: 17,
+        gap: 16,
     },
     profileCard: {
         backgroundColor: 'rgba(255, 255, 255, 0.05)',

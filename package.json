@@ -13,6 +13,8 @@
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
     "@google/genai": "^1.27.0",
+    "@gorhom/bottom-sheet": "^5.2.8",
+    "@gorhom/portal": "^1.0.14",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.49.1",
     "expo": "~54.0.31",
