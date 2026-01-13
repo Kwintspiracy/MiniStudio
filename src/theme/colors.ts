@@ -20,6 +20,7 @@ export const colors = {
         secondary: '#7E808B',
         dark: '#1D1D1D',
         textfieldbg: '#16171D',
+        red: '#C4002B',
     },
 
     // Button colors

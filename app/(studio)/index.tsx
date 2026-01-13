@@ -35,7 +35,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { shareAsync, isAvailableAsync } from 'expo-sharing';
 
 // Get screen dimensions
+// Get screen dimensions
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Dynamic Grid Calculation
+const HISTORY_GRID_GAP = 8;
+const HISTORY_GRID_PADDING = 48; // modalContent padding (24) * 2
+const MIN_HISTORY_ITEM_WIDTH = 82;
+
+const availableHistoryWidth = SCREEN_WIDTH - HISTORY_GRID_PADDING;
+const numHistoryColumns = Math.floor((availableHistoryWidth + HISTORY_GRID_GAP) / (MIN_HISTORY_ITEM_WIDTH + HISTORY_GRID_GAP));
+const historyItemWidth = (availableHistoryWidth - (numHistoryColumns - 1) * HISTORY_GRID_GAP) / numHistoryColumns;
 
 // --- Dedicated SVG Icon Components ---
 
@@ -447,15 +457,12 @@ export default function StudioScreen() {
     }
   }, [activePreviewImage]);
 
-  const handleUseAsSource = useCallback(async () => {
-    if (!activePreviewImage) return;
-
-    let imageData = activePreviewImage;
-
+  const loadHistoryItemAsSource = useCallback(async (url: string) => {
+    let imageData = url;
     // If it's a remote URL (not a data URL), fetch and convert to base64
-    if (activePreviewImage.startsWith('http')) {
+    if (url.startsWith('http')) {
       try {
-        const response = await fetch(activePreviewImage);
+        const response = await fetch(url);
         const blob = await response.blob();
         const reader = new FileReader();
         imageData = await new Promise<string>((resolve, reject) => {
@@ -468,11 +475,15 @@ export default function StudioScreen() {
         return;
       }
     }
-
     const newImage: ImageFile = { base64: imageData, mimeType: 'image/png' };
     setSourceImages([newImage]);
+  }, []);
+
+  const handleUseAsSource = useCallback(async () => {
+    if (!activePreviewImage) return;
+    await loadHistoryItemAsSource(activePreviewImage);
     setIsResultsDrawerOpen(false);
-  }, [activePreviewImage]);
+  }, [activePreviewImage, loadHistoryItemAsSource]);
 
   const toggleSelectionMode = () => {
     setIsSelectionMode(!isSelectionMode);
@@ -638,7 +649,10 @@ export default function StudioScreen() {
         <ModeCardSelector activeMode={activeMode} onModeChange={setActiveMode} />
         <ScrollView 
             ref={scrollViewRef}
-            contentContainerStyle={styles.scrollContent} 
+            contentContainerStyle={[
+              styles.scrollContent, 
+              { paddingBottom: (hasImageLoaded ? 220 : 120) + insets.bottom }
+            ]} 
             showsVerticalScrollIndicator={false}
         >
 
@@ -773,26 +787,28 @@ export default function StudioScreen() {
         </ScrollView>
 
         {/* Bottom Navigation - Text area moves above keyboard, buttons stay at bottom */}
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingTextArea}
-          keyboardVerticalOffset={0}
-        >
-          <View style={styles.floatingTextContainer}>
-            <TextInput
-              value={activeMode === 'paint' ? painterPrompt : designerPrompt}
-              onChangeText={activeMode === 'paint' ? setPainterPrompt : setDesignerPrompt}
-              placeholder="Any specific detail to add ?"
-              placeholderTextColor="#7E808B"
-              style={styles.footerPromptInput}
-              multiline
-              scrollEnabled={true}
-            />
-          </View>
-        </KeyboardAvoidingView>
+        {hasImageLoaded && (
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardAvoidingTextArea}
+            keyboardVerticalOffset={0}
+          >
+            <View style={styles.floatingTextContainer}>
+              <TextInput
+                value={activeMode === 'paint' ? painterPrompt : designerPrompt}
+                onChangeText={activeMode === 'paint' ? setPainterPrompt : setDesignerPrompt}
+                placeholder="Any specific detail to add ?"
+                placeholderTextColor="#7E808B"
+                style={styles.footerPromptInput}
+                multiline
+                scrollEnabled={true}
+              />
+            </View>
+          </KeyboardAvoidingView>
+        )}
 
         {/* Fixed bottom buttons - don't move with keyboard */}
-        <View style={[styles.footerContainer, { paddingBottom: Platform.OS === 'android' ? 30 + insets.bottom : insets.bottom + 16 }]}>
+        <View style={[styles.footerContainer, { paddingBottom: Platform.OS === 'android' ? 30 + insets.bottom : insets.bottom + 16 }, !hasImageLoaded && { paddingTop: 32 }]}>
           <View style={styles.bottomButtonsRow}>
             <TouchableOpacity
               style={styles.galleryButton}
@@ -806,9 +822,10 @@ export default function StudioScreen() {
               <Text style={styles.galleryButtonText}>Gallery</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.createButton, !isPro && styles.createButtonBasic, isLoading && styles.cancelButton]}
+              style={[styles.createButton, !isPro && styles.createButtonBasic, !hasImageLoaded && styles.buttonDisabled, isLoading && styles.cancelButton]}
               onPress={isLoading ? handleCancelGeneration : handleGenerate}
               activeOpacity={0.8}
+              disabled={!hasImageLoaded && !isLoading}
               accessibilityLabel={isLoading ? 'Cancel generation' : `Create image in ${isPro ? 'Pro' : 'Basic'} mode`}
               accessibilityRole="button"
               accessibilityHint={isLoading ? 'Stops the current image generation' : 'Generates a new image based on your settings'}
@@ -867,7 +884,17 @@ export default function StudioScreen() {
                         activePreviewImage === item.url && !isSelectionMode && styles.historyItemActive,
                         isSelected && styles.historyItemSelected
                       ]} 
-                      onPress={() => isSelectionMode ? toggleSelection(item.url) : setActivePreviewImage(item.url)}
+                      onPress={() => {
+                        if (isSelectionMode) {
+                          toggleSelection(item.url);
+                        } else {
+                          setActivePreviewImage(item.url);
+                          // Only set as source if there isn't one already
+                          if (sourceImages.length === 0) {
+                            loadHistoryItemAsSource(item.url);
+                          }
+                        }
+                      }}
                       activeOpacity={0.7}
                     >
                       <Image source={{ uri: item.url }} style={[styles.historyImage, isSelected && { opacity: 0.7 }]} />
@@ -920,9 +947,9 @@ const styles = StyleSheet.create({
   modeCardContent: { flexDirection: 'row', alignItems: 'center', gap: -4 },
   modeCardImage: { width: 50, height: 50, borderRadius: 64 },
   modeCardText: { justifyContent: 'space-between', height: 30 },
-  modeCardTitle: { fontFamily: Platform.OS === 'ios' ? 'Sarabun' : 'System', fontWeight: '800', fontSize: 16, lineHeight: 16, letterSpacing: -0.41, color: '#FA0439' },
-  modeCardTitleActive: { color: '#FA0439' },
-  modeCardSubtitle: { fontFamily: Platform.OS === 'ios' ? 'Sarabun' : 'System', fontWeight: '500', fontSize: 12, lineHeight: 14, letterSpacing: -0.41, color: colors.text.primary },
+  modeCardTitle: { fontFamily: Platform.OS === 'ios' ? 'Sarabun' : 'System', fontWeight: '800', fontSize: 16, lineHeight: 16, color: '#FA0439' },
+  modeCardTitleActive: { color: colors.text.red },
+  modeCardSubtitle: { fontFamily: Platform.OS === 'ios' ? 'Sarabun' : 'System', fontWeight: '500', fontSize: 12, lineHeight: 14, color: colors.text.primary },
   modeCardSubtitleActive: { color: '#000000' },
   // Mode Badge Styles (Basic/Pro) - Figma Toggle-button Component
   modeBadge: { width: 80, height: 32, flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: 16 },
@@ -957,7 +984,7 @@ const styles = StyleSheet.create({
   proBadgeText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontWeight: '500', fontSize: 14, letterSpacing: -0.41, marginLeft: 4 },
   proTextInactive: { color: colors.text.primary },
   proTextActive: { color: colors.text.primary },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 50 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 240 },
   navTabContainer: { flexDirection: 'row', alignSelf: 'stretch', backgroundColor: colors.background.secondary, paddingHorizontal: 16, paddingVertical: 8 },
   tabButton: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: 6 },
   tabButtonActive: { backgroundColor: colors.button.primary },
@@ -980,7 +1007,7 @@ const styles = StyleSheet.create({
   promptInput: { flex: 1, fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontSize: 14, color: colors.text.primary, lineHeight: 20 },
   designStepSection: { gap: 5 },
   paintStepSection: { gap: 5 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 8, padding: 8, marginTop: 12 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 8, paddingVertical: 8, marginTop: 12 },
   sectionHeaderText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 13, color: '#EFEFF1' },
   conceptTabContainer: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', gap: 4 },
 
@@ -1052,8 +1079,8 @@ const styles = StyleSheet.create({
   resultActionButtonIcon: { height: 40, paddingHorizontal: 24, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   historyContainer: { alignSelf: 'stretch', gap: 9, paddingBottom: 60 },
   historyTitle: { color: colors.text.primary, fontSize: 16, fontFamily: 'SF Pro Display', fontWeight: '700', letterSpacing: -0.41 },
-  historyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: '2%', alignSelf: 'stretch' },
-  historyItem: { width: '23.5%', aspectRatio: 1, minWidth: 82, minHeight: 82, borderRadius: 8, overflow: 'hidden' },
+  historyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: HISTORY_GRID_GAP, alignSelf: 'stretch' },
+  historyItem: { width: historyItemWidth, aspectRatio: 1, borderRadius: 8, overflow: 'hidden' },
   historyItemActive: { borderWidth: 2, borderColor: colors.button.primary },
   historyItemSelected: { borderWidth: 2, borderColor: colors.button.primary },
   headerButtonText: { color: colors.text.primary, fontSize: 16, fontFamily: 'SF Pro Display', fontWeight: '400' },
