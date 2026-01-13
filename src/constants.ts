@@ -71,6 +71,7 @@ export const COLOR_BRANDS: ColorBrand[] = [
 
 export const DEFAULT_DESIGNER_TEMPLATES = {
   sketch: "Inspired by these images make a high-detail professional character concept art sketch, in the style of fantasy illustration. Use precise and clean linework with a consistent line weight to define the forms. {input}",
+  sculpt: "A professional, high-resolution product photograph of a 32mm miniature. The figure, a {input}, is rendered as an unpainted, dark grey resin print. Emphasize extreme, hyperrealistic photorealism.",
   miniature: "A professional, high-resolution product photograph of a 32mm miniature. The figure, a {input}, is rendered as an unpainted, dark grey resin print. Emphasize extreme, hyperrealistic photorealism.",
   'pro-shot': "A studio product shot of a grey {input} miniature on a seamless black background. Soft diffused lighting.",
   combined: `Role: You are a Concept Artist using a "Style Transfer" workflow. Result: The subject described in my text, but painted as if it belongs in the universe of the reference images.`

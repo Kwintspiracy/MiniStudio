@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, StatusBar, Alert } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import { useRouter, Stack } from 'expo-router';
@@ -78,32 +78,29 @@ export default function CameraScreen() {
                 style={styles.camera}
                 facing={facing}
                 ref={cameraRef}
-            >
-                <SafeAreaView style={styles.uiOverlay}>
-                    {/* Top Bar */}
-                    <View style={styles.topBar}>
-                        <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-                            <XMarkIcon color="#FFF" size={28} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={toggleCameraFacing} style={styles.iconButton}>
-                            <ArrowsPointingOutIcon color="#FFF" size={28} />
-                            {/* Using Arrows as flip icon placeholder since FlipIcon isn't in Icons export based on memory, 
-                                if it looks weird user will tell. Or just text 'Flip' */}
-                        </TouchableOpacity>
-                    </View>
+            />
+            <SafeAreaView style={styles.uiOverlay} pointerEvents="box-none">
+                {/* Top Bar */}
+                <View style={styles.topBar}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+                        <XMarkIcon color="#FFF" size={28} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={toggleCameraFacing} style={styles.iconButton}>
+                        <ArrowsPointingOutIcon color="#FFF" size={28} />
+                    </TouchableOpacity>
+                </View>
 
-                    {/* Bottom Controls */}
-                    <View style={styles.bottomBar}>
-                        <TouchableOpacity
-                            style={styles.captureButtonOuter}
-                            onPress={takePicture}
-                            disabled={isCapturing}
-                        >
-                            <View style={[styles.captureButtonInner, isCapturing && styles.capturing]} />
-                        </TouchableOpacity>
-                    </View>
-                </SafeAreaView>
-            </CameraView>
+                {/* Bottom Controls */}
+                <View style={styles.bottomBar}>
+                    <TouchableOpacity
+                        style={styles.captureButtonOuter}
+                        onPress={takePicture}
+                        disabled={isCapturing}
+                    >
+                        <View style={[styles.captureButtonInner, isCapturing && styles.capturing]} />
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
         </View>
     );
 }
@@ -146,7 +143,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     uiOverlay: {
-        flex: 1,
+        ...StyleSheet.absoluteFillObject,
         justifyContent: 'space-between',
     },
     topBar: {

@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert, Modal, StyleSheet, Platform, Dimensions, StatusBar, Share, Animated, Easing,
   KeyboardAvoidingView, Keyboard
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import {
@@ -33,7 +33,6 @@ import { colors, spacing, borderRadius, fontFamily, textStyles } from '@/theme';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { shareAsync, isAvailableAsync } from 'expo-sharing';
-import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 
 // Get screen dimensions
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -116,9 +115,23 @@ export default function StudioScreen() {
   useEffect(() => {
     if (selectedImage) {
       setSourceImages([{ base64: selectedImage, mimeType: 'image/jpeg' }]);
+      setActivePreviewImage(selectedImage);
       setSelectedImage(null); // Clear it so we don't re-trigger
+      cameFromGalleryRef.current = false; // Don't trigger useFocusEffect
+      setIsResultsDrawerOpen(true); // Reopen gallery to show the captured image
     }
   }, [selectedImage]);
+
+  // Reopen gallery when returning from camera without taking a photo
+  useFocusEffect(
+    useCallback(() => {
+      if (cameFromGalleryRef.current) {
+        // Returned from camera without taking photo - reopen gallery
+        setIsResultsDrawerOpen(true);
+        cameFromGalleryRef.current = false;
+      }
+    }, [])
+  );
 
   const { styles: paintStylesList, templates: designerTemplates, effects: effectPrompts, shareMessage, exampleAssets, loading: promptsLoading } = usePrompts();
 
@@ -157,10 +170,8 @@ export default function StudioScreen() {
   const [selectedHistoryItems, setSelectedHistoryItems] = useState<Set<string>>(new Set());
   const [hiddenDemoAssets, setHiddenDemoAssets] = useState<string[]>([]);
 
-  // FTUE State
-  const [isFirstTimeDrawerOpen, setIsFirstTimeDrawerOpen] = useState(false);
-  const ftueSheetRef = useRef<BottomSheet>(null);
   const scrollViewRef = useRef<ScrollView>(null);
+  const cameFromGalleryRef = useRef(false); // Track if we navigated to camera from gallery
 
   const { pickMultipleImages, pickDocument } = useImagePicker();
   const { saveImage } = useMediaSave();
@@ -221,15 +232,15 @@ export default function StudioScreen() {
         return [...prev, ...newItems];
       });
 
-      // FTUE: Open drawer on first launch when assets are available
-      AsyncStorage.getItem('has_seen_drawer').then(seen => {
-        if (!seen) {
-          setIsFirstTimeDrawerOpen(true);
-          AsyncStorage.setItem('has_seen_drawer', 'true');
-        }
-      });
     }
   }, [exampleAssets, hiddenDemoAssets]);
+
+  // Auto-open Gallery drawer on fresh start when no source is selected
+  useEffect(() => {
+    if (!authLoading && sourceImages.length === 0 && !activePreviewImage) {
+      setIsResultsDrawerOpen(true);
+    }
+  }, [authLoading]);
 
   // Persist generation history (user-generated only, excluding demos) whenever it changes
   useEffect(() => {
@@ -247,6 +258,7 @@ export default function StudioScreen() {
     const images = await pickMultipleImages();
     if (images.length > 0) {
       setSourceImages(images);
+      setActivePreviewImage(images[0].base64);
     }
   }, [pickMultipleImages]);
 
@@ -254,6 +266,7 @@ export default function StudioScreen() {
     const doc = await pickDocument();
     if (doc) {
       setSourceImages([doc]);
+      setActivePreviewImage(doc.base64);
     }
   }, [pickDocument]);
 
@@ -539,10 +552,46 @@ export default function StudioScreen() {
     });
   };
 
+
+
   if (authLoading) return <View style={styles.centered}><ActivityIndicator size="large" color="#0058DB" /></View>;
 
   const hasImageLoaded = sourceImages.length > 0;
   const hasContentToView = hasImageLoaded || generationHistory.length > 0 || exampleAssets.length > 0;
+
+  const renderInputContainer = useCallback((onCameraClose?: () => void) => {
+    const showCompact = hasImageLoaded || !!activePreviewImage;
+    return (
+      <View style={[styles.inputContainer, { paddingHorizontal: 8, alignSelf: 'stretch' }, !showCompact && { height: 300, flexDirection: 'column', justifyContent: 'center', gap: 16 }]}>
+        {showCompact ? (
+          <View style={styles.sourceImageWrapper}>
+            <Image source={{ uri: sourceImages[0]?.base64 || activePreviewImage || '' }} style={styles.sourceImage} />
+            <TouchableOpacity onPress={() => { setSourceImages([]); setActivePreviewImage(null); }} style={styles.removeImageOverlay}>
+              <Text style={styles.removeImageTextSmall}>×</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={[styles.sourceInfo, { alignItems: 'center' }]}>
+            <Text style={styles.inputLabel}>SOURCE</Text>
+            <Text style={styles.inputSubtitle}>
+              Take a photo, choose an image or use images from your gallery
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.optionsRow}>
+          <TouchableOpacity style={styles.optionButton} onPress={() => { cameFromGalleryRef.current = true; setIsResultsDrawerOpen(false); router.push('/camera'); }} activeOpacity={0.8}>
+            <PhotoCameraIcon />
+            <Text style={styles.optionButtonText}>Camera</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.optionButton} onPress={handleFilesPress} activeOpacity={0.8}>
+            <PhotoLibraryIcon />
+            <Text style={styles.optionButtonText}>Files</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }, [hasImageLoaded, sourceImages, handleFilesPress, activePreviewImage]);
 
   // paintStylesList is now coming from the hook
 
@@ -585,34 +634,7 @@ export default function StudioScreen() {
             contentContainerStyle={styles.scrollContent} 
             showsVerticalScrollIndicator={false}
         >
-          <View style={styles.inputContainer}>
-            {hasImageLoaded ? (
-              <View style={styles.sourceImageWrapper}>
-                <Image source={{ uri: sourceImages[0].base64 }} style={styles.sourceImage} />
-                <TouchableOpacity onPress={() => setSourceImages([])} style={styles.removeImageOverlay}>
-                  <Text style={styles.removeImageTextSmall}>×</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.sourceInfo}>
-                <Text style={styles.inputLabel}>SOURCE</Text>
-                <Text style={styles.inputSubtitle}>
-                  Choose an image
-                </Text>
-              </View>
-            )}
 
-            <View style={styles.optionsRow}>
-              <TouchableOpacity style={styles.optionButton} onPress={() => router.push('/camera')} activeOpacity={0.8}>
-                <PhotoCameraIcon />
-                <Text style={styles.optionButtonText}>Camera</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.optionButton} onPress={handleFilesPress} activeOpacity={0.8}>
-                <PhotoLibraryIcon />
-                <Text style={styles.optionButtonText}>Files</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
 
           {/* DESIGN: Mode-Specific Content */}
           {hasImageLoaded && (
@@ -766,8 +788,7 @@ export default function StudioScreen() {
         <View style={[styles.footerContainer, { paddingBottom: Platform.OS === 'android' ? 30 + insets.bottom : insets.bottom + 16 }]}>
           <View style={styles.bottomButtonsRow}>
             <TouchableOpacity
-              style={[styles.galleryButton, !hasContentToView && styles.buttonDisabled]}
-              disabled={!hasContentToView}
+              style={styles.galleryButton}
               onPress={() => setIsResultsDrawerOpen(true)}
               activeOpacity={0.7}
               accessibilityLabel="Open gallery"
@@ -778,23 +799,23 @@ export default function StudioScreen() {
               <Text style={styles.galleryButtonText}>Gallery</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.createButton, isLoading && styles.cancelButton]}
+              style={[styles.createButton, !isPro && styles.createButtonBasic, isLoading && styles.cancelButton]}
               onPress={isLoading ? handleCancelGeneration : handleGenerate}
               activeOpacity={0.8}
-              accessibilityLabel={isLoading ? 'Cancel generation' : 'Create image'}
+              accessibilityLabel={isLoading ? 'Cancel generation' : `Create image in ${isPro ? 'Pro' : 'Basic'} mode`}
               accessibilityRole="button"
               accessibilityHint={isLoading ? 'Stops the current image generation' : 'Generates a new image based on your settings'}
             >
               <View style={styles.createButtonContent}>
                 {!isLoading && <MagicWandIcon color="#F4F4F4" />}
                 {isLoading && <SpinnerIcon color="#FFFFFF" />}
-                <Text style={[styles.createButtonText, isLoading && styles.cancelButtonText]}>{isLoading ? 'Cancel' : 'Create'}</Text>
+                <Text style={[styles.createButtonText, isLoading && styles.cancelButtonText]}>{isLoading ? 'Cancel' : `Create (${isPro ? 'Pro' : 'Basic'})`}</Text>
               </View>
             </TouchableOpacity>
           </View>
         </View>
 
-        <Modal visible={isResultsDrawerOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsResultsDrawerOpen(false)}>
+        <Modal visible={isResultsDrawerOpen} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setIsResultsDrawerOpen(false)}>
           <SafeAreaView style={styles.modalContainer} edges={['top']}>
             <View style={styles.grabberContainer}><View style={styles.grabber} /></View>
             <View style={styles.modalHeader}>
@@ -813,16 +834,21 @@ export default function StudioScreen() {
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-              {activePreviewImage && (
-                <View style={styles.resultContainer}>
+              {activePreviewImage ? (
+                <View style={[styles.resultContainer, { marginBottom: 24 }]}>
                   <Image source={{ uri: activePreviewImage }} style={[styles.activeResultImage, { aspectRatio: previewAspectRatio }]} resizeMode="cover" />
                   <View style={styles.resultActions}>
-                    <TouchableOpacity onPress={handleUseAsSource} style={[styles.resultActionButton, styles.resultActionButtonPrimary]} accessibilityLabel="Use as source image" accessibilityRole="button"><ToSourceIcon color="#1D1D1D" /><Text style={[styles.resultActionText, styles.resultActionTextDark]}>Use as source</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={handleUseAsSource} style={[styles.resultActionButton, styles.resultActionButtonPrimary]} accessibilityLabel="Use as source image" accessibilityRole="button"><Text style={[styles.resultActionText, styles.resultActionTextDark]}>Use as source</Text></TouchableOpacity>
                     <TouchableOpacity onPress={handleDownload} style={styles.resultActionButtonIcon} accessibilityLabel="Download image" accessibilityRole="button"><MdFileDownloadIcon color="#F4F4F4" /></TouchableOpacity>
                     <TouchableOpacity onPress={handleShare} style={styles.resultActionButtonIcon} accessibilityLabel="Share image" accessibilityRole="button"><ShareIcon color="#F4F4F4" /></TouchableOpacity>
                   </View>
                 </View>
-              )}
+              ) : null}
+
+              <View style={[styles.historyContainer, { paddingBottom: 0, marginBottom: 24 }]}>
+                <Text style={styles.historyTitle}>Source</Text>
+                {renderInputContainer(() => setIsResultsDrawerOpen(false))}
+              </View>
               <View style={[styles.historyContainer, { paddingBottom: 80 + insets.bottom }]}><Text style={styles.historyTitle}>History</Text><View style={styles.historyGrid}>
                 {generationHistory.map((item, i) => {
                   const isSelected = selectedHistoryItems.has(item.url);
@@ -853,57 +879,6 @@ export default function StudioScreen() {
           </SafeAreaView>
         </Modal>
 
-        {/* FTUE Bottom Sheet */}
-        <BottomSheet
-          ref={ftueSheetRef}
-          index={isFirstTimeDrawerOpen ? 0 : -1}
-          snapPoints={['55%']}
-          enablePanDownToClose={true}
-          onChange={(index) => {
-            if (index === -1) {
-              setIsFirstTimeDrawerOpen(false);
-            }
-          }}
-          backdropComponent={(props) => (
-            <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.6} pressBehavior="none" />
-          )}
-          backgroundStyle={{ backgroundColor: colors.background.secondary }}
-          handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.3)', width: 36 }}
-        >
-          <BottomSheetView style={styles.ftueSheetContent}>
-            <View style={styles.modalHeader}>
-              <View style={[styles.modalHeaderSide, { alignItems: 'flex-start' }]} />
-              <Text style={styles.modalTitle}>Gallery</Text>
-              <TouchableOpacity 
-                onPress={() => ftueSheetRef.current?.close()}
-                style={[styles.modalHeaderSide, { alignItems: 'flex-end' }]}
-              >
-                <Text style={styles.doneButtonText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-              <View style={[styles.historyContainer, { paddingBottom: 80 + insets.bottom }]}>
-                <Text style={styles.historyTitle}>History</Text>
-                <View style={styles.historyGrid}>
-                  {generationHistory.map((item, i) => (
-                    <TouchableOpacity 
-                      key={i} 
-                      style={styles.historyItem}
-                      onPress={() => {
-                        ftueSheetRef.current?.close();
-                        setActivePreviewImage(item.url);
-                        setIsResultsDrawerOpen(true);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Image source={{ uri: item.url }} style={styles.historyImage} />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </ScrollView>
-          </BottomSheetView>
-        </BottomSheet>
 
         {/* Paint Explorer Modal */}
         <PaintExplorerModal
@@ -943,10 +918,10 @@ const styles = StyleSheet.create({
   modeCardSubtitle: { fontFamily: Platform.OS === 'ios' ? 'Sarabun' : 'System', fontWeight: '500', fontSize: 12, lineHeight: 14, letterSpacing: -0.41, color: colors.text.primary },
   modeCardSubtitleActive: { color: '#000000' },
   // Mode Badge Styles (Basic/Pro) - Updated from Figma
-  modeBadge: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 12, borderRadius: 56, minWidth: 90, height: 40, backgroundColor: '#28436C' },
+  modeBadge: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 0, borderRadius: 24, minWidth: 80, height: 40, backgroundColor: '#28436C' },
   modeBadgeBasic: { backgroundColor: '#28436C' },
   modeBadgeAdvanced: { backgroundColor: colors.button.primary },
-  modeBadgeInner: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 },
+  modeBadgeInner: { paddingVertical: 4, paddingHorizontal: 0, borderRadius: 6 },
   modeBadgeInnerBasic: { backgroundColor: '#EA420F' },
   modeBadgeInnerAdvanced: { backgroundColor: colors.button.primary },
   modeBadgeText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontWeight: '500', fontSize: 14, letterSpacing: -0.41, color: colors.text.primary },
@@ -979,14 +954,14 @@ const styles = StyleSheet.create({
   tabButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 14, marginLeft: 4 },
   tabTextActive: { color: colors.text.primary },
   tabTextInactive: { color: colors.text.secondary },
-  inputContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch', backgroundColor: colors.background.tertiary, borderRadius: 8, borderWidth: 2, borderColor: colors.border.strong, borderStyle: 'dashed', paddingVertical: 8, paddingHorizontal: 8 },
+  inputContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch', backgroundColor: colors.background.secondary, borderRadius: 8, borderWidth: 2, borderColor: colors.border.strong, borderStyle: 'dashed', paddingVertical: 8, paddingHorizontal: 8 },
   sourceInfo: { justifyContent: 'center' },
-  inputLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '700', fontSize: 12, color: colors.text.secondary },
-  inputSubtitle: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 13, color: colors.text.primary, marginTop: 2 },
+  inputLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '700', fontSize: 12, color: colors.text.primary, paddingLeft: 8 },
+  inputSubtitle: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '400', fontSize: 13, color: colors.text.secondary, marginTop: 2, paddingLeft: 8, textAlign: 'center' },
   optionsRow: { flexDirection: 'row', alignItems: 'center' },
   optionButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 17, paddingHorizontal: 16, backgroundColor: colors.button.secondary, borderRadius: 4, marginLeft: 8 },
   optionButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 13, color: colors.text.primary, marginLeft: 8 },
-  sourceImageWrapper: { width: 50, height: 50, borderRadius: 6, borderWidth: 3, borderColor: colors.button.primary, overflow: 'hidden' },
+  sourceImageWrapper: { width: 50, height: 50, borderRadius: 6, borderWidth: 2, borderColor: colors.button.primary, overflow: 'hidden' },
   sourceImage: { width: '100%', height: '100%' },
   removeImageOverlay: { position: 'absolute', top: 0, right: 0, width: 15, height: 15, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   removeImageTextSmall: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
@@ -1041,15 +1016,16 @@ const styles = StyleSheet.create({
   galleryButton: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 24, paddingVertical: 16, backgroundColor: '#2C3142', borderRadius: 33, justifyContent: 'center' },
   galleryButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: colors.text.primary, letterSpacing: -0.41 },
   createButton: { flex: 1, paddingVertical: 16, backgroundColor: colors.button.primary, borderRadius: 62, justifyContent: 'center', alignItems: 'center' },
+  createButtonBasic: { backgroundColor: '#28436C' },
   createButtonContent: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   createButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: colors.text.primary },
   cancelButton: { backgroundColor: colors.text.dark },
   cancelButtonText: { color: colors.text.primary, opacity: 0.3 },
   buttonDisabled: { opacity: 0.5 },
-  modalContainer: { flex: 1, backgroundColor: colors.background.secondary },
+  modalContainer: { flex: 1, backgroundColor: colors.text.textfieldbg },
   grabberContainer: { width: '100%', height: 24, alignItems: 'center', justifyContent: 'center' },
   grabber: { width: 36, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,0.2)' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 16, paddingHorizontal: 24, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 16, paddingHorizontal: 24},
   modalHeaderSide: { width: 80, justifyContent: 'center' },
   modalTitle: { flex: 1, textAlign: 'center', color: colors.text.primary, fontSize: 16, fontFamily: 'SF Pro Display', fontWeight: '700', letterSpacing: -0.41 },
   doneButtonText: { color: colors.button.primary, fontSize: 16, fontWeight: '600', textAlign: 'right' },
@@ -1060,7 +1036,7 @@ const styles = StyleSheet.create({
   resultActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, alignSelf: 'stretch' },
   resultActionButton: { flex: 1, minWidth: 100, height: 40, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 12 },
   resultActionButtonPrimary: { backgroundColor: colors.button.white },
-  resultActionText: { color: colors.text.primary, fontSize: 14, fontFamily: 'SF Pro Display', fontWeight: '500', letterSpacing: -0.41 },
+  resultActionText: { color: colors.text.primary, fontSize: 14, fontFamily: 'SF Pro Display', fontWeight: '600', letterSpacing: -0.41 },
   resultActionTextDark: { color: colors.text.dark },
   resultActionButtonIcon: { height: 40, paddingHorizontal: 24, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   historyContainer: { alignSelf: 'stretch', gap: 9, paddingBottom: 60 },
