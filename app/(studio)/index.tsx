@@ -95,14 +95,21 @@ const ModeCardSelector = ({ activeMode, onModeChange }: { activeMode: StudioMode
   </View>
 );
 
-// Basic/Pro Badge - Updated from Figma
+// Basic/Pro Toggle Badge - Figma Toggle-button Component
 const ModeBadge = ({ isAdvanced, onToggle }: { isAdvanced: boolean; onToggle: () => void }) => (
   <TouchableOpacity
     onPress={onToggle}
-    style={[styles.modeBadge, isAdvanced ? styles.modeBadgeAdvanced : styles.modeBadgeBasic]}
-    activeOpacity={0.7}
+    style={[styles.modeBadge, isAdvanced ? styles.modeBadgePro : styles.modeBadgeBasic]}
+    activeOpacity={0.8}
   >
-    <Text style={styles.modeBadgeText}>{isAdvanced ? 'Pro' : 'Basic'}</Text>
+    <View style={[styles.modeBadgeInner, isAdvanced && styles.modeBadgeInnerPro]}>
+      {/* Basic: dot on left, text on right | Pro: text on left, dot on right (aligned to end) */}
+      {!isAdvanced && <View style={styles.modeBadgeDotBasic} />}
+      <Text style={[styles.modeBadgeText, isAdvanced ? styles.modeBadgeTextPro : styles.modeBadgeTextBasic]}>
+        {isAdvanced ? 'PRO' : 'BASE'}
+      </Text>
+      {isAdvanced && <View style={styles.modeBadgeDotPro} />}
+    </View>
   </TouchableOpacity>
 );
 
@@ -807,9 +814,9 @@ export default function StudioScreen() {
               accessibilityHint={isLoading ? 'Stops the current image generation' : 'Generates a new image based on your settings'}
             >
               <View style={styles.createButtonContent}>
-                {!isLoading && <MagicWandIcon color="#F4F4F4" />}
+                {!isLoading && <MagicWandIcon color={isPro ? '#0F1014' : '#F4F4F4'} />}
                 {isLoading && <SpinnerIcon color="#FFFFFF" />}
-                <Text style={[styles.createButtonText, isLoading && styles.cancelButtonText]}>{isLoading ? 'Cancel' : `Create (${isPro ? 'Pro' : 'Basic'})`}</Text>
+                <Text style={[styles.createButtonText, isPro && styles.createButtonTextPro, isLoading && styles.cancelButtonText]}>{isLoading ? 'Cancel' : `Create (${isPro ? 'Pro' : 'Basic'})`}</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -917,14 +924,17 @@ const styles = StyleSheet.create({
   modeCardTitleActive: { color: '#FA0439' },
   modeCardSubtitle: { fontFamily: Platform.OS === 'ios' ? 'Sarabun' : 'System', fontWeight: '500', fontSize: 12, lineHeight: 14, letterSpacing: -0.41, color: colors.text.primary },
   modeCardSubtitleActive: { color: '#000000' },
-  // Mode Badge Styles (Basic/Pro) - Updated from Figma
-  modeBadge: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 0, borderRadius: 24, minWidth: 80, height: 40, backgroundColor: '#28436C' },
-  modeBadgeBasic: { backgroundColor: '#28436C' },
-  modeBadgeAdvanced: { backgroundColor: colors.button.primary },
-  modeBadgeInner: { paddingVertical: 4, paddingHorizontal: 0, borderRadius: 6 },
-  modeBadgeInnerBasic: { backgroundColor: '#EA420F' },
-  modeBadgeInnerAdvanced: { backgroundColor: colors.button.primary },
-  modeBadgeText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontWeight: '500', fontSize: 14, letterSpacing: -0.41, color: colors.text.primary },
+  // Mode Badge Styles (Basic/Pro) - Figma Toggle-button Component
+  modeBadge: { width: 80, height: 32, flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: 16 },
+  modeBadgeBasic: { backgroundColor: '#2C59FF', padding: 6 },
+  modeBadgePro: { backgroundColor: '#FF682C', padding: 6 },
+  modeBadgeInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 6, alignSelf: 'stretch' },
+  modeBadgeInnerPro: { justifyContent: 'flex-end' },
+  modeBadgeDotBasic: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#EFEFF1' },
+  modeBadgeDotPro: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#0F1014' },
+  modeBadgeText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontWeight: '600', fontSize: 13, lineHeight: 16, includeFontPadding: false },
+  modeBadgeTextBasic: { color: '#F4F4F4' },
+  modeBadgeTextPro: { color: '#0F1014' },
   // Unified Option Button Styles
   unifiedOptionButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, padding: 12, borderRadius: 4, backgroundColor: colors.background.tertiary },
   unifiedOptionButtonActive: { backgroundColor: colors.button.white },
@@ -1015,10 +1025,11 @@ const styles = StyleSheet.create({
   bottomButtonsRow: { flexDirection: 'row', alignSelf: 'stretch', gap: 8 },
   galleryButton: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 24, paddingVertical: 16, backgroundColor: '#2C3142', borderRadius: 33, justifyContent: 'center' },
   galleryButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: colors.text.primary, letterSpacing: -0.41 },
-  createButton: { flex: 1, paddingVertical: 16, backgroundColor: colors.button.primary, borderRadius: 62, justifyContent: 'center', alignItems: 'center' },
-  createButtonBasic: { backgroundColor: '#28436C' },
+  createButton: { flex: 1, paddingVertical: 16, backgroundColor: '#FF682C', borderRadius: 62, justifyContent: 'center', alignItems: 'center' },
+  createButtonBasic: { backgroundColor: colors.button.primary },
   createButtonContent: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   createButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: colors.text.primary },
+  createButtonTextPro: { color: '#0F1014' },
   cancelButton: { backgroundColor: colors.text.dark },
   cancelButtonText: { color: colors.text.primary, opacity: 0.3 },
   buttonDisabled: { opacity: 0.5 },
