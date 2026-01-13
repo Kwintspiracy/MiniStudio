@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 const API_KEY_STORAGE_KEY = 'ministudio_api_key';
@@ -92,7 +93,11 @@ export async function storeData<T>(key: string, data: T): Promise<void> {
       // Optional: Clear old data or handle cleanup here
     }
   } else {
-    await SecureStore.setItemAsync(key, jsonValue);
+    try {
+      await AsyncStorage.setItem(key, jsonValue);
+    } catch (e) {
+      console.error('Failed to save data to AsyncStorage:', e);
+    }
   }
 }
 
@@ -104,7 +109,12 @@ export async function getData<T>(key: string): Promise<T | null> {
   if (isWeb) {
     jsonValue = localStorage.getItem(key);
   } else {
-    jsonValue = await SecureStore.getItemAsync(key);
+    try {
+      jsonValue = await AsyncStorage.getItem(key);
+    } catch (e) {
+      console.error('Failed to fetch data from AsyncStorage:', e);
+      return null;
+    }
   }
 
   if (jsonValue === null) return null;
@@ -123,6 +133,10 @@ export async function deleteData(key: string): Promise<void> {
   if (isWeb) {
     localStorage.removeItem(key);
   } else {
-    await SecureStore.deleteItemAsync(key);
+    try {
+      await AsyncStorage.removeItem(key);
+    } catch (e) {
+      console.error('Failed to remove data from AsyncStorage:', e);
+    }
   }
 }
