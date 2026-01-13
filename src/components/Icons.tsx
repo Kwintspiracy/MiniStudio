@@ -304,3 +304,10 @@ export const TbProgressCheckIcon = ({ color = "#F4F4F4", size = 16 }: IconProps)
     <Path d="M6 8.00033L7.33333 9.33366L10 6.66699" stroke={color} strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
+
+// Gallery icon (IoIosImages style)
+export const GalleryIcon = ({ color = "#F4F4F4", size = 16 }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+    <Path d="M14.6668 10.6663V2.66634C14.6668 1.93301 14.0668 1.33301 13.3335 1.33301H5.3335C4.60016 1.33301 4.00016 1.93301 4.00016 2.66634V10.6663C4.00016 11.3997 4.60016 11.9997 5.3335 11.9997H13.3335C14.0668 11.9997 14.6668 11.3997 14.6668 10.6663ZM7.3335 7.99967L8.68683 9.80634L10.6668 7.33301L13.3335 10.6663H5.3335L7.3335 7.99967ZM1.3335 3.99967V13.333C1.3335 14.0663 1.9335 14.6663 2.66683 14.6663H12.0002V13.333H2.66683V3.99967H1.3335Z" fill={color} />
+  </Svg>
+);

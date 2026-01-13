@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, Image, TextInput,
-  ActivityIndicator, Alert, Modal, StyleSheet, Platform, Dimensions, StatusBar, Share, Animated, Easing
+  ActivityIndicator, Alert, Modal, StyleSheet, Platform, Dimensions, StatusBar, Share, Animated, Easing,
+  KeyboardAvoidingView, Keyboard
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,9 +12,14 @@ import {
   AppTitleIcon, BiSolidUserCircleIcon, BiSolidUserCircle32Icon, ColorPaletteIcon as IoMdColorPaletteIcon,
   BuildIcon, RiPaintFillIcon, AiFillFireIcon, DrawIcon, PaintIcon, MagicWandIcon, SculptIcon,
   CameraLensIcon, PhotoCameraIcon, PhotoLibraryIcon, CloseIcon, ToSourceIcon,
-  FileDownloadIcon as MdFileDownloadIcon, SpinnerIcon, TbProgressCheckIcon, ShareIcon
+  FileDownloadIcon as MdFileDownloadIcon, SpinnerIcon, TbProgressCheckIcon, ShareIcon, GalleryIcon
 } from '@/components/Icons';
-import type { ImageFile, ToolMode, DesignerType, HistoryItem, StyleOption } from '@/types';
+import type { ImageFile, DesignerType, HistoryItem, StyleOption, StudioMode } from '@/types';
+
+// Mode card images
+const ImageSketch = require('../../assets/ImageSketch.png');
+const ImageSculpt = require('../../assets/ImageSculpt.png');
+const ImagePaint = require('../../assets/ImagePaint.png');
 import { usePrompts } from '@/hooks/usePrompts';
 import { generatePaintedMiniature, generateImageFromImage, upscaleImage, cancelGeneration } from '@/services/geminiService';
 import { fetchAllPaints, fetchUserPaints, PaletteColor } from '@/services/paintService';
@@ -58,61 +64,46 @@ const ToggleButton = ({ value, onToggle }: { value: boolean, onToggle: () => voi
 
 // --- Figma Components ---
 
-const MainNavTab = ({ activeTab, onTabChange }: { activeTab: ToolMode; onTabChange: (tab: ToolMode) => void }) => (
-  <View style={styles.navTabContainer}>
-    <TouchableOpacity
-      onPress={() => onTabChange('designer')}
-      style={[styles.tabButton, activeTab === 'designer' && styles.tabButtonActive]}
-      activeOpacity={0.8}
-    >
-      <DrawIcon color={activeTab === 'designer' ? '#FFFFFF' : colors.text.secondary} />
-      <Text style={[styles.tabButtonText, activeTab === 'designer' ? styles.tabTextActive : styles.tabTextInactive]}>DESIGN</Text>
-    </TouchableOpacity>
+// Mode Card Data
+const MODE_CARDS: { id: StudioMode; title: string; subtitle: string; image: any }[] = [
+  { id: 'paint', title: 'Paint', subtitle: 'Explore', image: ImagePaint },
+  { id: 'sculpt', title: 'Sculpt', subtitle: 'Prototype', image: ImageSculpt },
+  { id: 'sketch', title: 'Sketch', subtitle: 'Explore', image: ImageSketch },
+];
 
-    <TouchableOpacity
-      onPress={() => onTabChange('painter')}
-      style={[styles.tabButton, activeTab === 'painter' && styles.tabButtonActive]}
-      activeOpacity={0.8}
-    >
-      <RiPaintFillIcon color={activeTab === 'painter' ? '#FFFFFF' : colors.text.secondary} />
-      <Text style={[styles.tabButtonText, activeTab === 'painter' ? styles.tabTextActive : styles.tabTextInactive]}>PAINT</Text>
-    </TouchableOpacity>
+// Mode Card Selector - Replaces the old MainNavTab
+const ModeCardSelector = ({ activeMode, onModeChange }: { activeMode: StudioMode; onModeChange: (mode: StudioMode) => void }) => (
+  <View style={styles.modeCardContainer}>
+    {MODE_CARDS.map((card) => {
+      const isActive = activeMode === card.id;
+      return (
+        <TouchableOpacity
+          key={card.id}
+          onPress={() => onModeChange(card.id)}
+          style={[styles.modeCard, isActive && styles.modeCardActive]}
+          activeOpacity={0.8}
+        >
+          <View style={styles.modeCardContent}>
+            <Image source={card.image} style={styles.modeCardImage} />
+            <View style={styles.modeCardText}>
+              <Text style={[styles.modeCardTitle, isActive && styles.modeCardTitleActive]}>{card.title}</Text>
+              <Text style={[styles.modeCardSubtitle, isActive && styles.modeCardSubtitleActive]}>{card.subtitle}</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+      );
+    })}
   </View>
 );
 
-const ConceptNavTab = ({ activeType, onTypeChange }: { activeType: DesignerType; onTypeChange: (type: DesignerType) => void }) => {
-  const tabs: { id: DesignerType; label: string; Icon: any }[] = [
-    { id: 'sketch', label: 'Sketch', Icon: DrawIcon },
-    { id: 'miniature', label: 'Sculpt', Icon: SculptIcon }
-  ];
-
-  return (
-    <View style={styles.conceptTabContainer}>
-      {tabs.map((tab) => (
-        <TouchableOpacity
-          key={tab.id}
-          onPress={() => onTypeChange(tab.id)}
-          style={[styles.unifiedOptionButton, { flex: 1 }, activeType === tab.id && styles.unifiedOptionButtonActive]}
-          activeOpacity={0.8}
-        >
-          <tab.Icon color={activeType === tab.id ? '#1D1D1D' : '#F4F4F4'} />
-          <Text style={[styles.unifiedOptionText, activeType === tab.id && styles.unifiedOptionTextActive]}>
-            {tab.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-};
-
-const ProBadge = ({ isPro, onToggle }: { isPro: boolean; onToggle: () => void }) => (
+// Basic/Pro Badge - Updated from Figma
+const ModeBadge = ({ isAdvanced, onToggle }: { isAdvanced: boolean; onToggle: () => void }) => (
   <TouchableOpacity
     onPress={onToggle}
-    style={[styles.proBadge, isPro ? styles.proBadgeActive : styles.proBadgeInactive]}
+    style={[styles.modeBadge, isAdvanced ? styles.modeBadgeAdvanced : styles.modeBadgeBasic]}
     activeOpacity={0.7}
   >
-    <TbProgressCheckIcon color="#F4F4F4" />
-    <Text style={[styles.proBadgeText, styles.proTextInactive]}>Pro</Text>
+    <Text style={styles.modeBadgeText}>{isAdvanced ? 'Pro' : 'Basic'}</Text>
   </TouchableOpacity>
 );
 
@@ -131,8 +122,7 @@ export default function StudioScreen() {
 
   const { styles: paintStylesList, templates: designerTemplates, effects: effectPrompts, shareMessage, exampleAssets, loading: promptsLoading } = usePrompts();
 
-  const [activeTab, setActiveTab] = useState<ToolMode>('designer');
-  const [designerType, setDesignerType] = useState<DesignerType>('sketch');
+  const [activeMode, setActiveMode] = useState<StudioMode>('paint');
   const [selectedStyle, setSelectedStyle] = useState<StyleOption>(paintStylesList[0]);
   useEffect(() => {
     if (paintStylesList.length > 0 && !selectedStyle) {
@@ -289,7 +279,7 @@ export default function StudioScreen() {
     const model = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
     try {
       let images: string[] = [];
-      if (activeTab === 'painter' && sourceImages.length >= 1) {
+      if (activeMode === 'paint' && sourceImages.length >= 1) {
         const promptToUse = isPro ? (selectedStyle.promptPro || selectedStyle.prompt) : selectedStyle.prompt;
         const promptParts: string[] = [promptToUse, painterPrompt];
 
@@ -327,9 +317,9 @@ export default function StudioScreen() {
         const finalPrompt = promptParts.filter(Boolean).join(' ');
         console.log(finalPrompt);
         images = await generatePaintedMiniature(sourceImages, finalPrompt, 1, model);
-      } else if (activeTab === 'designer') {
+      } else if (activeMode === 'sketch' || activeMode === 'sculpt') {
         const characterDesc = designerPrompt.trim() || 'character';
-        const typeToUse = sourceImages.length > 1 ? 'combined' : designerType;
+        const typeToUse = sourceImages.length > 1 ? 'combined' : activeMode;
         const templateConfig = designerTemplates[typeToUse];
         let template = isPro ? templateConfig.pro : templateConfig.default;
 
@@ -355,7 +345,7 @@ export default function StudioScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [sourceImages, activeTab, designerPrompt, designerType, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPhotoshootEnabled, isPaletteEnabled, selectedColors, selectedBrands]);
+  }, [sourceImages, activeMode, designerPrompt, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPhotoshootEnabled, isPaletteEnabled, selectedColors, selectedBrands]);
 
   // Handle dynamic aspect ratio for the preview image
   useEffect(() => {
@@ -568,26 +558,28 @@ export default function StudioScreen() {
 
         {/* Top Navigation */}
         <View style={styles.topNav}>
-          <View style={styles.topNavSide}>
-            <ProBadge isPro={isPro} onToggle={() => setIsPro(!isPro)} />
+          <View style={styles.topNavLeft}>
+            <ModeBadge isAdvanced={isPro} onToggle={() => setIsPro(!isPro)} />
           </View>
           <View style={styles.topNavTitle}>
-            <AppTitleIcon />
+            {/* App title removed per design */}
           </View>
-          <TouchableOpacity onPress={() => router.push('/settings')} style={[styles.topNavSide, styles.userIconContainer]} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => router.push('/settings')} style={styles.topNavRight} activeOpacity={0.7}>
             {user?.user_metadata?.avatar_url ? (
               <Image 
                 source={{ uri: user.user_metadata.avatar_url }} 
-                style={{ width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: colors.button.primary }}
+                style={styles.userAvatar}
               />
             ) : (
-              <BiSolidUserCircle32Icon />
+              <View style={styles.userAvatar}>
+                <BiSolidUserCircle32Icon />
+              </View>
             )}
           </TouchableOpacity>
         </View>
 
         {/* Main Content Area */}
-        <MainNavTab activeTab={activeTab} onTabChange={setActiveTab} />
+        <ModeCardSelector activeMode={activeMode} onModeChange={setActiveMode} />
         <ScrollView 
             ref={scrollViewRef}
             contentContainerStyle={styles.scrollContent} 
@@ -625,30 +617,13 @@ export default function StudioScreen() {
           {/* DESIGN: Mode-Specific Content */}
           {hasImageLoaded && (
             <View style={styles.modeContent}>
-              {activeTab === 'designer' ? (
+              {activeMode === 'sketch' ? (
+                <>{/* Sketch mode has no additional effects */}</>
+              ) : activeMode === 'sculpt' ? (
                 <>
-                  <View style={styles.designStepSection}>
-                    <View style={styles.sectionHeader}>
-                      <SectionAccent />
-                      <Text style={styles.sectionHeaderText}>FROM SKETCH TO MINI</Text>
-                    </View>
-                    <ConceptNavTab activeType={designerType} onTypeChange={setDesignerType} />
-                  </View>
-                  <View style={styles.promptContainer}>
-                    <TextInput
-                      value={designerPrompt}
-                      onChangeText={setDesignerPrompt}
-                      placeholder="Optional: add more details to the default prompt..."
-                      placeholderTextColor={colors.text.secondary}
-                      multiline
-                      textAlignVertical="top"
-                      style={[styles.promptInput, !designerPrompt && { fontStyle: 'italic' }]}
-                    />
-                  </View>
-
                   <View style={styles.paintStepSection}>
                     <View style={styles.sectionHeader}>
-                      <MagicWandIcon color="rgba(244, 244, 244, 0.4)" />
+                      <AiFillFireIcon color="#C16549" size={16} />
                       <Text style={styles.sectionHeaderText}>ADD EFFECTS</Text>
                     </View>
                     <TouchableOpacity style={styles.optionItem} onPress={() => setIsPhotoshootEnabled(!isPhotoshootEnabled)} activeOpacity={0.7}>
@@ -661,7 +636,7 @@ export default function StudioScreen() {
                 <>
                   <View style={styles.paintStepSection}>
                     <View style={styles.sectionHeader}>
-                      <SectionAccent />
+                      <RiPaintFillIcon color="#49C171" size={16} />
                       <Text style={styles.sectionHeaderText}>CHOOSE A STYLE</Text>
                     </View>
                     <View style={styles.styleGrid}>
@@ -679,21 +654,9 @@ export default function StudioScreen() {
                     </View>
                   </View>
 
-                  <View style={[styles.promptContainer, { minHeight: 110 }]}>
-                    <TextInput
-                      value={painterPrompt}
-                      onChangeText={setPainterPrompt}
-                      placeholder="Add more details to the default prompt..."
-                      placeholderTextColor="rgba(244, 244, 244, 0.4)"
-                      multiline
-                      textAlignVertical="top"
-                      style={[styles.promptInput, !painterPrompt && { fontStyle: 'italic' }]}
-                    />
-                  </View>
-
                   <View style={styles.paintStepSection}>
                     <View style={styles.sectionHeader}>
-                      <SectionAccent />
+                      <AiFillFireIcon color="#C16549" size={16} />
                       <Text style={styles.sectionHeaderText}>ADD EFFECTS</Text>
                     </View>
                     <TouchableOpacity style={styles.optionItem} onPress={() => setIsNMMEnabled(!isNMMEnabled)} activeOpacity={0.7}>
@@ -706,7 +669,7 @@ export default function StudioScreen() {
                     </TouchableOpacity>
 
                     <View style={styles.sectionHeader}>
-                      <SectionAccent />
+                      <IoMdColorPaletteIcon color="#BF49C1" size={16} />
                       <Text style={styles.sectionHeaderText}>COLOR PALETTE</Text>
                     </View>
                     <TouchableOpacity style={styles.optionItem} onPress={() => setIsPaletteEnabled(!isPaletteEnabled)} activeOpacity={0.7}>
@@ -780,8 +743,27 @@ export default function StudioScreen() {
           )}
         </ScrollView>
 
-        {/* Bottom Navigation */}
-        <View style={[styles.footerContainer, Platform.OS === 'android' && { paddingBottom: 30 + insets.bottom }]}>
+        {/* Bottom Navigation - Text area moves above keyboard, buttons stay at bottom */}
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingTextArea}
+          keyboardVerticalOffset={0}
+        >
+          <View style={styles.floatingTextContainer}>
+            <TextInput
+              value={activeMode === 'paint' ? painterPrompt : designerPrompt}
+              onChangeText={activeMode === 'paint' ? setPainterPrompt : setDesignerPrompt}
+              placeholder="Any specific detail to add ?"
+              placeholderTextColor="#7E808B"
+              style={styles.footerPromptInput}
+              multiline
+              scrollEnabled={true}
+            />
+          </View>
+        </KeyboardAvoidingView>
+
+        {/* Fixed bottom buttons - don't move with keyboard */}
+        <View style={[styles.footerContainer, { paddingBottom: Platform.OS === 'android' ? 30 + insets.bottom : insets.bottom + 16 }]}>
           <View style={styles.bottomButtonsRow}>
             <TouchableOpacity
               style={[styles.galleryButton, !hasContentToView && styles.buttonDisabled]}
@@ -792,6 +774,7 @@ export default function StudioScreen() {
               accessibilityRole="button"
               accessibilityState={{ disabled: !hasContentToView }}
             >
+              <GalleryIcon color="#F4F4F4" />
               <Text style={styles.galleryButtonText}>Gallery</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -948,6 +931,26 @@ export default function StudioScreen() {
 }
 
 const styles = StyleSheet.create({
+  // Mode Card Selector Styles (Figma-based)
+  modeCardContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'stretch', gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: 'transparent' },
+  modeCard: { flex: 1, backgroundColor: colors.background.secondary, borderRadius: 8, padding: 12, gap: 8 },
+  modeCardActive: { backgroundColor: colors.text.primary },
+  modeCardContent: { flexDirection: 'row', alignItems: 'center', gap: -4 },
+  modeCardImage: { width: 50, height: 50, borderRadius: 64 },
+  modeCardText: { justifyContent: 'space-between', height: 30 },
+  modeCardTitle: { fontFamily: Platform.OS === 'ios' ? 'Sarabun' : 'System', fontWeight: '800', fontSize: 16, lineHeight: 16, letterSpacing: -0.41, color: '#FA0439' },
+  modeCardTitleActive: { color: '#FA0439' },
+  modeCardSubtitle: { fontFamily: Platform.OS === 'ios' ? 'Sarabun' : 'System', fontWeight: '500', fontSize: 12, lineHeight: 14, letterSpacing: -0.41, color: colors.text.primary },
+  modeCardSubtitleActive: { color: '#000000' },
+  // Mode Badge Styles (Basic/Pro) - Updated from Figma
+  modeBadge: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 12, borderRadius: 56, minWidth: 90, height: 40, backgroundColor: '#28436C' },
+  modeBadgeBasic: { backgroundColor: '#28436C' },
+  modeBadgeAdvanced: { backgroundColor: colors.button.primary },
+  modeBadgeInner: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 },
+  modeBadgeInnerBasic: { backgroundColor: '#EA420F' },
+  modeBadgeInnerAdvanced: { backgroundColor: colors.button.primary },
+  modeBadgeText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontWeight: '500', fontSize: 14, letterSpacing: -0.41, color: colors.text.primary },
+  // Unified Option Button Styles
   unifiedOptionButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, padding: 12, borderRadius: 4, backgroundColor: colors.background.tertiary },
   unifiedOptionButtonActive: { backgroundColor: colors.button.white },
   unifiedOptionText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 13, color: colors.text.primary },
@@ -957,8 +960,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background.primary },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background.primary },
   topNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 64, paddingHorizontal: 0, backgroundColor: colors.background.secondary },
-  topNavSide: { width: 91, alignItems: 'center', justifyContent: 'center' },
+  topNavLeft: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 16 },
+  topNavRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 16 },
   topNavTitle: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  userAvatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: colors.button.primary, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  topNavSide: { width: 91, alignItems: 'center', justifyContent: 'center' },
   userIconContainer: { alignItems: 'flex-end', paddingRight: 16 },
   proBadge: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, borderColor: colors.button.primary },
   proBadgeInactive: { backgroundColor: '#002761' },
@@ -966,7 +972,7 @@ const styles = StyleSheet.create({
   proBadgeText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontWeight: '500', fontSize: 14, letterSpacing: -0.41, marginLeft: 4 },
   proTextInactive: { color: colors.text.primary },
   proTextActive: { color: colors.text.primary },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 50 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 50 },
   navTabContainer: { flexDirection: 'row', alignSelf: 'stretch', backgroundColor: colors.background.secondary, paddingHorizontal: 16, paddingVertical: 8 },
   tabButton: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: 6 },
   tabButtonActive: { backgroundColor: colors.button.primary },
@@ -984,13 +990,13 @@ const styles = StyleSheet.create({
   sourceImage: { width: '100%', height: '100%' },
   removeImageOverlay: { position: 'absolute', top: 0, right: 0, width: 15, height: 15, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
   removeImageTextSmall: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
-  modeContent: { marginTop: 8, gap: 5, alignSelf: 'stretch' },
+  modeContent: { marginTop: 0, gap: 5, alignSelf: 'stretch' },
   promptContainer: { alignSelf: 'stretch', backgroundColor: colors.text.textfieldbg, borderRadius: 4, paddingHorizontal: 16, paddingVertical: 12, minHeight: 110 },
   promptInput: { flex: 1, fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontSize: 14, color: colors.text.primary, lineHeight: 20 },
   designStepSection: { gap: 5 },
   paintStepSection: { gap: 5 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 8, padding: 8, marginTop: 12 },
-  sectionHeaderText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 13, color: colors.text.secondary },
+  sectionHeaderText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 13, color: '#EFEFF1' },
   conceptTabContainer: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', gap: 4 },
 
   styleGrid: { flexDirection: 'row', alignSelf: 'stretch', flexWrap: 'wrap', gap: 4 },
@@ -1025,11 +1031,16 @@ const styles = StyleSheet.create({
 
   explorerButton: { alignSelf: 'stretch', padding: 16, backgroundColor: colors.button.white, borderRadius: 4, alignItems: 'center' },
   explorerButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 14, color: colors.text.dark },
-  footerContainer: { alignSelf: 'stretch', backgroundColor: colors.background.secondary, paddingTop: 32, paddingHorizontal: 16, paddingBottom: 50, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 20 },
+  keyboardAvoidingFooter: { position: 'absolute', bottom: 0, left: 0, right: 0 },
+  keyboardAvoidingTextArea: { position: 'absolute', bottom: 70., left: 0, right: 0 },
+  floatingTextContainer: { backgroundColor: '#16181D', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32 },
+  footerContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#16181D', paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 },
+  footerInner: { gap: 16, justifyContent: 'space-between', alignItems: 'center' },
+  footerPromptInput: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontWeight: '400', fontSize: 14, lineHeight: 20, color: colors.text.primary, alignSelf: 'stretch', paddingVertical: 0, minHeight: 88, textAlignVertical: 'top' },
   bottomButtonsRow: { flexDirection: 'row', alignSelf: 'stretch', gap: 8 },
-  galleryButton: { flex: 1, height: 52, backgroundColor: 'transparent', borderWidth: 2, borderColor: colors.border.strong, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
-  galleryButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: colors.text.secondary },
-  createButton: { flex: 1, height: 52, backgroundColor: colors.button.primary, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  galleryButton: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 24, paddingVertical: 16, backgroundColor: '#2C3142', borderRadius: 33, justifyContent: 'center' },
+  galleryButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: colors.text.primary, letterSpacing: -0.41 },
+  createButton: { flex: 1, paddingVertical: 16, backgroundColor: colors.button.primary, borderRadius: 62, justifyContent: 'center', alignItems: 'center' },
   createButtonContent: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   createButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: colors.text.primary },
   cancelButton: { backgroundColor: colors.text.dark },

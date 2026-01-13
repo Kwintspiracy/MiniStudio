@@ -21,3 +21,4 @@ export interface HistoryItem {
 
 export type ToolMode = 'designer' | 'painter';
 export type DesignerType = 'sketch' | 'miniature' | 'pro-shot' | 'combined';
+export type StudioMode = 'sketch' | 'sculpt' | 'paint';
