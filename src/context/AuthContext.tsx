@@ -6,6 +6,7 @@ import { supabase } from '../services/supabase';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import Purchases from 'react-native-purchases';
 
 // Ensure WebBrowser works correctly on the web
 WebBrowser.maybeCompleteAuthSession();
@@ -59,6 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 setSession(session);
                 setUser(session?.user ?? null);
+                
+                // Link RevenueCat if user exists
+                if (session?.user?.id && Platform.OS !== 'web') {
+                    try {
+                        await Purchases.logIn(session.user.id);
+                    } catch (e) {
+                         // Ignore RC errors in dev/expo-go
+                         if (__DEV__) console.log("RC LogIn skipped (likely Expo Go)");
+                    }
+                }
             } catch (error: any) {
                 if (__DEV__) console.warn("Auth check failed:", error);
 
@@ -103,6 +114,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setSession(session);
             setUser(session?.user ?? null);
             setLoading(false);
+
+            // Handle RevenueCat Login/Logout on Auth Change
+            if (Platform.OS !== 'web') {
+                try {
+                    if (session?.user?.id) {
+                        await Purchases.logIn(session.user.id);
+                    } else {
+                         const customerInfo = await Purchases.getCustomerInfo();
+                         if (!customerInfo.originalAppUserId.startsWith("$RCAnonymousID")) {
+                             await Purchases.logOut();
+                         }
+                    }
+                } catch (e) {
+                     // Ignore RC errors
+                     if (__DEV__) console.log("RC Auth Sync skipped");
+                }
+            }
         });
 
         return () => subscription.unsubscribe();
@@ -317,6 +345,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setSession(null);
             setUser(null);
             setLoading(false);
+            if (Platform.OS !== 'web') {
+                try {
+                    const customerInfo = await Purchases.getCustomerInfo();
+                    // only log out if we are NOT already anonymous (meaning we were logged in)
+                    if (!customerInfo.originalAppUserId.startsWith("$RCAnonymousID")) {
+                         await Purchases.logOut();
+                    }
+                } catch (e) {
+                     if (__DEV__) console.log("RC LogOut skipped");
+                }
+            }
         }
     };
 

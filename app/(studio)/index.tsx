@@ -26,6 +26,7 @@ import { fetchAllPaints, fetchUserPaints, PaletteColor } from '@/services/paintS
 import { useImagePicker } from '@/hooks/useImagePicker';
 import { useMediaSave } from '@/hooks/useMediaSave';
 import { useAuth } from '@/context/AuthContext';
+import { useEntitlements } from '@/hooks/useEntitlements';
 import { useImageContext } from '@/context/ImageContext';
 import { PaintExplorerModal } from '@/components/PaintExplorerModal';
 import { AppModal } from '@/components/AppModal';
@@ -167,7 +168,19 @@ export default function StudioScreen() {
 
   const [designerPrompt, setDesignerPrompt] = useState('');
   const [painterPrompt, setPainterPrompt] = useState('');
-  const [isPro, setIsPro] = useState(false);
+  
+  // Replace local state with Entitlements hook
+  const { entitlements, loading: entitlementsLoading } = useEntitlements();
+  const isPro = entitlements.is_pro;
+  
+  // Handler to open Paywall if user tries to toggle Pro and is not Pro
+  const handleProToggle = () => {
+      if (isPro) {
+          // Already Pro, nothing to toggle (maybe show settings?)
+      } else {
+          router.push('/paywall');
+      }
+  };
 
   const [sourceImages, setSourceImages] = useState<ImageFile[]>([]);
   const [activePreviewImage, setActivePreviewImage] = useState<string | null>(null);
@@ -626,7 +639,10 @@ export default function StudioScreen() {
         {/* Top Navigation */}
         <View style={styles.topNav}>
           <View style={styles.topNavLeft}>
-            <ModeBadge isAdvanced={isPro} onToggle={() => setIsPro(!isPro)} />
+            <ModeBadge isAdvanced={isPro} onToggle={handleProToggle} />
+            <View style={{marginLeft: 10}}>
+                <Text style={{color: '#fff', fontSize: 10}}>Tokens: {entitlements.purchased_balance}</Text>
+            </View>
           </View>
           <View style={styles.topNavTitle}>
             {/* App title removed per design */}

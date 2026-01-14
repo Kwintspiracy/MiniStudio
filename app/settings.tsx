@@ -86,6 +86,23 @@ export default function SettingsScreen() {
                     </View>
                 </View>
 
+                <View style={{ marginBottom: 16 }}>
+                    <TouchableOpacity
+                        style={{
+                            backgroundColor: colors.button.primary,
+                            padding: 16,
+                            borderRadius: 8,
+                            alignItems: 'center',
+                            flexDirection: 'row',
+                            justifyContent: 'center',
+                            gap: 8
+                        }}
+                        onPress={() => router.push('/paywall')}
+                    >
+                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Manage Subscription & Tokens</Text>
+                    </TouchableOpacity>
+                </View>
+
                 {/* Usage Tracker */}
                 <UsageTracker ref={usageTrackerRef} />
             </ScrollView>

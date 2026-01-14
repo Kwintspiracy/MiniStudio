@@ -1,0 +1,8 @@
+{
+  "event": {
+    "type": "NON_RENEWING_PURCHASE",
+    "product_id": "rc_tokens_200", 
+    "app_user_id": "8d6ba346-5883-461b-b398-b189e5cb86b9", 
+    "purchased_at_ms": 1705250000000
+  }
+}

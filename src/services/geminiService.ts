@@ -28,7 +28,7 @@ export async function generatePaintedMiniature(
     baseImages: ImageFile | ImageFile[] | null,
     prompt: string,
     numberOfImages: number,
-    model: 'gemini-2.5-flash-image' | 'imagen-4.0-generate-001' | 'gemini-3-pro-image-preview'
+    model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview'
 ): Promise<string[]> {
     const imagesToProcess = Array.isArray(baseImages) ? baseImages : (baseImages ? [baseImages] : []);
     const baseImagePayload = imagesToProcess.length > 0 ? prepareImagePayload(imagesToProcess[0]) : undefined;

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme';
+import { useEntitlements } from '../hooks/useEntitlements';
 
 interface UsageStats {
     is_unlimited: boolean;
@@ -18,6 +19,7 @@ export interface UsageTrackerRef {
 
 export const UsageTracker = forwardRef<UsageTrackerRef>((_, ref) => {
     const { user } = useAuth();
+    const { entitlements, refetch: refetchEntitlements } = useEntitlements();
     const [stats, setStats] = useState<UsageStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -30,6 +32,9 @@ export const UsageTracker = forwardRef<UsageTrackerRef>((_, ref) => {
     const fetchStats = async () => {
         try {
             setErrorMsg(null);
+            // Reload entitlements to get fresh balance
+            await refetchEntitlements();
+            
             const { data, error } = await supabase.rpc('get_usage_stats', {
                 p_user_id: user?.id
             });
@@ -55,7 +60,7 @@ export const UsageTracker = forwardRef<UsageTrackerRef>((_, ref) => {
     if (errorMsg) {
         return (
             <View style={styles.container}>
-                <Text style={[styles.title, { color: colors.accent.red }]}>Error Loading Usage</Text>
+                <Text style={[styles.title, { color: colors.text.red }]}>Error Loading Usage</Text>
                 <Text style={styles.subtitle}>{errorMsg}</Text>
             </View>
         );
@@ -94,11 +99,34 @@ export const UsageTracker = forwardRef<UsageTrackerRef>((_, ref) => {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.title}>Monthly Usage</Text>
+            <View style={styles.headerRow}>
+                <Text style={styles.title}>Monthly Usage</Text>
+                {entitlements.subscription_status === 'active' && 
+                    <View style={[styles.badge, { backgroundColor: colors.accent.purple }]}>
+                         <Text style={[styles.badgeText, { color: 'white' }]}>PRO</Text>
+                    </View>
+                }
+            </View>
+
             <View style={styles.bars}>
                 {renderBar("Basic Generations", stats.basic_used, stats.basic_limit, colors.accent.blue)}
+                
+                {/* Only show Premium usage/limit for everyone, or just Pro? 
+                    The RPC returns 10 by default for free users. 
+                    Let's show it so they know they hit a limit.
+                */}
                 {renderBar("Premium Generations", stats.premium_used, stats.premium_limit, colors.accent.purple)}
             </View>
+
+             <View style={styles.tokenSection}>
+                <Text style={styles.tokenTitle}>Extra Tokens</Text>
+                <View style={styles.tokenRow}>
+                    <Text style={styles.tokenValue}>{entitlements.purchased_balance}</Text>
+                    <Text style={styles.tokenLabel}>Available</Text>
+                </View>
+                <Text style={styles.tokenHint}>Tokens are used when your monthly limit is reached.</Text>
+            </View>
+
         </View>
     );
 });
@@ -114,13 +142,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 4,
+        marginBottom: 12,
     },
     title: {
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 16,
+        fontWeight: 'bold',
         color: colors.text.primary,
-        marginBottom: 12,
         fontFamily: 'SF Pro Display',
     },
     subtitle: {
@@ -141,6 +168,7 @@ const styles = StyleSheet.create({
     },
     bars: {
         gap: 16,
+        marginBottom: 20,
     },
     barContainer: {
         gap: 6,
@@ -150,12 +178,12 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
     },
     barLabel: {
-        fontSize: 12, // Reduced size
+        fontSize: 12,
         color: colors.text.secondary,
         fontFamily: 'SF Pro Display',
     },
     barValue: {
-        fontSize: 12, // Reduced size
+        fontSize: 12,
         color: colors.text.primary,
         fontWeight: '500',
         fontFamily: 'SF Pro Display',
@@ -170,4 +198,35 @@ const styles = StyleSheet.create({
         height: '100%',
         borderRadius: 3,
     },
+    tokenSection: {
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255, 255, 255, 0.1)',
+        paddingTop: 16,
+    },
+    tokenTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.text.primary,
+        marginBottom: 8,
+    },
+    tokenRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: 6,
+        marginBottom: 4,
+    },
+    tokenValue: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: colors.accent.blue,
+    },
+    tokenLabel: {
+        fontSize: 14,
+        color: colors.text.secondary,
+    },
+    tokenHint: {
+         fontSize: 12,
+         color: colors.text.secondary,
+         fontStyle: 'italic',
+    }
 });
