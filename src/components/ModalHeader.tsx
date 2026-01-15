@@ -1,84 +1,37 @@
-/**
- * ModalHeader Component
- * 
- * Reusable header for modal screens with grabber, title, and action button.
- */
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { colors, fontFamily } from '../theme';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { colors } from '@/theme';
+import { CloseIcon } from '@/components/Icons';
 
 interface ModalHeaderProps {
-    title: string;
-    actionLabel?: string;
-    onAction?: () => void;
-    showGrabber?: boolean;
+  title: string;
+  onClose: () => void;
 }
 
-export const ModalHeader: React.FC<ModalHeaderProps> = ({
-    title,
-    actionLabel = 'Done',
-    onAction,
-    showGrabber = true,
-}) => {
-    return (
-        <>
-            {showGrabber && (
-                <View style={styles.grabberContainer}>
-                    <View style={styles.grabber} />
-                </View>
-            )}
-            <View style={styles.header}>
-                <View style={styles.headerSide} />
-                <Text style={styles.title}>{title}</Text>
-                <TouchableOpacity
-                    onPress={onAction}
-                    style={styles.headerSide}
-                    accessibilityLabel={actionLabel}
-                    accessibilityRole="button"
-                >
-                    <Text style={styles.actionText}>{actionLabel}</Text>
-                </TouchableOpacity>
-            </View>
-        </>
-    );
-};
+export const ModalHeader = ({ title, onClose }: ModalHeaderProps) => (
+  <View style={styles.modalHeader}>
+    <Text style={styles.modalTitle}>{title}</Text>
+    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+      <CloseIcon color={colors.text.secondary} />
+    </TouchableOpacity>
+  </View>
+);
 
 const styles = StyleSheet.create({
-    grabberContainer: {
-        alignItems: 'center',
-        paddingTop: 8,
-        paddingBottom: 4,
-    },
-    grabber: {
-        width: 36,
-        height: 5,
-        borderRadius: 2.5,
-        backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-    },
-    headerSide: {
-        width: 60,
-        alignItems: 'flex-end',
-    },
-    title: {
-        fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
-        fontWeight: '600',
-        fontSize: 17,
-        color: colors.text.primary,
-        textAlign: 'center',
-    },
-    actionText: {
-        fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
-        fontWeight: '600',
-        fontSize: 17,
-        color: colors.accent.blue,
-    },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 4, // Often needed for alignment
+  },
+  modalTitle: {
+    fontFamily: 'Sarabun',
+    fontWeight: '700',
+    fontSize: 18,
+    color: colors.text.primary,
+  },
+  closeButton: {
+    padding: 4,
+  },
 });
-
-export default ModalHeader;

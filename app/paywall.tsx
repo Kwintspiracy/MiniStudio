@@ -303,8 +303,8 @@ export default function PaywallScreen() {
       
       {purchasing && (
         <View style={styles.overlay}>
-             <ActivityIndicator size="large" color="#fff" />
-             <Text style={{color: 'white', marginTop: 16, fontWeight: '600'}}>Finalizing Purchase...</Text>
+             <ActivityIndicator size="large" color={colors.palette.white} />
+             <Text style={{color: colors.palette.white, marginTop: 16, fontWeight: '600'}}>Finalizing Purchase...</Text>
         </View>
       )}
     </View>
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
       borderRadius: 8,
   },
   buyButtonText: {
-      color: 'white',
+      color: colors.palette.white,
       fontWeight: 'bold',
       fontSize: 14,
   },

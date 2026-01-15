@@ -77,16 +77,11 @@ export const DEFAULT_DESIGNER_TEMPLATES = {
   combined: `Role: You are a Concept Artist using a "Style Transfer" workflow. Result: The subject described in my text, but painted as if it belongs in the universe of the reference images.`
 };
 
-// ⚠️ REPLACE WITH YOUR REAL "PUBLIC" API KEYS from RevenueCat Dashboard
-// DO NOT use "test_" keys here if you want to test Real Sandbox Purchases.
-// Look for keys starting with "appl_" or "goog_"
-export const REVENUECAT_KEYS = {
-    // REAL KEYS (Pending Apple Approval) - Using these to avoid "Invalid Key" logs
-    apple: "appl_OJPYpLQEsCUbwitdPyTrSwSdZdt", 
-    google: "goog_OGIhjdMHHvuuUkZuVXTrYkxaiKt",
+// Keys are now loaded from app.json / app.config.ts via Expo Constants
+import Constants from 'expo-constants';
 
-    // TEST STORE KEY (For Expo Go Development)
-    // apple: "appl_khYqALOpOozlSsmXnknFhCaMpLu", 
-    // google: "appl_khYqALOpOozlSsmXnknFhCaMpLu",
+export const REVENUECAT_KEYS = {
+    apple: Constants.expoConfig?.extra?.revenueCat?.apple || '',
+    google: Constants.expoConfig?.extra?.revenueCat?.google || '',
 };
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, StyleSheet, Image } from 'react-native';
+import { colors } from '../../src/theme';
 import { adminFetchAllPrompts, adminCreatePromptVersion, adminActivatePromptVersion, adminUpdatePrompt, PromptConfig, uploadAsset, adminUpdateAssetsList } from '../../src/services/promptService';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -299,7 +300,7 @@ export default function AdminDashboard() {
     if (loading && prompts.length === 0) {
         return (
             <View style={styles.center}>
-                <ActivityIndicator size="large" color="#0058DB" />
+                <ActivityIndicator size="large" color={colors.button.primary} />
             </View>
         );
     }
@@ -319,7 +320,7 @@ export default function AdminDashboard() {
                             disabled={uploading}
                         >
                             {uploading ? (
-                                <ActivityIndicator size="small" color="#C9D1D9" />
+                                <ActivityIndicator size="small" color={colors.admin.textCode} />
                             ) : (
                                 <Text style={styles.addKeyButtonText}>📷</Text>
                             )}
@@ -393,7 +394,7 @@ export default function AdminDashboard() {
                                             value={newKeyName}
                                             onChangeText={setNewKeyName}
                                             placeholder="share.message"
-                                            placeholderTextColor="#666"
+                                            placeholderTextColor={colors.border.strong}
                                         />
                                     </>
                                 )}
@@ -428,7 +429,7 @@ export default function AdminDashboard() {
                                     onChangeText={setEditNegativeTemplate}
                                     multiline
                                     placeholder="Text to append when effect is OFF"
-                                    placeholderTextColor="#555"
+                                    placeholderTextColor={colors.border.strong}
                                 />
 
                                 <Text style={styles.label}>Negative (Pro) - optional</Text>
@@ -438,7 +439,7 @@ export default function AdminDashboard() {
                                     onChangeText={setEditNegativeTemplatePro}
                                     multiline
                                     placeholder="Text to append when effect is OFF"
-                                    placeholderTextColor="#555"
+                                    placeholderTextColor={colors.border.strong}
                                 />
 
                                 <View style={styles.editorActions}>
@@ -489,7 +490,7 @@ export default function AdminDashboard() {
                                 <View style={styles.assetFooter}>
                                     <TouchableOpacity style={styles.addAssetButton} onPress={addNewAsset} disabled={uploading}>
                                         {uploading ? (
-                                            <ActivityIndicator size="small" color="#FFF" />
+                                            <ActivityIndicator size="small" color={colors.palette.white} />
                                         ) : (
                                             <Text style={styles.addAssetButtonText}>+ Add Image</Text>
                                         )}
@@ -539,13 +540,13 @@ export default function AdminDashboard() {
                                             <Text style={styles.templateText}>{version.template}</Text>
                                         </View>
                                         <View style={[styles.templateSection, { marginTop: 12 }]}>
-                                            <Text style={[styles.sectionLabel, { color: '#0058DB' }]}>Pro:</Text>
+                                            <Text style={[styles.sectionLabel, { color: colors.button.primary }]}>Pro:</Text>
                                             <Text style={styles.templateText}>{version.template_pro}</Text>
                                         </View>
 
                                         {(version.negative_template || version.negative_template_pro) && (
-                                            <View style={[styles.templateSection, { marginTop: 12, borderColor: '#522' }]}>
-                                                <Text style={[styles.sectionLabel, { color: '#e55' }]}>Negative:</Text>
+                                            <View style={[styles.templateSection, { marginTop: 12, borderColor: colors.admin.danger }]}>
+                                                <Text style={[styles.sectionLabel, { color: colors.admin.danger }]}>Negative:</Text>
                                                 {version.negative_template ? <Text style={styles.templateText}>[Def] {version.negative_template}</Text> : null}
                                                 {version.negative_template_pro ? <Text style={styles.templateText}>[Pro] {version.negative_template_pro}</Text> : null}
                                             </View>
@@ -566,75 +567,75 @@ export default function AdminDashboard() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, flexDirection: 'row', backgroundColor: '#0D1117' },
+    container: { flex: 1, flexDirection: 'row', backgroundColor: colors.admin.background },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    sidebar: { width: 300, borderRightWidth: 1, borderRightColor: '#30363D', padding: 20 },
-    headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#F0F6FC', marginBottom: 20 },
+    sidebar: { width: 300, borderRightWidth: 1, borderRightColor: colors.admin.border, padding: 20 },
+    headerTitle: { fontSize: 24, fontWeight: 'bold', color: colors.admin.text, marginBottom: 20 },
     sidebarList: { flex: 1 },
     sidebarItem: { paddingVertical: 12, paddingHorizontal: 16, borderRadius: 6, marginBottom: 4 },
-    sidebarItemActive: { backgroundColor: '#1F6FEB' },
-    sidebarItemText: { color: '#F0F6FC', fontSize: 14, fontWeight: 'bold' },
-    sidebarItemSubText: { color: '#8B949E', fontSize: 12, marginTop: 2 },
-    sidebarItemTextActive: { color: '#F0F6FC' },
+    sidebarItemActive: { backgroundColor: colors.admin.active },
+    sidebarItemText: { color: colors.admin.text, fontSize: 14, fontWeight: 'bold' },
+    sidebarItemSubText: { color: colors.admin.textSecondary, fontSize: 12, marginTop: 2 },
+    sidebarItemTextActive: { color: colors.admin.text },
 
     main: { flex: 1, padding: 40 },
     mainHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
-    keyTitle: { fontSize: 32, fontWeight: 'bold', color: '#F0F6FC' },
-    keySubtitle: { fontSize: 14, color: '#8B949E', marginTop: 4 },
-    createButton: { backgroundColor: '#238636', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6 },
-    createButtonText: { color: '#FFFFFF', fontWeight: 'bold' },
+    keyTitle: { fontSize: 32, fontWeight: 'bold', color: colors.admin.text },
+    keySubtitle: { fontSize: 14, color: colors.admin.textSecondary, marginTop: 4 },
+    createButton: { backgroundColor: colors.admin.success, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6 },
+    createButtonText: { color: colors.palette.white, fontWeight: 'bold' },
 
     versionsList: { flex: 1 },
-    versionCard: { backgroundColor: '#161B22', borderRadius: 8, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#30363D' },
-    activeCard: { borderColor: '#238636', backgroundColor: '#161B22' },
+    versionCard: { backgroundColor: colors.admin.card, borderRadius: 8, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: colors.admin.border },
+    activeCard: { borderColor: colors.admin.success, backgroundColor: colors.admin.card },
     versionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
     versionInfo: {},
-    versionLabel: { fontSize: 18, fontWeight: 'bold', color: '#F0F6FC' },
-    activeText: { color: '#238636' },
-    dateLabel: { fontSize: 12, color: '#8B949E', marginTop: 4 },
+    versionLabel: { fontSize: 18, fontWeight: 'bold', color: colors.admin.text },
+    activeText: { color: colors.admin.success },
+    dateLabel: { fontSize: 12, color: colors.admin.textSecondary, marginTop: 4 },
 
-    activeBadge: { backgroundColor: 'rgba(35, 134, 54, 0.2)', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1, borderColor: '#238636' },
-    activeBadgeText: { color: '#3FB950', fontSize: 12, fontWeight: 'bold' },
+    activeBadge: { backgroundColor: colors.admin.badgeBg, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1, borderColor: colors.admin.success },
+    activeBadgeText: { color: colors.admin.successText, fontSize: 12, fontWeight: 'bold' },
 
-    activateButton: { backgroundColor: '#1F6FEB', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
-    activateButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: 'bold' },
+    activateButton: { backgroundColor: colors.admin.active, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
+    activateButtonText: { color: colors.palette.white, fontSize: 12, fontWeight: 'bold' },
 
-    editButton: { marginLeft: 8, backgroundColor: '#30363D', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
-    editButtonText: { color: '#C9D1D9', fontSize: 12, fontWeight: 'bold' },
+    editButton: { marginLeft: 8, backgroundColor: colors.admin.border, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
+    editButtonText: { color: colors.admin.textCode, fontSize: 12, fontWeight: 'bold' },
 
-    templateSection: { backgroundColor: '#0D1117', padding: 12, borderRadius: 6, borderWidth: 1, borderColor: '#30363D' },
-    sectionLabel: { color: '#8B949E', fontSize: 11, fontWeight: 'bold', marginBottom: 4, textTransform: 'uppercase' },
-    templateText: { color: '#C9D1D9', fontFamily: 'monospace', lineHeight: 22, fontSize: 14 },
-    placeholderText: { color: '#8B949E', fontSize: 18 },
+    templateSection: { backgroundColor: colors.admin.background, padding: 12, borderRadius: 6, borderWidth: 1, borderColor: colors.admin.border },
+    sectionLabel: { color: colors.admin.textSecondary, fontSize: 11, fontWeight: 'bold', marginBottom: 4, textTransform: 'uppercase' },
+    templateText: { color: colors.admin.textCode, fontFamily: 'monospace', lineHeight: 22, fontSize: 14 },
+    placeholderText: { color: colors.admin.textSecondary, fontSize: 18 },
 
     // Editor
     editorContainer: { flex: 1, maxWidth: 800 },
-    label: { color: '#8B949E', marginBottom: 8, marginTop: 20, fontWeight: 'bold' },
-    input: { backgroundColor: '#0D1117', borderWidth: 1, borderColor: '#30363D', color: '#F0F6FC', padding: 12, borderRadius: 6, fontSize: 16 },
+    label: { color: colors.admin.textSecondary, marginBottom: 8, marginTop: 20, fontWeight: 'bold' },
+    input: { backgroundColor: colors.admin.background, borderWidth: 1, borderColor: colors.admin.border, color: colors.admin.text, padding: 12, borderRadius: 6, fontSize: 16 },
     textArea: { height: 300, textAlignVertical: 'top' },
     editorActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 30, gap: 12 },
-    cancelButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 6, backgroundColor: '#30363D' },
-    saveButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 6, backgroundColor: '#238636' },
-    actionButtonText: { color: '#FFFFFF', fontWeight: 'bold' },
+    cancelButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 6, backgroundColor: colors.admin.border },
+    saveButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 6, backgroundColor: colors.admin.success },
+    actionButtonText: { color: colors.palette.white, fontWeight: 'bold' },
 
 
 
     sidebarHeaderContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    addKeyButton: { backgroundColor: '#30363D', width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
-    addKeyButtonText: { color: '#C9D1D9', fontSize: 20, lineHeight: 22, fontWeight: 'bold' },
+    addKeyButton: { backgroundColor: colors.admin.border, width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+    addKeyButtonText: { color: colors.admin.textCode, fontSize: 20, lineHeight: 22, fontWeight: 'bold' },
 
     // Asset Manager Styles
-    assetRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#161B22', borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#30363D' },
+    assetRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.admin.card, borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: colors.admin.border },
     assetThumb: { width: 60, height: 60, borderRadius: 6, marginRight: 12 },
-    assetUrl: { flex: 1, color: '#C9D1D9', fontSize: 13 },
+    assetUrl: { flex: 1, color: colors.admin.textCode, fontSize: 13 },
     assetActions: { flexDirection: 'row', gap: 6 },
-    assetBtn: { width: 32, height: 32, borderRadius: 6, backgroundColor: '#30363D', justifyContent: 'center', alignItems: 'center' },
+    assetBtn: { width: 32, height: 32, borderRadius: 6, backgroundColor: colors.admin.border, justifyContent: 'center', alignItems: 'center' },
     assetBtnDisabled: { opacity: 0.3 },
-    assetBtnDelete: { backgroundColor: '#6e2b2b' },
-    assetBtnText: { color: '#F0F6FC', fontSize: 16, fontWeight: 'bold' },
+    assetBtnDelete: { backgroundColor: colors.button.dangerDark },
+    assetBtnText: { color: colors.admin.text, fontSize: 16, fontWeight: 'bold' },
     assetFooter: { flexDirection: 'row', gap: 12, marginTop: 16 },
-    addAssetButton: { flex: 1, backgroundColor: '#238636', paddingVertical: 12, borderRadius: 6, alignItems: 'center' },
-    addAssetButtonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
-    saveOrderButton: { flex: 1, backgroundColor: '#1F6FEB', paddingVertical: 12, borderRadius: 6, alignItems: 'center' },
-    saveOrderButtonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 14 },
+    addAssetButton: { flex: 1, backgroundColor: colors.admin.success, paddingVertical: 12, borderRadius: 6, alignItems: 'center' },
+    addAssetButtonText: { color: colors.palette.white, fontWeight: 'bold', fontSize: 14 },
+    saveOrderButton: { flex: 1, backgroundColor: colors.admin.active, paddingVertical: 12, borderRadius: 6, alignItems: 'center' },
+    saveOrderButtonText: { color: colors.palette.white, fontWeight: 'bold', fontSize: 14 },
 });

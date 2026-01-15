@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 import { Platform, View, Text } from 'react-native';
+import { colors } from '../../src/theme';
 
 export default function AdminLayout() {
     if (Platform.OS !== 'web') {

@@ -11,15 +11,12 @@ import {
   XMarkIcon, RefreshIcon, ArrowsPointingOutIcon, DownloadIcon, CheckIcon,
   AppTitleIcon, BiSolidUserCircleIcon, BiSolidUserCircle32Icon, ColorPaletteIcon as IoMdColorPaletteIcon,
   BuildIcon, RiPaintFillIcon, AiFillFireIcon, DrawIcon, PaintIcon, MagicWandIcon, SculptIcon,
-  CameraLensIcon, PhotoCameraIcon, PhotoLibraryIcon, CloseIcon, ToSourceIcon,
+  CameraLensIcon, CloseIcon,
   FileDownloadIcon as MdFileDownloadIcon, SpinnerIcon, TbProgressCheckIcon, ShareIcon, GalleryIcon
 } from '@/components/Icons';
 import type { ImageFile, DesignerType, HistoryItem, StyleOption, StudioMode } from '@/types';
+import { sanitizePrompt } from '@/utils/sanitization';
 
-// Mode card images
-const ImageSketch = require('../../assets/ImageSketch.png');
-const ImageSculpt = require('../../assets/ImageSculpt.png');
-const ImagePaint = require('../../assets/ImagePaint.png');
 import { usePrompts } from '@/hooks/usePrompts';
 import { generatePaintedMiniature, generateImageFromImage, upscaleImage, cancelGeneration } from '@/services/geminiService';
 import { fetchAllPaints, fetchUserPaints, PaletteColor } from '@/services/paintService';
@@ -30,6 +27,10 @@ import { useEntitlements } from '@/hooks/useEntitlements';
 import { useImageContext } from '@/context/ImageContext';
 import { PaintExplorerModal } from '@/components/PaintExplorerModal';
 import { AppModal } from '@/components/AppModal';
+import { ToggleButton } from '@/components/ToggleButton';
+import { SectionHeader } from '@/components/SectionHeader';
+import { ModeCardSelector } from '@/components/studio/ModeCardSelector';
+import { SourceContainer } from '@/components/studio/SourceContainer';
 import { colors, spacing, borderRadius, fontFamily, textStyles } from '@/theme';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -61,50 +62,11 @@ const SectionAccent = () => (
     <View style={{ width: 4, height: 16, backgroundColor: colors.button.primary, borderRadius: 0 }} />
 );
 
-// --- Figma Component: Toggle-button ---
-const ToggleButton = ({ value, onToggle }: { value: boolean, onToggle: () => void }) => (
-  <TouchableOpacity
-    onPress={onToggle}
-    style={[styles.toggleContainer, value ? styles.toggleOn : styles.toggleOff]}
-    activeOpacity={0.8}
-  >
-    <View style={[styles.toggleCircle, value ? styles.toggleCircleActive : styles.toggleCircleInactive]} />
-  </TouchableOpacity>
-);
+// --- Figma Components ---
 
 // --- Figma Components ---
 
-// Mode Card Data
-const MODE_CARDS: { id: StudioMode; title: string; subtitle: string; image: any }[] = [
-  { id: 'paint', title: 'Paint', subtitle: 'Explore', image: ImagePaint },
-  { id: 'sculpt', title: 'Sculpt', subtitle: 'Prototype', image: ImageSculpt },
-  { id: 'sketch', title: 'Sketch', subtitle: 'Explore', image: ImageSketch },
-];
-
-// Mode Card Selector - Replaces the old MainNavTab
-const ModeCardSelector = ({ activeMode, onModeChange }: { activeMode: StudioMode; onModeChange: (mode: StudioMode) => void }) => (
-  <View style={styles.modeCardContainer}>
-    {MODE_CARDS.map((card) => {
-      const isActive = activeMode === card.id;
-      return (
-        <TouchableOpacity
-          key={card.id}
-          onPress={() => onModeChange(card.id)}
-          style={[styles.modeCard, isActive && styles.modeCardActive]}
-          activeOpacity={0.8}
-        >
-          <View style={styles.modeCardContent}>
-            <Image source={card.image} style={styles.modeCardImage} />
-            <View style={styles.modeCardText}>
-              <Text style={[styles.modeCardTitle, isActive && styles.modeCardTitleActive]}>{card.title}</Text>
-              <Text style={[styles.modeCardSubtitle, isActive && styles.modeCardSubtitleActive]}>{card.subtitle}</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      );
-    })}
-  </View>
-);
+// Basic/Pro Toggle Badge - Figma Toggle-button Component
 
 // Basic/Pro Toggle Badge - Figma Toggle-button Component
 const ModeBadge = ({ isAdvanced, onToggle }: { isAdvanced: boolean; onToggle: () => void }) => (
@@ -348,7 +310,8 @@ export default function StudioScreen() {
       let images: string[] = [];
       if (activeMode === 'paint' && sourceImages.length >= 1) {
         const promptToUse = isPro ? (selectedStyle.promptPro || selectedStyle.prompt) : selectedStyle.prompt;
-        const promptParts: string[] = [promptToUse, painterPrompt];
+        const sanitizedPainterPrompt = sanitizePrompt(painterPrompt);
+        const promptParts: string[] = [promptToUse, sanitizedPainterPrompt];
 
         const nmmEffect = effectPrompts['effect.nmm'];
         if (isNMMEnabled && nmmEffect) {
@@ -385,7 +348,7 @@ export default function StudioScreen() {
         console.log(finalPrompt);
         images = await generatePaintedMiniature(sourceImages, finalPrompt, 1, model);
       } else if (activeMode === 'sketch' || activeMode === 'sculpt') {
-        const characterDesc = designerPrompt.trim() || 'character';
+        const characterDesc = sanitizePrompt(designerPrompt).trim() || 'character';
         const typeToUse = sourceImages.length > 1 ? 'combined' : activeMode;
         const templateConfig = designerTemplates[typeToUse];
         let template = isPro ? templateConfig.pro : templateConfig.default;
@@ -614,39 +577,7 @@ export default function StudioScreen() {
   const hasImageLoaded = sourceImages.length > 0;
   const hasContentToView = hasImageLoaded || generationHistory.length > 0 || exampleAssets.length > 0;
 
-  const renderInputContainer = useCallback((onCameraClose?: () => void) => {
-    const showCompact = hasImageLoaded || !!activePreviewImage;
-    return (
-      <View style={[styles.inputContainer, { paddingHorizontal: 8, alignSelf: 'stretch' }, !showCompact && { height: 300, flexDirection: 'column', justifyContent: 'center', gap: 16 }]}>
-        {showCompact ? (
-          <View style={styles.sourceImageWrapper}>
-            <Image source={{ uri: sourceImages[0]?.base64 || activePreviewImage || '' }} style={styles.sourceImage} />
-            <TouchableOpacity onPress={() => { setSourceImages([]); setActivePreviewImage(null); }} style={styles.removeImageOverlay}>
-              <Text style={styles.removeImageTextSmall}>×</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={[styles.sourceInfo, { alignItems: 'center' }]}>
-            <Text style={styles.inputLabel}>SOURCE</Text>
-            <Text style={styles.inputSubtitle}>
-              Take a photo, choose an image or use images from your gallery
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.optionsRow}>
-          <TouchableOpacity style={styles.optionButton} onPress={() => { cameFromGalleryRef.current = true; setIsResultsDrawerOpen(false); router.push('/camera'); }} activeOpacity={0.8}>
-            <PhotoCameraIcon />
-            <Text style={styles.optionButtonText}>Camera</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.optionButton} onPress={handleFilesPress} activeOpacity={0.8}>
-            <PhotoLibraryIcon />
-            <Text style={styles.optionButtonText}>Files</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }, [hasImageLoaded, sourceImages, handleFilesPress, activePreviewImage]);
+  // paintStylesList is now coming from the hook
 
   // paintStylesList is now coming from the hook
 
@@ -695,6 +626,7 @@ export default function StudioScreen() {
         >
 
 
+
           {/* DESIGN: Mode-Specific Content */}
           {hasImageLoaded && (
             <View style={styles.modeContent}>
@@ -703,10 +635,10 @@ export default function StudioScreen() {
               ) : activeMode === 'sculpt' ? (
                 <>
                   <View style={styles.paintStepSection}>
-                    <View style={styles.sectionHeader}>
-                      <AiFillFireIcon color="#C16549" size={16} />
-                      <Text style={styles.sectionHeaderText}>ADD EFFECTS</Text>
-                    </View>
+                    <SectionHeader 
+                      icon={<AiFillFireIcon color="#C16549" size={16} />}
+                      title="ADD EFFECTS"
+                    />
                     <TouchableOpacity style={styles.optionItem} onPress={() => setIsPhotoshootEnabled(!isPhotoshootEnabled)} activeOpacity={0.7}>
                       <Text style={[styles.optionLabel, isPhotoshootEnabled && styles.optionLabelActive]}>Photoshoot - Studio Lighting</Text>
                       <ToggleButton value={isPhotoshootEnabled} onToggle={() => setIsPhotoshootEnabled(!isPhotoshootEnabled)} />
@@ -716,16 +648,19 @@ export default function StudioScreen() {
               ) : (
                 <>
                   <View style={styles.paintStepSection}>
-                    <View style={styles.sectionHeader}>
-                      <RiPaintFillIcon color="#49C171" size={16} />
-                      <Text style={styles.sectionHeaderText}>CHOOSE A STYLE</Text>
-                    </View>
+                    <SectionHeader 
+                      icon={<RiPaintFillIcon color="#49C171" size={16} />}
+                      title="CHOOSE A STYLE"
+                    />
                     <View style={styles.styleGrid}>
                       {paintStylesList.map((style) => (
                         <TouchableOpacity
                           key={style.id}
                           onPress={() => setSelectedStyle(paintStylesList.find(s => s.id === style.id) || paintStylesList[0])}
                           style={[styles.unifiedOptionButton, selectedStyle?.id === style.id && styles.unifiedOptionButtonActive]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Style: ${style.name}`}
+                          accessibilityState={{ selected: selectedStyle?.id === style.id }}
                         >
                           <Text style={[styles.unifiedOptionText, selectedStyle?.id === style.id && styles.unifiedOptionTextActive]}>
                             {style.name}
@@ -736,10 +671,10 @@ export default function StudioScreen() {
                   </View>
 
                   <View style={styles.paintStepSection}>
-                    <View style={styles.sectionHeader}>
-                      <AiFillFireIcon color="#C16549" size={16} />
-                      <Text style={styles.sectionHeaderText}>ADD EFFECTS</Text>
-                    </View>
+                    <SectionHeader 
+                      icon={<AiFillFireIcon color="#C16549" size={16} />}
+                      title="ADD EFFECTS"
+                    />
                     <TouchableOpacity style={styles.optionItem} onPress={() => setIsNMMEnabled(!isNMMEnabled)} activeOpacity={0.7}>
                       <Text style={[styles.optionLabel, isNMMEnabled && styles.optionLabelActive]}>NNM - Non Metallic Metal</Text>
                       <ToggleButton value={isNMMEnabled} onToggle={() => setIsNMMEnabled(!isNMMEnabled)} />
@@ -749,10 +684,10 @@ export default function StudioScreen() {
                       <ToggleButton value={isOSLEnabled} onToggle={() => setIsOSLEnabled(!isOSLEnabled)} />
                     </TouchableOpacity>
 
-                    <View style={styles.sectionHeader}>
-                      <IoMdColorPaletteIcon color="#BF49C1" size={16} />
-                      <Text style={styles.sectionHeaderText}>COLOR PALETTE</Text>
-                    </View>
+                    <SectionHeader 
+                      icon={<IoMdColorPaletteIcon color="#BF49C1" size={16} />}
+                      title="COLOR PALETTE"
+                    />
                     <TouchableOpacity style={styles.optionItem} onPress={() => setIsPaletteEnabled(!isPaletteEnabled)} activeOpacity={0.7}>
                       <Text style={[styles.optionLabel, isPaletteEnabled && styles.optionLabelActive]}>Choose from Brands and Paints</Text>
                       <ToggleButton value={isPaletteEnabled} onToggle={() => setIsPaletteEnabled(!isPaletteEnabled)} />
@@ -869,8 +804,8 @@ export default function StudioScreen() {
               accessibilityHint={isLoading ? 'Stops the current image generation' : 'Generates a new image based on your settings'}
             >
               <View style={styles.createButtonContent}>
-                {!isLoading && <MagicWandIcon color={isPro ? '#0F1014' : '#F4F4F4'} />}
-                {isLoading && <SpinnerIcon color="#FFFFFF" />}
+                {!isLoading && <MagicWandIcon color={isPro ? colors.button.dark : colors.text.primary} />}
+                {isLoading && <SpinnerIcon color={colors.text.primary} />}
                 <Text style={[styles.createButtonText, isPro && styles.createButtonTextPro, isLoading && styles.cancelButtonText]}>{isLoading ? 'Cancel' : `Create (${isPro ? '2 Tokens' : '1 Token'})`}</Text>
               </View>
             </TouchableOpacity>
@@ -909,7 +844,13 @@ export default function StudioScreen() {
 
               <View style={[styles.historyContainer, { paddingBottom: 0, marginBottom: 24 }]}>
                 <Text style={styles.historyTitle}>Source</Text>
-                {renderInputContainer(() => setIsResultsDrawerOpen(false))}
+                <SourceContainer 
+                  sourceImages={sourceImages}
+                  activePreviewImage={activePreviewImage}
+                  onClearImage={() => { setSourceImages([]); setActivePreviewImage(null); }}
+                  onCameraPress={() => { cameFromGalleryRef.current = true; setIsResultsDrawerOpen(false); router.push('/camera'); }}
+                  onFilesPress={handleFilesPress}
+                />
               </View>
               <View style={[styles.historyContainer, { paddingBottom: 80 + insets.bottom }]}><Text style={styles.historyTitle}>History</Text><View style={styles.historyGrid}>
                 {generationHistory.map((item, i) => {
@@ -978,28 +919,17 @@ export default function StudioScreen() {
 }
 
 const styles = StyleSheet.create({
-  // Mode Card Selector Styles (Figma-based)
-  modeCardContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'stretch', gap: 8, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: 'transparent' },
-  modeCard: { flex: 1, backgroundColor: colors.background.secondary, borderRadius: 8, padding: 12, gap: 8 },
-  modeCardActive: { backgroundColor: colors.text.primary },
-  modeCardContent: { flexDirection: 'row', alignItems: 'center', gap: -4 },
-  modeCardImage: { width: 50, height: 50, borderRadius: 64 },
-  modeCardText: { justifyContent: 'space-between', height: 30 },
-  modeCardTitle: { fontFamily: Platform.OS === 'ios' ? 'Sarabun' : 'System', fontWeight: '800', fontSize: 16, lineHeight: 16, color: '#FA0439' },
-  modeCardTitleActive: { color: colors.text.red },
-  modeCardSubtitle: { fontFamily: Platform.OS === 'ios' ? 'Sarabun' : 'System', fontWeight: '500', fontSize: 12, lineHeight: 14, color: colors.text.primary },
-  modeCardSubtitleActive: { color: '#000000' },
   // Mode Badge Styles (Basic/Pro) - Figma Toggle-button Component
   modeBadge: { width: 80, height: 32, flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: 16 },
-  modeBadgeBasic: { backgroundColor: '#2C59FF', padding: 6 },
-  modeBadgePro: { backgroundColor: '#FF682C', padding: 6 },
+  modeBadgeBasic: { backgroundColor: colors.button.primary, padding: 6 },
+  modeBadgePro: { backgroundColor: colors.accent.orange, padding: 6 },
   modeBadgeInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 6, alignSelf: 'stretch' },
   modeBadgeInnerPro: { justifyContent: 'flex-end' },
-  modeBadgeDotBasic: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#EFEFF1' },
-  modeBadgeDotPro: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#0F1014' },
+  modeBadgeDotBasic: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.text.primary },
+  modeBadgeDotPro: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.button.dark },
   modeBadgeText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontWeight: '600', fontSize: 13, lineHeight: 16, includeFontPadding: false },
-  modeBadgeTextBasic: { color: '#F4F4F4' },
-  modeBadgeTextPro: { color: '#0F1014' },
+  modeBadgeTextBasic: { color: colors.text.primary },
+  modeBadgeTextPro: { color: colors.button.dark },
   // Unified Option Button Styles
   unifiedOptionButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, padding: 12, borderRadius: 4, backgroundColor: colors.background.tertiary },
   unifiedOptionButtonActive: { backgroundColor: colors.button.white },
@@ -1083,18 +1013,18 @@ const styles = StyleSheet.create({
   explorerButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '600', fontSize: 14, color: colors.text.dark },
   keyboardAvoidingFooter: { position: 'absolute', bottom: 0, left: 0, right: 0 },
   keyboardAvoidingTextArea: { position: 'absolute', bottom: 70., left: 0, right: 0 },
-  floatingTextContainer: { backgroundColor: '#16181D', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32 },
-  footerContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#16181D', paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 },
+  floatingTextContainer: { backgroundColor: colors.background.secondary, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32 },
+  footerContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.background.secondary, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 },
   footerInner: { gap: 16, justifyContent: 'space-between', alignItems: 'center' },
   footerPromptInput: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System', fontWeight: '400', fontSize: 14, lineHeight: 20, color: colors.text.primary, alignSelf: 'stretch', paddingVertical: 0, minHeight: 88, textAlignVertical: 'top' },
   bottomButtonsRow: { flexDirection: 'row', alignSelf: 'stretch', gap: 8 },
-  galleryButton: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 24, paddingVertical: 16, backgroundColor: '#2C3142', borderRadius: 33, justifyContent: 'center' },
-  galleryButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: colors.text.primary, letterSpacing: -0.41 },
-  createButton: { flex: 1, paddingVertical: 16, backgroundColor: '#FF682C', borderRadius: 62, justifyContent: 'center', alignItems: 'center' },
+  galleryButton: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 24, paddingVertical: 16, backgroundColor: colors.background.card, borderRadius: 33, justifyContent: 'center' },
+  galleryButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: colors.button.white, letterSpacing: -0.41 },
+  createButton: { flex: 1, paddingVertical: 16, backgroundColor: colors.accent.orange, borderRadius: 62, justifyContent: 'center', alignItems: 'center' },
   createButtonBasic: { backgroundColor: colors.button.primary },
   createButtonContent: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   createButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', fontWeight: '500', fontSize: 16, color: colors.text.primary },
-  createButtonTextPro: { color: '#0F1014' },
+  createButtonTextPro: { color: colors.button.dark },
   cancelButton: { backgroundColor: colors.text.dark },
   cancelButtonText: { color: colors.text.primary, opacity: 0.3 },
   buttonDisabled: { opacity: 0.5 },

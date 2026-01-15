@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import { colors } from '../theme';
 
 interface AppModalProps {
     visible: boolean;
@@ -30,10 +31,10 @@ export const AppModal: React.FC<AppModalProps> = ({
         switch (type) {
             case 'error':
             case 'critical':
-                return '#FA0439';
+                return colors.button.danger;
             case 'default':
             default:
-                return '#0058DB';
+                return colors.button.primary;
         }
     };
 
@@ -79,7 +80,7 @@ export const AppModal: React.FC<AppModalProps> = ({
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backgroundColor: 'rgba(0, 0, 0, 0.6)', // Modal overlay opacity
         justifyContent: 'center',
         alignItems: 'center',
         padding: 24,
@@ -87,7 +88,7 @@ const styles = StyleSheet.create({
     container: {
         width: '100%',
         maxWidth: 345,
-        backgroundColor: '#292936',
+        backgroundColor: colors.background.modal,
         borderRadius: 32,
         padding: 24,
         gap: 24,
@@ -99,13 +100,13 @@ const styles = StyleSheet.create({
         fontFamily: 'SF Pro Display',
         fontWeight: '700',
         fontSize: 20,
-        color: '#F4F4F4',
+        color: colors.text.primary,
     },
     message: {
         fontFamily: 'SF Pro Display',
         fontWeight: '400',
         fontSize: 16,
-        color: '#B6B6B6',
+        color: colors.text.secondary,
         lineHeight: 21,
     },
     buttonContainer: {
@@ -123,7 +124,7 @@ const styles = StyleSheet.create({
     secondaryButton: {
         flex: 1,
         height: 52,
-        backgroundColor: '#777777',
+        backgroundColor: colors.button.secondary, // Standardized to theme
         borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
@@ -133,6 +134,6 @@ const styles = StyleSheet.create({
         fontFamily: 'SF Pro Display',
         fontWeight: '500',
         fontSize: 16,
-        color: '#F4F4F4',
+        color: colors.text.primary,
     },
 });

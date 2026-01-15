@@ -25,7 +25,7 @@ export default function CameraScreen() {
         return (
             <SafeAreaView style={styles.permissionContainer}>
                 <Stack.Screen options={{ headerShown: false }} />
-                <StatusBar barStyle="light-content" backgroundColor="#000" />
+                <StatusBar barStyle="light-content" backgroundColor={colors.palette.black} />
                 <Text style={styles.permissionText}>We need your permission to show the camera</Text>
                 <TouchableOpacity onPress={requestPermission} style={styles.permissionButton}>
                     <Text style={styles.permissionButtonText}>Grant Permission</Text>
@@ -83,10 +83,10 @@ export default function CameraScreen() {
                 {/* Top Bar */}
                 <View style={styles.topBar}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-                        <XMarkIcon color="#FFF" size={28} />
+                        <XMarkIcon color={colors.palette.white} size={28} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={toggleCameraFacing} style={styles.iconButton}>
-                        <ArrowsPointingOutIcon color="#FFF" size={28} />
+                        <ArrowsPointingOutIcon color={colors.palette.white} size={28} />
                     </TouchableOpacity>
                 </View>
 
@@ -108,7 +108,7 @@ export default function CameraScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000',
+        backgroundColor: colors.palette.black,
     },
     permissionContainer: {
         flex: 1,
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     permissionButtonText: {
-        color: '#FFF',
+        color: colors.palette.white,
         fontWeight: '600',
     },
     closeButtonFull: {
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
         height: 80,
         borderRadius: 40,
         borderWidth: 4,
-        borderColor: '#FFF',
+        borderColor: colors.palette.white,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: 'rgba(0,0,0,0.1)',
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
         width: 64,
         height: 64,
         borderRadius: 32,
-        backgroundColor: '#FFF',
+        backgroundColor: colors.palette.white,
     },
     capturing: {
         backgroundColor: colors.accent.red,

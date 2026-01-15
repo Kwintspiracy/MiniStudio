@@ -34,13 +34,13 @@ export default function SettingsScreen() {
                 options={{
                     headerShown: true,
                     title: 'User Settings',
-                    headerStyle: { backgroundColor: '#1E1E2B' },
-                    headerTintColor: '#0A84FF',
+                    headerStyle: { backgroundColor: colors.background.secondary },
+                    headerTintColor: colors.accent.blue,
                     headerTitleStyle: {
                         fontFamily: 'SF Pro Text',
                         fontWeight: '600',
                         fontSize: 17,
-                        color: '#fff',
+                        color: colors.text.primary,
                     },
                     headerShadowVisible: false,
                     headerLeft: () => (
@@ -51,7 +51,7 @@ export default function SettingsScreen() {
                             accessibilityLabel="Go back"
                             accessibilityRole="button"
                         >
-                            <Text style={{ color: '#0A84FF', fontSize: 17 }}>{'‹ Back'}</Text>
+                            <Text style={{ color: colors.accent.blue, fontSize: 17 }}>{'‹ Back'}</Text>
                         </TouchableOpacity>
                     ),
                 }}
@@ -86,7 +86,7 @@ export default function SettingsScreen() {
                             )}
                         </View>
                         <View style={styles.userDetails}>
-                            <Text style={styles.userName}>Name</Text>
+                            <Text style={styles.userName}>ACCOUNT</Text>
                             <Text style={styles.userEmail}>{user?.email}</Text>
                         </View>
                     </View>
@@ -105,7 +105,7 @@ export default function SettingsScreen() {
                         }}
                         onPress={() => router.push('/paywall')}
                     >
-                        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Manage Subscription & Tokens</Text>
+                        <Text style={{ color: colors.text.primary, fontWeight: 'bold', fontSize: 16 }}>Manage Subscription & Tokens</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -150,7 +150,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#1E1E2B',
+        backgroundColor: colors.background.primary,
     },
     content: {
         flex: 1,
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
         gap: 16,
     },
     profileCard: {
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        backgroundColor: colors.button.secondary, // using secondary button bg (transparent white)
         borderRadius: 8,
         padding: 16,
     },
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
         height: 50,
         borderRadius: 25,
         borderWidth: 2,
-        borderColor: '#0058DB',
+        borderColor: colors.button.primary,
         overflow: 'hidden',
     },
     avatar: {
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     avatarText: {
-        color: '#F4F4F4',
+        color: colors.text.primary,
         fontSize: 18,
         fontWeight: '600',
     },
@@ -197,25 +197,25 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     userName: {
-        color: '#8B8B91',
+        color: colors.text.secondary,
         fontFamily: 'SF Pro Display',
         fontWeight: '700',
         fontSize: 12,
         marginBottom: 2,
     },
     userEmail: {
-        color: '#F4F4F4',
+        color: colors.text.primary,
         fontFamily: 'SF Pro Display',
         fontWeight: '400',
         fontSize: 13,
     },
     footerContainer: {
         alignSelf: 'stretch',
-        backgroundColor: '#12121A',
+        backgroundColor: colors.background.secondary,
         paddingTop: 32,
         paddingHorizontal: 16,
         paddingBottom: 50,
-        shadowColor: '#000',
+        shadowColor: colors.palette.black,
         shadowOffset: { width: 0, height: -3 },
         shadowOpacity: 0.3,
         shadowRadius: 16,
@@ -228,13 +228,13 @@ const styles = StyleSheet.create({
     signOutButton: {
         flex: 1,
         height: 52,
-        backgroundColor: '#91001F',
+        backgroundColor: colors.button.dangerDark, // Standardized to design system danger color
         borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
     },
     signOutText: {
-        color: '#F4F4F4',
+        color: colors.text.primary,
         fontFamily: 'SF Pro Display',
         fontWeight: '500',
         fontSize: 16,
