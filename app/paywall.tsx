@@ -94,7 +94,9 @@ export default function PaywallScreen() {
                              if (pack.product.productType === 'AUTO_RENEWABLE_SUBSCRIPTION' || pack.packageType === 'MONTHLY') {
                                 router.back();
                             } else {
-                                Alert.alert("Success", "Tokens added! (Mock)");
+                                // For mock token packs, we can't really update the balance, so just go back or stay
+                                // Let's auto-close to mimic real behavior
+                                router.back();
                             }
                         }
                     }
@@ -107,20 +109,43 @@ export default function PaywallScreen() {
     try {
       const { customerInfo } = await Purchases.purchasePackage(pack);
       
-      // Refresh entitlements
+      // -- LATENCY MASKING START --
+      // We know RevenueCat succeeded, but the Webhook -> Supabase -> DB Update takes 2-5s.
+      // We will perform a few "optimistic" fetches to see if the balance updates.
+      // Even if it doesn't match yet, we wait a bit to give it a chance.
+      
+      // Wait Loop (3 attempts of 1.5s = 4.5s max wait)
+      for (let i = 0; i < 3; i++) {
+        await new Promise(r => setTimeout(r, 1500));
+        await refetch();
+        // Ideally we check if balance increased, but we don't have previous balance handy here easily
+        // without more state. Just the delay helps.
+      }
+      
+      // Final fetch
       await refetch();
+      // -- LATENCY MASKING END --
 
       if (pack.product.productType === 'NON_CONSUMABLE' || pack.packageType === 'ANNUAL' || pack.packageType === 'MONTHLY') {
           // Check for entitlement OR if in Expo Go/Test Store (where entitlements might not sync immediately)
           if (typeof customerInfo.entitlements.active['pro_access'] !== "undefined" || Constants.appOwnership === 'expo') {
-            Alert.alert("Success", "Welcome to Pro! (Test Store Verified)");
-            router.back();
+            Alert.alert("Success", "Welcome to Pro! (Test Store Verified)", [
+                { text: "OK", onPress: () => router.back() }
+            ]);
           }
       } else {
-          Alert.alert("Success", "Tokens added! (Mock Test Store)");
+          Alert.alert("Success", "Tokens added!", [
+              { text: "OK", onPress: () => router.back() } 
+          ]);
       }
     } catch (e: any) {
       if (!e.userCancelled) {
+        // Double check standard error code for cancellation (1) just in case
+        // But usually userCancelled boolean is reliable
+        if (e.message.includes("cancelled") || e.code === 1) {
+             return; 
+        }
+
         // Special Handling for Expo Go / Test Store (Loose equality for code)
         if (Constants.appOwnership === 'expo' && (e.code == 5 || e.code === '5')) {
             Alert.alert(
@@ -130,11 +155,10 @@ export default function PaywallScreen() {
                     {
                         text: "Continue Test",
                         onPress: () => {
-                             if (pack.product.productType === 'NON_CONSUMABLE' || pack.packageType === 'ANNUAL' || pack.packageType === 'MONTHLY') {
-                                router.back();
-                            } else {
-                                Alert.alert("Success", "Tokens added! (Mock)");
-                            }
+                             // Wait & Poll for Expo Sim too
+                             setTimeout(() => {
+                                 router.back();
+                             }, 1000);
                         }
                     }
                 ]
@@ -280,6 +304,7 @@ export default function PaywallScreen() {
       {purchasing && (
         <View style={styles.overlay}>
              <ActivityIndicator size="large" color="#fff" />
+             <Text style={{color: 'white', marginTop: 16, fontWeight: '600'}}>Finalizing Purchase...</Text>
         </View>
       )}
     </View>

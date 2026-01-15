@@ -100,7 +100,7 @@ export const UsageTracker = forwardRef<UsageTrackerRef>((_, ref) => {
     return (
         <View style={styles.container}>
             <View style={styles.headerRow}>
-                <Text style={styles.title}>Monthly Usage</Text>
+                <Text style={styles.title}>Your Balance</Text>
                 {entitlements.subscription_status === 'active' && 
                     <View style={[styles.badge, { backgroundColor: colors.accent.purple }]}>
                          <Text style={[styles.badgeText, { color: 'white' }]}>PRO</Text>
@@ -108,23 +108,12 @@ export const UsageTracker = forwardRef<UsageTrackerRef>((_, ref) => {
                 }
             </View>
 
-            <View style={styles.bars}>
-                {renderBar("Basic Generations", stats.basic_used, stats.basic_limit, colors.accent.blue)}
-                
-                {/* Only show Premium usage/limit for everyone, or just Pro? 
-                    The RPC returns 10 by default for free users. 
-                    Let's show it so they know they hit a limit.
-                */}
-                {renderBar("Premium Generations", stats.premium_used, stats.premium_limit, colors.accent.purple)}
-            </View>
-
              <View style={styles.tokenSection}>
-                <Text style={styles.tokenTitle}>Extra Tokens</Text>
                 <View style={styles.tokenRow}>
                     <Text style={styles.tokenValue}>{entitlements.purchased_balance}</Text>
-                    <Text style={styles.tokenLabel}>Available</Text>
+                    <Text style={styles.tokenLabel}>Tokens</Text>
                 </View>
-                <Text style={styles.tokenHint}>Tokens are used when your monthly limit is reached.</Text>
+                <Text style={styles.tokenHint}>Tokens are used to generate miniatures.</Text>
             </View>
 
         </View>

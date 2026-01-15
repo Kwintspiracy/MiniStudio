@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ScrollView, RefreshControl } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { colors } from '../src/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +21,12 @@ export default function SettingsScreen() {
         await usageTrackerRef.current?.refresh();
         setRefreshing(false);
     };
+
+    useFocusEffect(
+        useCallback(() => {
+            usageTrackerRef.current?.refresh();
+        }, [])
+    );
 
     return (
         <View style={styles.container}>

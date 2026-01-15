@@ -17,7 +17,7 @@
         "NSPhotoLibraryAddUsageDescription": "MiniMiniPainterStudioStudio needs permission to save generated images to your photo library.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "10"
+      "buildNumber": "11"
     },
     "android": {
       "adaptiveIcon": {

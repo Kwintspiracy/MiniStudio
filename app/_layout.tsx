@@ -55,7 +55,21 @@ function RootLayoutNav() {
     const initPurchases = async () => {
         if (Platform.OS !== 'web') {
             try {
-                Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG); 
+                // Custom Log Handler to silence "Purchase was cancelled" noise
+                Purchases.setLogHandler((logLevel, message) => {
+                    if (message.includes("Purchase was cancelled")) {
+                        return; // Swallow this specific error
+                    }
+                    // Pass others through to console
+                    switch(logLevel) {
+                        case Purchases.LOG_LEVEL.ERROR: console.error(`[RC Error] ${message}`); break;
+                        case Purchases.LOG_LEVEL.WARN: console.warn(`[RC Warn] ${message}`); break; 
+                        case Purchases.LOG_LEVEL.INFO: console.log(`[RC Info] ${message}`); break;
+                        case Purchases.LOG_LEVEL.DEBUG: console.debug(`[RC Debug] ${message}`); break;
+                        case Purchases.LOG_LEVEL.VERBOSE: console.debug(`[RC Verbose] ${message}`); break;
+                    }
+                });
+                Purchases.setLogLevel(Purchases.LOG_LEVEL.WARN); 
                 
                 if (Platform.OS === 'ios') {
                     await Purchases.configure({ apiKey: REVENUECAT_KEYS.apple });

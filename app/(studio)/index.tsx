@@ -170,15 +170,39 @@ export default function StudioScreen() {
   const [painterPrompt, setPainterPrompt] = useState('');
   
   // Replace local state with Entitlements hook
-  const { entitlements, loading: entitlementsLoading } = useEntitlements();
-  const isPro = entitlements.is_pro;
+  const { entitlements, refetch, loading: entitlementsLoading } = useEntitlements();
+  // Reverted to local state per user request (was strictly entitlements.is_pro)
+  const [isPro, setIsPro] = useState(entitlements.is_pro);
+
+  // Sync with entitlements if they update (e.g. after purchase)
+  useEffect(() => {
+      setIsPro(entitlements.is_pro);
+  }, [entitlements.is_pro]);
+
+  // Refetch entitlements when screen comes into focus (e.g. returning from Paywall)
+  useFocusEffect(
+    useCallback(() => {
+        refetch();
+    }, [refetch])
+  );
   
-  // Handler to open Paywall if user tries to toggle Pro and is not Pro
   const handleProToggle = () => {
-      if (isPro) {
-          // Already Pro, nothing to toggle (maybe show settings?)
+      // Allow toggling freely (or add logic to block if !entitlements.is_pro later)
+      // Per user request: "should just do as usual and turn on Pro"
+      if (!isPro && !entitlements.is_pro) {
+          // Optional: Still good UX to show Paywall if they aren't actually Entitled?
+          // User said "It should NOT do that". So we will just toggle it ON (Mocking Pro locally)
+          // OR we interpret "Turn on Pro" as "Try to turn on Pro".
+          
+          // Debugging/Dev Mode: Just toggle.
+          // Production Logic: Should probably be:
+          // if (isPro) setIsPro(false);
+          // else router.push('/paywall');
+          
+          // But strict compliance to request: "just do as usual and turn on Pro"
+          setIsPro(!isPro);
       } else {
-          router.push('/paywall');
+          setIsPro(!isPro);
       }
   };
 
@@ -640,9 +664,7 @@ export default function StudioScreen() {
         <View style={styles.topNav}>
           <View style={styles.topNavLeft}>
             <ModeBadge isAdvanced={isPro} onToggle={handleProToggle} />
-            <View style={{marginLeft: 10}}>
-                <Text style={{color: '#fff', fontSize: 10}}>Tokens: {entitlements.purchased_balance}</Text>
-            </View>
+
           </View>
           <View style={styles.topNavTitle}>
             {/* App title removed per design */}
@@ -655,7 +677,7 @@ export default function StudioScreen() {
               />
             ) : (
               <View style={styles.userAvatar}>
-                <BiSolidUserCircle32Icon />
+                <BiSolidUserCircle32Icon size={40} />
               </View>
             )}
           </TouchableOpacity>
@@ -849,7 +871,7 @@ export default function StudioScreen() {
               <View style={styles.createButtonContent}>
                 {!isLoading && <MagicWandIcon color={isPro ? '#0F1014' : '#F4F4F4'} />}
                 {isLoading && <SpinnerIcon color="#FFFFFF" />}
-                <Text style={[styles.createButtonText, isPro && styles.createButtonTextPro, isLoading && styles.cancelButtonText]}>{isLoading ? 'Cancel' : `Create (${isPro ? 'Pro' : 'Basic'})`}</Text>
+                <Text style={[styles.createButtonText, isPro && styles.createButtonTextPro, isLoading && styles.cancelButtonText]}>{isLoading ? 'Cancel' : `Create (${isPro ? '2 Tokens' : '1 Token'})`}</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -991,7 +1013,7 @@ const styles = StyleSheet.create({
   topNavLeft: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 16 },
   topNavRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 16 },
   topNavTitle: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  userAvatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: colors.button.primary, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  userAvatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 3, borderColor: colors.button.primary, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   topNavSide: { width: 91, alignItems: 'center', justifyContent: 'center' },
   userIconContainer: { alignItems: 'flex-end', paddingRight: 16 },
   proBadge: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, borderColor: colors.button.primary },
