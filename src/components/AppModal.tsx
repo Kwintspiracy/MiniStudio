@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
-import { colors } from '../theme';
+import { colors, fontFamily } from '../theme';
 
 interface AppModalProps {
     visible: boolean;
@@ -97,13 +97,13 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     title: {
-        fontFamily: 'SF Pro Display',
+        fontFamily: fontFamily.primary,
         fontWeight: '700',
         fontSize: 20,
         color: colors.text.primary,
     },
     message: {
-        fontFamily: 'SF Pro Display',
+        fontFamily: fontFamily.primary,
         fontWeight: '400',
         fontSize: 16,
         color: colors.text.secondary,
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
     },
     buttonText: {
-        fontFamily: 'SF Pro Display',
+        fontFamily: fontFamily.primary,
         fontWeight: '500',
         fontSize: 16,
         color: colors.text.primary,

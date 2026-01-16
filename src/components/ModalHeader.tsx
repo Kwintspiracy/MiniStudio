@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors } from '@/theme';
+import { colors, fontFamily } from '@/theme';
 import { CloseIcon } from '@/components/Icons';
 
 interface ModalHeaderProps {
@@ -26,7 +26,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4, // Often needed for alignment
   },
   modalTitle: {
-    fontFamily: 'Sarabun',
+    fontFamily: fontFamily.primary,
     fontWeight: '700',
     fontSize: 18,
     color: colors.text.primary,

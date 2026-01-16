@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchActivePrompts } from '../services/promptService';
-import { PAINTING_STYLES, DEFAULT_DESIGNER_TEMPLATES } from '../constants';
+import { PAINTING_STYLES, DEFAULT_DESIGNER_TEMPLATES, NMM_MIXED_PROMPT } from '../constants';
 import { StyleOption, DesignerType } from '../types';
 
 interface PromptsState {
@@ -109,6 +109,16 @@ export function usePrompts() {
             } : {
                 default: 'Rendered as a professional studio product shot with soft diffused lighting on a seamless black background.',
                 pro: 'Rendered as a professional studio product shot with soft diffused lighting on a seamless black background.'
+            };
+
+            newEffects['effect.nmm.mixed'] = remotePrompts['effect.nmm.mixed'] ? {
+                default: remotePrompts['effect.nmm.mixed'].default,
+                pro: remotePrompts['effect.nmm.mixed'].pro,
+                negative_default: remotePrompts['effect.nmm.mixed'].negative_default,
+                negative_pro: remotePrompts['effect.nmm.mixed'].negative_pro
+            } : {
+                default: NMM_MIXED_PROMPT,
+                pro: NMM_MIXED_PROMPT
             };
 
             // Share Message

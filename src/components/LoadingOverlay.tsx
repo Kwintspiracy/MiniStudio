@@ -6,7 +6,7 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { colors } from '../theme';
+import { colors, fontFamily } from '../theme';
 
 interface LoadingOverlayProps {
     visible: boolean;
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
         gap: 16,
     },
     message: {
-        fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+        fontFamily: fontFamily.primary,
         fontWeight: '500',
         fontSize: 16,
         color: colors.text.primary,

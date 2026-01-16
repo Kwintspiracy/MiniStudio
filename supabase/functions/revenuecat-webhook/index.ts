@@ -1,29 +1,48 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { serve } from "std/http/server.ts";
+import { createClient } from "@supabase/supabase-js";
 
+// SEC-002: Environment-based CORS origins (no wildcard in production)
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") || "").split(",").filter(Boolean);
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS[0] : "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// SEC-001: RevenueCat Webhook Authorization Secret
+const REVENUECAT_WEBHOOK_SECRET = Deno.env.get("REVENUECAT_WEBHOOK_SECRET");
+
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
+    // SEC-001: Verify RevenueCat Authorization Header
+    const authHeader = req.headers.get("Authorization");
+    
+    if (REVENUECAT_WEBHOOK_SECRET) {
+      // If a secret is configured, verify it matches
+      if (!authHeader || authHeader !== `Bearer ${REVENUECAT_WEBHOOK_SECRET}`) {
+        console.error("[Webhook] Unauthorized: Invalid or missing Authorization header");
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      console.log("[Webhook] Authorization verified");
+    } else {
+      // Warn if no secret is configured (should be set in production)
+      console.warn("[Webhook] WARNING: REVENUECAT_WEBHOOK_SECRET not configured. Webhook is not secured!");
+    }
+
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      {
-        global: {
-          headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
-        },
-      }
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
     const body = await req.json();
-    console.log("RevenueCat Webhook received:", JSON.stringify(body));
+    console.log("[Webhook] RevenueCat event received:", body.event?.type);
 
     const { event } = body;
     if (!event) throw new Error("No event found in body");
@@ -34,7 +53,7 @@ serve(async (req) => {
     const purchasedAtMs = event.purchased_at_ms;
 
     if (!userId) {
-       console.log("No app_user_id, skipping. (Keep-alive ping?)");
+       console.log("[Webhook] No app_user_id, skipping. (Keep-alive ping?)");
        return new Response(JSON.stringify({ received: true }), {
          headers: { ...corsHeaders, "Content-Type": "application/json" },
        });
@@ -42,10 +61,6 @@ serve(async (req) => {
 
     // 1. Handle Subscriptions (INITIAL_PURCHASE, RENEWAL, EXPIRATION, CANCELLATION)
     if (["INITIAL_PURCHASE", "RENEWAL", "UNCANCELLATION"].includes(type)) {
-      // Check if it's a "Pro" product
-      // Ideally, we check entitlement id, but RC webhook payload structure varies.
-      // We assume if it's a subscription event, it's Pro for now, or check product ID mapping.
-      
       const { error } = await supabaseClient
         .from("user_entitlements")
         .upsert({
@@ -53,18 +68,14 @@ serve(async (req) => {
           is_pro: true,
           subscription_status: 'active',
           updated_at: new Date(purchasedAtMs).toISOString(),
-          revenue_cat_id: event.original_app_user_id // or similar
+          revenue_cat_id: event.original_app_user_id
         }, { onConflict: "user_id" });
 
       if (error) throw error;
-      console.log(`Updated user ${userId} to Pro (Active)`);
+      console.log(`[Webhook] Updated user ${userId} to Pro (Active)`);
     }
 
     if (["EXPIRATION", "CANCELLATION", "PRODUCT_CHANGE"].includes(type)) {
-       // BE CAREFUL: "CANCELLATION" might mean "Turned off auto-renew" but still active until end of period.
-       // RevenueCat sends "EXPIRATION" when it actually expires.
-       // If type is EXPIRATION, revoke access.
-       
        if (type === "EXPIRATION") {
           const { error } = await supabaseClient
             .from("user_entitlements")
@@ -76,21 +87,18 @@ serve(async (req) => {
             .eq("user_id", userId);
             
           if (error) throw error;
-          console.log(`User ${userId} - Subscription Expired`);
+          console.log(`[Webhook] User ${userId} - Subscription Expired`);
        }
        
-       // Just update status text for others
        if (type === "CANCELLATION") {
-         // This usually means "Voluntary Cancellation" (auto-renew off)
-         // We do not revoke access yet.
-         const { error } = await supabaseClient
+          const { error } = await supabaseClient
             .from("user_entitlements")
             .update({
               subscription_status: 'canceled_pending_expiration',
               updated_at: new Date().toISOString()
             })
             .eq("user_id", userId);
-          if (error) console.error("Error updating status:", error);
+          if (error) console.error("[Webhook] Error updating cancellation status:", error);
        }
     }
 
@@ -99,43 +107,23 @@ serve(async (req) => {
       // Determine token amount from Product ID
       let tokensToAdd = 0;
       if (productId.includes("tokens_200")) tokensToAdd = 200;
-      if (productId.includes("tokens_50")) tokensToAdd = 50; // Legacy / Fallback
-      if (productId.includes("token_pack")) tokensToAdd = 50; // Legacy fallback
-      
-      // Dev helper for smaller packs if you ever make them
+      if (productId.includes("tokens_50")) tokensToAdd = 50;
+      if (productId.includes("token_pack")) tokensToAdd = 50;
       if (productId.includes("tokens_10")) tokensToAdd = 10;
 
       if (tokensToAdd > 0) {
-        // Use RPC to increment atomically (optional, but cleaner)
-        // Or just read-update-write if we trust the single event stream.
-        // Let's use a raw RPC call if we had one, but we don't.
-        // We accept a tiny race condition risk or use a SQL function.
-        // Let's try to do it via a custom RPC or just a direct update + increment.
+        // SEC-003: Use atomic increment via RPC to prevent race conditions
+        const { data, error } = await supabaseClient.rpc('increment_token_balance', {
+          p_user_id: userId,
+          p_tokens: tokensToAdd
+        });
 
-        // Retrieve current balance first
-        const { data: userLink, error: fetchError } = await supabaseClient
-          .from("user_entitlements")
-          .select("purchased_balance")
-          .eq("user_id", userId)
-          .single();
-
-        if (fetchError && fetchError.code !== 'PGRST116') { // Ignore "not found"
-            throw fetchError;
+        if (error) {
+          console.error("[Webhook] RPC increment_token_balance error:", error);
+          throw error;
         }
-
-        const currentBalance = userLink?.purchased_balance || 0;
-        const newBalance = currentBalance + tokensToAdd;
-
-        const { error } = await supabaseClient
-          .from("user_entitlements")
-          .upsert({
-            user_id: userId,
-            purchased_balance: newBalance,
-            updated_at: new Date().toISOString()
-          }, { onConflict: "user_id" });
-
-        if (error) throw error;
-        console.log(`Added ${tokensToAdd} tokens to user ${userId}. New Balance: ${newBalance}`);
+        
+        console.log(`[Webhook] Added ${tokensToAdd} tokens to user ${userId}. New Balance: ${data}`);
       }
     }
 
@@ -144,7 +132,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("Webhook error:", error);
+    console.error("[Webhook] Error:", error);
     const message = error instanceof Error ? error.message : String(error);
     return new Response(JSON.stringify({ error: message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

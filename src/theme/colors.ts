@@ -7,12 +7,12 @@
 
 export const colors = {
     // Background colors
-    // Background colors
     background: {
         primary: '#2C2F3A',   // Restored original Studio BG
         secondary: '#1F2129', // Restored original Secondary
         tertiary: '#464B5D',  // Restored original Tertiary
         bottom: '#0F1014',
+        highlight: 'rgba(44, 89, 255, 0.1)', // Blue tinted highlight (paywall cards)
         
         // Preserved Legacy Colors
         settings: '#1E1E2B',  // Settings Container
@@ -26,6 +26,7 @@ export const colors = {
     text: {
         primary: '#EFEFF1',   // Restored original text color
         secondary: '#7E808B', // Restored original secondary text
+        muted: 'rgba(244, 244, 244, 0.4)', // Placeholder/subdued text
         dark: '#1D1D1D',
         textfieldbg: '#16171D', // Restored original input bg
         red: '#C4002B',         // Restored original red
@@ -47,13 +48,22 @@ export const colors = {
         red: '#FA0439',
         purple: '#BB51FF',
         yellow: '#FFD60A',
-        orange: '#FF682C', // Kept this useful addition
+        orange: '#FF682C',
     },
 
     // Border colors
     border: {
         subtle: 'rgba(255, 255, 255, 0.05)',
         strong: '#66666B',
+    },
+
+    // Overlay colors (semi-transparent backgrounds)
+    overlay: {
+        soft: 'rgba(255, 255, 255, 0.1)',    // Light overlay for cards/tracks
+        medium: 'rgba(255, 255, 255, 0.2)',  // Grabber handles
+        dark: 'rgba(0, 0, 0, 0.3)',          // Dark chip backgrounds
+        heavy: 'rgba(0, 0, 0, 0.6)',         // Remove buttons
+        modal: 'rgba(0, 0, 0, 0.7)',         // Modal backdrops
     },
 
     // Pure Palette (Absolute Black/White)
@@ -82,7 +92,7 @@ export const colors = {
         active: '#1F6FEB',
         success: '#238636',
         successText: '#3FB950',
-        danger: '#DA3633', // Custom red matching general vibes
+        danger: '#DA3633',
         badgeBg: 'rgba(35, 134, 54, 0.2)',
     }
 } as const;
@@ -94,6 +104,7 @@ export type ColorToken =
     | `button.${keyof typeof colors.button}`
     | `accent.${keyof typeof colors.accent}`
     | `border.${keyof typeof colors.border}`
+    | `overlay.${keyof typeof colors.overlay}`
     | `palette.${keyof typeof colors.palette}`
     | `social.${keyof typeof colors.social}`
     | `admin.${keyof typeof colors.admin}`;

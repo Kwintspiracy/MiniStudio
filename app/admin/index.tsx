@@ -52,7 +52,9 @@ export default function AdminDashboard() {
         return groups;
     }, [prompts]);
 
-    const keys = Object.keys(groupedPrompts).sort();
+    const keys = Object.keys(groupedPrompts)
+        .filter(key => !['style.oil-painting', 'style.cel-shaded', 'style.blanchitsu'].includes(key))
+        .sort();
 
     const handleActivate = async (id: string, key: string) => {
         const { error } = await adminActivatePromptVersion(id, key);
@@ -385,7 +387,7 @@ export default function AdminDashboard() {
                         )}
 
                         {isEditing ? (
-                            <View style={styles.editorContainer}>
+                            <ScrollView style={styles.editorContainer} showsVerticalScrollIndicator={true}>
                                 {isCreatingKey && (
                                     <>
                                         <Text style={styles.label}>New Key (e.g. share.message)</Text>
@@ -450,7 +452,7 @@ export default function AdminDashboard() {
                                         <Text style={styles.actionButtonText}>{editingId ? 'Update Version' : 'Save New Version'}</Text>
                                     </TouchableOpacity>
                                 </View>
-                            </View>
+                            </ScrollView>
 
                         ) : isAssetKey ? (
                             /* Asset Manager UI */
@@ -612,7 +614,7 @@ const styles = StyleSheet.create({
     editorContainer: { flex: 1, maxWidth: 800 },
     label: { color: colors.admin.textSecondary, marginBottom: 8, marginTop: 20, fontWeight: 'bold' },
     input: { backgroundColor: colors.admin.background, borderWidth: 1, borderColor: colors.admin.border, color: colors.admin.text, padding: 12, borderRadius: 6, fontSize: 16 },
-    textArea: { height: 300, textAlignVertical: 'top' },
+    textArea: { height: 400, minHeight: 400, textAlignVertical: 'top' },
     editorActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 30, gap: 12 },
     cancelButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 6, backgroundColor: colors.admin.border },
     saveButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 6, backgroundColor: colors.admin.success },

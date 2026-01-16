@@ -2,7 +2,7 @@ import React, { useEffect, useState, forwardRef, useImperativeHandle } from 'rea
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
-import { colors } from '../theme';
+import { colors, fontFamily } from '../theme';
 import { useEntitlements } from '../hooks/useEntitlements';
 
 interface UsageStats {
@@ -122,7 +122,7 @@ export const UsageTracker = forwardRef<UsageTrackerRef>((_, ref) => {
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        backgroundColor: colors.border.subtle,
         borderRadius: 8,
         padding: 16,
         marginBottom: 16,
@@ -137,12 +137,12 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         color: colors.text.primary,
-        fontFamily: 'SF Pro Display',
+        fontFamily: fontFamily.primary,
     },
     subtitle: {
         fontSize: 13,
         color: colors.text.secondary,
-        fontFamily: 'SF Pro Display',
+        fontFamily: fontFamily.primary,
     },
     badge: {
         backgroundColor: colors.accent.yellow,
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     badgeText: {
         fontSize: 10,
         fontWeight: '700',
-        color: '#000',
+        color: colors.palette.black,
     },
     bars: {
         gap: 16,
@@ -169,17 +169,17 @@ const styles = StyleSheet.create({
     barLabel: {
         fontSize: 12,
         color: colors.text.secondary,
-        fontFamily: 'SF Pro Display',
+        fontFamily: fontFamily.primary,
     },
     barValue: {
         fontSize: 12,
         color: colors.text.primary,
         fontWeight: '500',
-        fontFamily: 'SF Pro Display',
+        fontFamily: fontFamily.primary,
     },
     track: {
         height: 6,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: colors.overlay.soft,
         borderRadius: 3,
         overflow: 'hidden',
     },
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     },
     tokenSection: {
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)',
+        borderTopColor: colors.overlay.soft,
         paddingTop: 16,
     },
     tokenTitle: {

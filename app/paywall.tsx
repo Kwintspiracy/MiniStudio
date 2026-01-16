@@ -252,7 +252,7 @@ export default function PaywallScreen() {
             
             {/* Dev/Expo Go Warning */}
             {Constants.appOwnership === 'expo' && (
-                <View style={[styles.packageCard, { borderColor: colors.accent.blue, backgroundColor: 'rgba(44, 89, 255, 0.1)' }]}>
+                <View style={[styles.packageCard, { borderColor: colors.accent.blue, backgroundColor: colors.background.highlight }]}>
                      <View style={{flex: 1}}>
                         <Text style={{color: colors.text.primary, textAlign:'center', fontSize: 12}}>
                             Using RevenueCat Test Store (Expo Go Mode). Purchases are simulated.
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
     left: 0, 
     right: 0, 
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay.modal,
     justifyContent: 'center',
     alignItems: 'center',
   }

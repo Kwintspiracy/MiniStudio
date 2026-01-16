@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../src/context/AuthContext';
 import { setApiKey } from '../src/services/storageService';
 import { KeyIcon } from '../src/components/Icons';
-import { colors } from '../src/theme';
+import { colors, fontFamily } from '../src/theme';
 
 
 export default function ApiKeyScreen() {
@@ -119,14 +119,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   headerTitleApiKey: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontFamily: fontFamily.primary,
     fontSize: 32,
     fontWeight: '700',
     color: colors.text.primary,
     letterSpacing: -0.41,
   },
   headerSubtitleApiKey: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontFamily: fontFamily.primary,
     fontSize: 16,
     fontWeight: '400',
     color: colors.text.secondary,
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   apiKeyLabel: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontFamily: fontFamily.primary,
     fontSize: 12,
     fontWeight: '700',
     color: colors.text.secondary,
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontSize: 14,
     color: colors.text.primary,
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontFamily: fontFamily.primary,
   },
   apiKeyButton: {
     width: '100%',
@@ -168,14 +168,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   apiKeyButtonText: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontFamily: fontFamily.primary,
     fontSize: 14,
     fontWeight: '600',
     color: colors.text.primary,
     letterSpacing: -0.41,
   },
   apiKeyLinkText: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System',
+    fontFamily: fontFamily.secondary,
     fontSize: 12,
     fontWeight: '600',
     color: colors.accent.blue,
@@ -187,6 +187,6 @@ const styles = StyleSheet.create({
   errorText: {
     color: colors.accent.red,
     fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontFamily: fontFamily.primary,
   },
 });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors } from '@/theme';
+import { colors, fontFamily } from '@/theme';
 
 interface SectionHeaderProps {
   icon?: React.ReactNode;
@@ -19,10 +19,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 8,
+    marginTop: 16
   },
   sectionHeaderText: {
-    fontFamily: 'Sarabun',
+    fontFamily: fontFamily.primary,
     fontWeight: '700',
     fontSize: 12,
     lineHeight: 16,

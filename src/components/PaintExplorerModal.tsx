@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, memo, useCallback } from 'react';
 import {
     View,
     Text,
@@ -7,21 +7,59 @@ import {
     Modal,
     ActivityIndicator,
     StyleSheet,
-    Platform,
     Dimensions,
     FlatList,
     ListRenderItem,
+    TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { CloseCircleIcon } from './Icons';
 import { PaletteColor, fetchAllPaints, fetchUserPaints } from '../services/paintService';
-import { colors, borderRadius, spacing } from '../theme';
+import { colors, borderRadius, spacing, fontFamily } from '../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ITEM_WIDTH = (SCREEN_WIDTH - 48 - 12) / 2; // 24px padding each side, 12px gap
 
 
+
+
+const PaintItem = memo(({ 
+    color, 
+    isSelected, 
+    onToggle 
+}: { 
+    color: PaletteColor, 
+    isSelected: boolean, 
+    onToggle: (name: string, hex: string, finish?: string) => void 
+}) => {
+    const paintKey = color.id || `${color.brand}-${color.name}`;
+    
+    return (
+        <TouchableOpacity
+            key={paintKey}
+            style={[styles.paintItem, isSelected && styles.paintItemSelected]}
+            onPress={() => onToggle(color.name, color.hex || '#FFFFFF', color.finish)}
+            activeOpacity={0.7}
+        >
+            <View
+                style={[styles.paintSwatch, { backgroundColor: color.hex || '#D9D9D9' }]}
+            />
+            <View style={styles.paintInfo}>
+                <Text style={styles.paintName} numberOfLines={1}>
+                    {color.name || 'Unknown'}
+                </Text>
+                <Text style={styles.paintCode} numberOfLines={1}>
+                    {color.code || color.hex || ''}
+                </Text>
+            </View>
+        </TouchableOpacity>
+    );
+}, (prev, next) => {
+    return prev.isSelected === next.isSelected && 
+           prev.color.id === next.color.id && 
+           prev.color.name === next.color.name;
+});
 
 interface PaintExplorerModalProps {
     visible: boolean;
@@ -44,6 +82,7 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
 }) => {
     const [dbColors, setDbColors] = useState<PaletteColor[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         if ((visible || triggerLoad) && dbColors.length === 0) {
@@ -67,9 +106,6 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
 
                     const uniqueList = Array.from(uniquePaintsMap.values());
                     setDbColors(uniqueList);
-                    if (onPaintsLoaded) {
-                        onPaintsLoaded(uniqueList);
-                    }
                 } catch (e) {
                     console.error(e);
                 } finally {
@@ -80,19 +116,24 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
         }
     }, [visible, triggerLoad]);
 
-    // Group colors by brand and type/set
-    const groupedColors = useMemo(() => {
-        // Debug: log unique brands in database
+    // Sync paints to parent whenever dbColors is populated
+    useEffect(() => {
+        if (dbColors.length > 0 && onPaintsLoaded) {
+            onPaintsLoaded(dbColors);
+        }
+    }, [dbColors, onPaintsLoaded]);
+
+    // 1. Filter by Brands (Heavy lifting, cached until brands change)
+    const brandFilteredPaints = useMemo(() => {
         if (__DEV__) {
             const uniqueBrands = [...new Set(dbColors.map(c => c.brand?.trim()))];
             console.log('PaintExplorer: Available brands in database:', uniqueBrands);
-            console.log('PaintExplorer: Selected brands:', selectedBrands);
         }
 
         const normalizedSelectedBrands = selectedBrands.map(b => b.toLowerCase().trim());
         const hasSelection = normalizedSelectedBrands.length > 0;
 
-        const brandPaints = dbColors.filter((c) => {
+        return dbColors.filter((c) => {
             // @ts-ignore
             const isUserPaint = c._isUserPaint === true;
 
@@ -105,34 +146,57 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
             }
 
             const paintBrand = (c.brand?.trim() || 'Unknown').toLowerCase();
-
-            // Check if the paint's brand matches any selected brand
-            // Only compare against non-"My Paints" selections since we already handled user paints
             return normalizedSelectedBrands.some(selected => selected !== 'my paints' && paintBrand === selected);
         });
+    }, [dbColors, selectedBrands]);
 
-        if (__DEV__) {
-            console.log(`PaintExplorer: Found ${brandPaints.length} paints for brands "${selectedBrands.join(', ')}"`);
-        }
-
-        // Group by set/type
-        const groups = brandPaints.reduce((acc, color) => {
+    // 2. Base Grouping (Grouped Brand Paints, Cached until brands change)
+    const baseGroupedColors = useMemo(() => {
+        return brandFilteredPaints.reduce((acc, color) => {
             const setName = color.set?.trim() || 'General';
             if (!acc[setName]) acc[setName] = [];
             acc[setName].push(color);
             return acc;
         }, {} as Record<string, PaletteColor[]>);
+    }, [brandFilteredPaints]);
 
-        return groups;
-    }, [dbColors, selectedBrands]);
+    // 3. Search & Grouping
+    const groupedColors = useMemo(() => {
+        if (!searchQuery.trim()) {
+            return baseGroupedColors;
+        }
+
+        const query = searchQuery.toLowerCase().trim();
+        // @ts-ignore
+        const filteredPaints = brandFilteredPaints.filter(p => 
+            p.name.toLowerCase().includes(query) || 
+            p.hex.toLowerCase().includes(query) ||
+            (p.brand && p.brand.toLowerCase().includes(query))
+        );
+
+        if (__DEV__) {
+            console.log(`PaintExplorer: Found ${filteredPaints.length} paints (filtered)`);
+        }
+
+        // Group by set/type
+        return filteredPaints.reduce((acc, color) => {
+            const setName = color.set?.trim() || 'General';
+            if (!acc[setName]) acc[setName] = [];
+            acc[setName].push(color);
+            return acc;
+        }, {} as Record<string, PaletteColor[]>);
+    }, [baseGroupedColors, brandFilteredPaints, searchQuery]);
 
     const totalTones = useMemo(() => {
         return Object.values(groupedColors).reduce((acc, colors) => acc + colors.length, 0);
     }, [groupedColors]);
 
-    const isColorSelected = (colorName: string) => selectedColors.some(c => c.name === colorName);
+    // Memoize FlatList data to prevent unnecessary re-renders
+    const flatListData = useMemo(() => Object.entries(groupedColors), [groupedColors]);
 
-    const renderSection: ListRenderItem<[string, PaletteColor[]]> = ({ item: [setName, colors] }) => (
+    const isColorSelected = useCallback((colorName: string) => selectedColors.some(c => c.name === colorName), [selectedColors]);
+
+    const renderSection: ListRenderItem<[string, PaletteColor[]]> = useCallback(({ item: [setName, colors] }) => (
         <View style={styles.typeSection}>
             {/* Type Header */}
             <View style={styles.typeHeader}>
@@ -143,34 +207,17 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
 
             {/* Paint Grid */}
             <View style={styles.paintGrid}>
-                {colors.map((color, idx) => {
-                    // Use a stable key combinator as paint ids might not be unique across public/user paints
-                    const paintKey = color.id || `${color.brand}-${color.name}-${idx}`;
-                    const selected = isColorSelected(color.name);
-                    return (
-                        <TouchableOpacity
-                            key={paintKey}
-                            style={[styles.paintItem, selected && styles.paintItemSelected]}
-                            onPress={() => onToggleColor(color.name, color.hex || '#FFFFFF', color.finish)}
-                            activeOpacity={0.7}
-                        >
-                            <View
-                                style={[styles.paintSwatch, { backgroundColor: color.hex || '#D9D9D9' }]}
-                            />
-                            <View style={styles.paintInfo}>
-                                <Text style={styles.paintName} numberOfLines={1}>
-                                    {color.name || 'Unknown'}
-                                </Text>
-                                <Text style={styles.paintCode} numberOfLines={1}>
-                                    {color.code || color.hex || ''}
-                                </Text>
-                            </View>
-                        </TouchableOpacity>
-                    );
-                })}
+                {colors.map((color, idx) => (
+                    <PaintItem 
+                        key={color.id || `${color.brand}-${color.name}-${idx}`}
+                        color={color}
+                        isSelected={isColorSelected(color.name)}
+                        onToggle={onToggleColor}
+                    />
+                ))}
             </View>
         </View>
-    );
+    ), [isColorSelected, onToggleColor]);
 
     return (
         <Modal
@@ -202,33 +249,62 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
                           Ideally we should update its prop interface to match others if needed, 
                           but typically size/color are standard.
                         */}
-                        <CloseCircleIcon size={24} color="#F4F4F4" />
+                        <CloseCircleIcon size={24} color={colors.button.white} />
                     </TouchableOpacity>
                 </View>
 
                 {/* Content */}
                 {isLoading ? (
                     <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color="#0058DB" />
+                        <ActivityIndicator size="large" color={colors.button.primary} />
                         <Text style={styles.loadingText}>Loading paints...</Text>
-                    </View>
-                ) : Object.keys(groupedColors).length === 0 ? (
-                    <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyTitle}>No paints found</Text>
-                        <Text style={styles.emptySubtitle}>
-                            {selectedBrands.includes('My Paints') && selectedBrands.length === 1
-                                ? 'Download MiniPainterDB to track your paint collection.'
-                                : 'No paints available for these brands.'}
-                        </Text>
                     </View>
                 ) : (
                     <FlatList
-                        data={Object.entries(groupedColors)}
+                        data={flatListData}
                         renderItem={renderSection}
                         keyExtractor={([setName]) => setName}
                         style={styles.content}
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={{ paddingBottom: 40 }}
+                        initialNumToRender={4}
+                        maxToRenderPerBatch={4}
+                        windowSize={5}
+                        removeClippedSubviews={true} 
+                        keyboardShouldPersistTaps="always"
+                        ListEmptyComponent={
+                            <View style={styles.emptyContainer}>
+                                <Text style={styles.emptyTitle}>No paints found</Text>
+                                <Text style={styles.emptySubtitle}>
+                                    {selectedBrands.includes('My Paints') && selectedBrands.length === 1
+                                        ? 'Download MiniPainterDB to track your paint collection.'
+                                        : 'No paints available for these brands.'}
+                                </Text>
+                            </View>
+                        }
+                        ListHeaderComponent={
+                            <View style={styles.searchContainer}>
+                                <View style={styles.searchWrapper}>
+                                    <TextInput
+                                        style={styles.searchInput}
+                                        placeholder="Search paints..."
+                                        placeholderTextColor="#666"
+                                        value={searchQuery}
+                                        onChangeText={setSearchQuery}
+                                        returnKeyType="search"
+                                    />
+                                    {searchQuery.length > 0 && (
+                                        <TouchableOpacity 
+                                            onPress={() => setSearchQuery('')}
+                                            style={styles.clearSearchButton}
+                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                        >
+                                            <CloseCircleIcon size={20} color="#999" />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            </View>
+                        }
                     />
                 )}
             </SafeAreaView>
@@ -239,7 +315,7 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
 const styles = StyleSheet.create({
     modalContainer: {
         flex: 1,
-        backgroundColor: '#12121F',
+        backgroundColor: colors.background.settingsFooter,
     },
     grabberContainer: {
         width: '100%',
@@ -251,7 +327,7 @@ const styles = StyleSheet.create({
         width: 36,
         height: 5,
         borderRadius: 2.5,
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        backgroundColor: colors.overlay.medium,
     },
     header: {
         flexDirection: 'row',
@@ -264,10 +340,10 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     headerTitle: {
-        fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+        fontFamily: fontFamily.primary,
         fontWeight: '700',
         fontSize: 20,
-        color: '#F4F4F4',
+        color: colors.button.white,
         letterSpacing: -0.41,
     },
     headerSubtitleRow: {
@@ -275,14 +351,36 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 4,
     },
+    searchContainer: {
+        paddingHorizontal: 24,
+        paddingBottom: 16,
+    },
+    searchWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.overlay.soft,
+        borderRadius: 8,
+        paddingRight: 10,
+    },
+    searchInput: {
+        flex: 1,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        fontSize: 16,
+        color: colors.button.white,
+        fontFamily: fontFamily.primary,
+    },
+    clearSearchButton: {
+        padding: 4,
+    },
     brandName: {
-        fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+        fontFamily: fontFamily.primary,
         fontWeight: '600',
         fontSize: 14,
-        color: '#F4F4F4',
+        color: colors.button.white,
     },
     toneCount: {
-        fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+        fontFamily: fontFamily.primary,
         fontWeight: '400',
         fontSize: 14,
         color: colors.text.secondary,
@@ -301,7 +399,7 @@ const styles = StyleSheet.create({
         gap: 16,
     },
     loadingText: {
-        fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+        fontFamily: fontFamily.primary,
         fontWeight: '400',
         fontSize: 14,
         color: colors.text.secondary,
@@ -312,13 +410,13 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     emptyTitle: {
-        fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+        fontFamily: fontFamily.primary,
         fontWeight: '600',
         fontSize: 16,
-        color: '#F4F4F4',
+        color: colors.button.white,
     },
     emptySubtitle: {
-        fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+        fontFamily: fontFamily.primary,
         fontWeight: '400',
         fontSize: 14,
         color: colors.text.secondary,
@@ -336,20 +434,20 @@ const styles = StyleSheet.create({
     typeAccentBar: {
         width: 3,
         height: 16,
-        backgroundColor: '#0058DB',
+        backgroundColor: colors.button.primary,
         borderRadius: 1.5,
         marginRight: 8,
     },
     typeName: {
         flex: 1,
-        fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+        fontFamily: fontFamily.primary,
         fontWeight: '600',
         fontSize: 13,
         color: colors.text.secondary,
         letterSpacing: 0.5,
     },
     typeCount: {
-        fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+        fontFamily: fontFamily.primary,
         fontWeight: '400',
         fontSize: 13,
         color: colors.text.secondary,
@@ -366,13 +464,13 @@ const styles = StyleSheet.create({
         gap: 12,
         paddingVertical: 12,
         paddingHorizontal: 12,
-        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+        backgroundColor: colors.overlay.dark,
         borderRadius: 8,
         borderWidth: 2,
         borderColor: 'transparent',
     },
     paintItemSelected: {
-        borderColor: '#0058DB',
+        borderColor: colors.button.primary,
     },
     paintSwatch: {
         width: 24,
@@ -384,14 +482,14 @@ const styles = StyleSheet.create({
         gap: 2,
     },
     paintName: {
-        fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+        fontFamily: fontFamily.primary,
         fontWeight: '700',
         fontSize: 14,
-        color: '#F4F4F4',
+        color: colors.button.white,
         lineHeight: 14,
     },
     paintCode: {
-        fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+        fontFamily: fontFamily.primary,
         fontWeight: '600',
         fontSize: 13,
         color: colors.text.secondary,

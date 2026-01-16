@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ScrollView, RefreshControl } from 'react-native';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
-import { colors } from '../src/theme';
+import { colors, fontFamily } from '../src/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppModal } from '../src/components/AppModal';
 
@@ -171,10 +171,10 @@ const styles = StyleSheet.create({
         gap: 16,
     },
     avatarContainer: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        borderWidth: 2,
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        borderWidth: 3,
         borderColor: colors.button.primary,
         overflow: 'hidden',
     },
@@ -198,14 +198,14 @@ const styles = StyleSheet.create({
     },
     userName: {
         color: colors.text.secondary,
-        fontFamily: 'SF Pro Display',
+        fontFamily: fontFamily.primary,
         fontWeight: '700',
         fontSize: 12,
         marginBottom: 2,
     },
     userEmail: {
         color: colors.text.primary,
-        fontFamily: 'SF Pro Display',
+        fontFamily: fontFamily.primary,
         fontWeight: '400',
         fontSize: 13,
     },
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     },
     signOutText: {
         color: colors.text.primary,
-        fontFamily: 'SF Pro Display',
+        fontFamily: fontFamily.primary,
         fontWeight: '500',
         fontSize: 16,
     },

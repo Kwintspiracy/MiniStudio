@@ -16,7 +16,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../src/context/AuthContext';
-import { colors } from '../src/theme';
+import { colors, fontFamily } from '../src/theme';
 
 // Google Icon Component
 const GoogleIcon = ({ size = 15 }: { size?: number }) => (
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   headerTitle: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontFamily: fontFamily.primary,
     fontSize: 32,
     fontWeight: '700',
     color: colors.text.primary,
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   headerSubtitle: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontFamily: fontFamily.primary,
     fontSize: 16,
     fontWeight: '400',
     color: colors.text.secondary,
@@ -336,14 +336,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontSize: 14,
     fontWeight: '400',
-    color: 'rgba(244, 244, 244, 0.4)',
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    color: colors.text.muted,
+    fontFamily: fontFamily.primary,
     lineHeight: 14,
   },
   errorText: {
     color: colors.accent.red,
     fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontFamily: fontFamily.primary,
     marginTop: -10,
   },
 
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryButtonText: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontFamily: fontFamily.primary,
     fontSize: 14,
     fontWeight: '600',
     color: colors.text.primary,
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   googleButtonText: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontFamily: fontFamily.primary,
     fontSize: 14,
     fontWeight: '600',
     color: colors.text.dark,
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   appleButtonText: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
+    fontFamily: fontFamily.primary,
     fontSize: 14,
     fontWeight: '600',
     color: colors.text.primary,

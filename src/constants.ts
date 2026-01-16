@@ -85,3 +85,18 @@ export const REVENUECAT_KEYS = {
     google: Constants.expoConfig?.extra?.revenueCat?.google || '',
 };
 
+export const METALLIC_PAINT_INSTRUCTIONS = `
+CRITICAL - METALLIC TEXTURE & HUE INSTRUCTIONS: For all metal parts (swords, armor trim, machinery), strictly use a True Metallic Metal (TMM) aesthetic. Do not use NMM techniques.
+
+Base Hue Source: You must use the specific HEX codes provided in the "Metallic Paints" palette section below as the fundamental base color for the metal.
+
+Physical Pigment Rendering: Render these specific HEX codes not as flat colors, but as acrylic metallic paints containing visible mica flakes and granular metallic luster. The surface must shimmer due to physical material properties, not painted gradients.
+
+Defining Volume with Ink: To deepen volume and create realistic metallic shadows, apply appropriate washes and inks into the recesses (e.g., use a warm brown/sepia wash over gold-toned metallic hexes; use dark blue/black/Nuln Oil style washes over cool silver/steel metallic hexes).
+
+No NMM: Do not paint horizon lines, high-contrast sky-earth reflections, or stylized NMM gradients. The metallic effect must come from the simulated pigment texture interacting with light, deepened by the applied washes.
+`;
+
+export const NMM_MIXED_PROMPT = "Apply Non-Metallic Metal (NMM) techniques to the general lighting and volumes, but strictly render the specific metallic paints listed in the palette with their true pigment properties (True Metallic Metal), creating a hybrid aesthetic where real metallic texture contrasts with the painterly NMM style.";
+
+

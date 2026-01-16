@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, Platform } from 'react-native';
 import { PhotoCameraIcon, PhotoLibraryIcon } from '@/components/Icons';
-import { colors } from '@/theme';
+import { colors, fontFamily } from '@/theme';
 import type { ImageFile } from '@/types';
 
 interface SourceContainerProps {
@@ -36,7 +36,7 @@ export const SourceContainer = ({
         <View style={styles.sourceInfo}>
           <Text style={styles.inputLabel}>SOURCE</Text>
           <Text style={styles.inputSubtitle}>
-            Take a photo, choose an image or use images from your gallery
+            Take a photo, choose an image or use images from your gallery.
           </Text>
         </View>
       )}
@@ -80,19 +80,20 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   inputLabel: { 
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', 
+    fontFamily: fontFamily.primary, 
     fontWeight: '700', 
-    fontSize: 12, 
+    fontSize: 16, 
     color: colors.text.primary, 
     paddingLeft: 8 
   },
   inputSubtitle: { 
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', 
+    fontFamily: fontFamily.primary, 
     fontWeight: '400', 
-    fontSize: 13, 
+    fontSize: 15,
+    lineHeight: 18,
     color: colors.text.secondary, 
-    marginTop: 2, 
-    paddingLeft: 8, 
+    marginTop: 5, 
+    paddingHorizontal: 16, 
     textAlign: 'center' 
   },
   optionsRow: { 
@@ -107,10 +108,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, 
     backgroundColor: colors.button.secondary, 
     borderRadius: 4, 
-    marginLeft: 8 
+    marginLeft: 8,
+    minWidth: 100
   },
   optionButtonText: { 
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'System', 
+    fontFamily: fontFamily.primary, 
     fontWeight: '500', 
     fontSize: 13, 
     color: colors.text.primary, 
@@ -134,12 +136,12 @@ const styles = StyleSheet.create({
     right: 0, 
     width: 15, 
     height: 15, 
-    backgroundColor: 'rgba(0,0,0,0.6)', 
+    backgroundColor: colors.overlay.heavy, 
     justifyContent: 'center', 
     alignItems: 'center' 
   },
   removeImageTextSmall: { 
-    color: '#FFF', 
+    color: colors.palette.white, 
     fontSize: 10, 
     fontWeight: 'bold' 
   },

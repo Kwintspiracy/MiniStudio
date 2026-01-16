@@ -4,12 +4,13 @@
  * Font families, sizes, weights, and predefined text styles.
  */
 import { Platform, TextStyle } from 'react-native';
+import { colors } from './colors';
 
 // Font families with platform fallbacks
 export const fontFamily = {
-    primary: Platform.OS === 'ios' ? 'SF Pro Display' : 'System',
-    secondary: Platform.OS === 'ios' ? 'SF Pro' : 'System',
-    text: Platform.OS === 'ios' ? 'SF Pro Text' : 'System',
+    primary: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto',
+    secondary: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto',
+    text: Platform.OS === 'ios' ? 'SF Pro Text' : 'Roboto',
 } as const;
 
 // Font sizes in pixels
@@ -46,7 +47,7 @@ export const textStyles = {
         fontWeight: fontWeight.bold,
         fontSize: fontSize['3xl'],
         letterSpacing: letterSpacing.tight,
-        color: '#F4F4F4',
+        color: colors.button.white,
     } as TextStyle,
 
     subheading: {
@@ -54,7 +55,7 @@ export const textStyles = {
         fontWeight: fontWeight.normal,
         fontSize: fontSize.base,
         letterSpacing: letterSpacing.wide,
-        color: 'rgba(244, 244, 244, 0.4)',
+        color: colors.text.muted,
     } as TextStyle,
 
     button: {
@@ -83,14 +84,14 @@ export const textStyles = {
         fontWeight: fontWeight.bold,
         fontSize: 12,
         letterSpacing: 0.5,
-        color: 'rgba(244, 244, 244, 0.4)',
+        color: colors.text.muted,
     } as TextStyle,
 
     body: {
         fontFamily: fontFamily.primary,
         fontWeight: fontWeight.normal,
         fontSize: fontSize.sm,
-        color: '#F4F4F4',
+        color: colors.button.white,
     } as TextStyle,
 
     caption: {
@@ -98,6 +99,6 @@ export const textStyles = {
         fontWeight: fontWeight.light,
         fontSize: fontSize.xs,
         letterSpacing: letterSpacing.tight,
-        color: '#F4F4F4',
+        color: colors.button.white,
     } as TextStyle,
 } as const;

@@ -9,8 +9,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import {
   XMarkIcon, RefreshIcon, ArrowsPointingOutIcon, DownloadIcon, CheckIcon,
-  AppTitleIcon, BiSolidUserCircleIcon, BiSolidUserCircle32Icon, ColorPaletteIcon as IoMdColorPaletteIcon,
-  BuildIcon, RiPaintFillIcon, AiFillFireIcon, DrawIcon, PaintIcon, MagicWandIcon, SculptIcon,
+  AppTitleIcon, BiSolidUserCircleIcon, BiSolidUserCircle32Icon,
+  BuildIcon, DrawIcon, PaintIcon, MagicWandIcon, SculptIcon,
   CameraLensIcon, CloseIcon,
   FileDownloadIcon as MdFileDownloadIcon, SpinnerIcon, TbProgressCheckIcon, ShareIcon, GalleryIcon
 } from '@/components/Icons';
@@ -18,7 +18,7 @@ import type { ImageFile, DesignerType, HistoryItem, StyleOption, StudioMode } fr
 import { sanitizePrompt } from '@/utils/sanitization';
 
 import { usePrompts } from '@/hooks/usePrompts';
-import { generatePaintedMiniature, generateImageFromImage, upscaleImage, cancelGeneration } from '@/services/geminiService';
+import { generatePaintedMiniature, generateImageFromImage, cancelGeneration } from '@/services/geminiService';
 import { fetchAllPaints, fetchUserPaints, PaletteColor } from '@/services/paintService';
 import { useImagePicker } from '@/hooks/useImagePicker';
 import { useMediaSave } from '@/hooks/useMediaSave';
@@ -31,13 +31,14 @@ import { ToggleButton } from '@/components/ToggleButton';
 import { SectionHeader } from '@/components/SectionHeader';
 import { ModeCardSelector } from '@/components/studio/ModeCardSelector';
 import { SourceContainer } from '@/components/studio/SourceContainer';
+import { OnboardingOverlay, TutorialStep } from '@/components/OnboardingOverlay';
 import { colors, spacing, borderRadius, fontFamily, textStyles } from '@/theme';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { shareAsync, isAvailableAsync } from 'expo-sharing';
 
 // Get screen dimensions
-// Get screen dimensions
+import { DEFAULT_DESIGNER_TEMPLATES, METALLIC_PAINT_INSTRUCTIONS } from '@/constants';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Dynamic Grid Calculation
@@ -116,10 +117,17 @@ export default function StudioScreen() {
   const { styles: paintStylesList, templates: designerTemplates, effects: effectPrompts, shareMessage, exampleAssets, loading: promptsLoading } = usePrompts();
 
   const [activeMode, setActiveMode] = useState<StudioMode>('paint');
-  const [selectedStyle, setSelectedStyle] = useState<StyleOption>(paintStylesList[0]);
+  const [selectedStyleId, setSelectedStyleId] = useState<string | null>(null);
+  
+  // Create derived selectedStyle based on the ID and the latest list
+  const selectedStyle = useMemo(() => {
+     return paintStylesList.find(s => s.id === selectedStyleId) || paintStylesList[0];
+  }, [selectedStyleId, paintStylesList]);
+
+  // Set initial selection once list loads
   useEffect(() => {
-    if (paintStylesList.length > 0 && !selectedStyle) {
-      setSelectedStyle(paintStylesList[0]);
+    if (paintStylesList.length > 0 && !selectedStyleId) {
+      setSelectedStyleId(paintStylesList[0].id);
     }
   }, [paintStylesList]);
   const [isNMMEnabled, setIsNMMEnabled] = useState(false);
@@ -173,13 +181,20 @@ export default function StudioScreen() {
   const [previewAspectRatio, setPreviewAspectRatio] = useState(1);
   const [generationHistory, setGenerationHistory] = useState<HistoryItem[]>([]);
   const [selectedColors, setSelectedColors] = useState<{ name: string, hex: string, finish?: string }[]>([]);
+  const [loadedPaints, setLoadedPaints] = useState<PaletteColor[]>([]);
+
 
   const [isLoading, setIsLoading] = useState(false);
-  const [isUpscaling, setIsUpscaling] = useState(false);
+
   const [isResultsDrawerOpen, setIsResultsDrawerOpen] = useState(false);
   const [isPaintExplorerOpen, setIsPaintExplorerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMyPaintsAlert, setShowMyPaintsAlert] = useState(false);
+  // Tutorial State
+  // Tutorial State
+  const [tutorialStep, setTutorialStep] = useState<TutorialStep>('checking');
+  const [targetLayout, setTargetLayout] = useState<{ x: number, y: number, width: number, height: number } | null>(null);
+  const targetRefs = useRef<{ [key: string]: View | null }>({});
 
   // Batch Deletion State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -214,7 +229,111 @@ export default function StudioScreen() {
         }
       }
     });
+
+    // Check onboarding status (V2)
+    const checkTutorial = async () => {
+        try {
+            // DEBUG: Force 'welcome' for testing (Reset by setting to false manually if needed)
+            const alwaysShow = false; 
+            const hasSeen = await AsyncStorage.getItem('has_seen_onboarding_v2');
+            
+            if (!hasSeen || alwaysShow) {
+                setTutorialStep('welcome');
+                // Ensure drawer is closed if starting tutorial
+                setIsResultsDrawerOpen(false);
+            } else {
+                setTutorialStep('idle');
+            }
+        } catch (e) {
+            setTutorialStep('idle');
+        }
+    };
+    checkTutorial();
+
   }, []);
+
+  const handleTutorialNext = () => {
+    if (tutorialStep === 'welcome') {
+      setTutorialStep('open_gallery');
+    }
+  };
+
+  const handleDismissTutorial = () => {
+    setTutorialStep('finished');
+    AsyncStorage.setItem('has_seen_onboarding_v2', 'true');
+  };
+
+  // Layout Capture Loop
+  useEffect(() => {
+    const measureTarget = () => {
+       const step = tutorialStep;
+       let targetKey = '';
+
+       if (step === 'open_gallery') targetKey = 'gallery_btn';
+       else if (step === 'select_demo_image') targetKey = 'demo_image';
+       else if (step === 'confirm_source') targetKey = 'use_source_btn';
+       else if (step === 'select_style_craftworld') targetKey = 'style_Craftworld Studio';
+       else if (step === 'enable_palette') targetKey = 'palette_toggle';
+       else if (step === 'select_brand_vallejo') targetKey = 'brand_Vallejo';
+       else if (step === 'toggle_pro') targetKey = 'pro_badge';
+       else if (step === 'generate') targetKey = 'create_btn';
+
+       if (targetKey && targetRefs.current[targetKey]) {
+          targetRefs.current[targetKey]?.measureInWindow((x, y, width, height) => {
+              setTargetLayout(prev => {
+                  if (prev && prev.x === x && prev.y === y && prev.width === width && prev.height === height) {
+                      return prev;
+                  }
+                  return { x, y, width, height };
+              });
+          });
+       } else {
+           setTargetLayout(prev => prev === null ? prev : null);
+       }
+    };
+
+    const timer = setInterval(measureTarget, 500); // Check every 500ms
+    return () => clearInterval(timer);
+  }, [tutorialStep, isResultsDrawerOpen]);
+
+  // Auto-Advance Logic
+  useEffect(() => {
+      // 1. Open Gallery
+      if (tutorialStep === 'open_gallery' && isResultsDrawerOpen) {
+          setTutorialStep('select_demo_image');
+      }
+      // 2. Select Demo Image (When preview updates and we are in gallery)
+      else if (tutorialStep === 'select_demo_image' && activePreviewImage) {
+          setTutorialStep('confirm_source');
+      }
+      // 3. Confirm Source (When gallery closes and we have source)
+      else if (tutorialStep === 'confirm_source' && !isResultsDrawerOpen && sourceImages.length > 0) {
+          // If the user already selected Craftworld, skip? Or force re-select? Let's just go to next.
+          setTutorialStep('select_style_craftworld');
+      }
+      // 4. Select Style (Craftworld)
+      else if (tutorialStep === 'select_style_craftworld' && selectedStyle?.name === 'Craftworld Studio') {
+           setTutorialStep('enable_palette');
+      }
+      // 5. Enable Palette
+      else if (tutorialStep === 'enable_palette' && isPaletteEnabled) {
+           setTutorialStep('select_brand_vallejo');
+      }
+      // 6. Select Vallejo
+      else if (tutorialStep === 'select_brand_vallejo' && selectedBrands.includes('Vallejo')) {
+           setTutorialStep('toggle_pro');
+      }
+      // 7. Toggle Pro
+      else if (tutorialStep === 'toggle_pro' && isPro) {
+           setTutorialStep('generate');
+      }
+      // 8. Generate (Loading starts)
+      else if (tutorialStep === 'generate' && isLoading) {
+           setTutorialStep('finished');
+           AsyncStorage.setItem('has_seen_onboarding_v2', 'true');
+      }
+
+  }, [tutorialStep, isResultsDrawerOpen, sourceImages, activePreviewImage, selectedStyle, isPaletteEnabled, selectedBrands, isPro, isLoading]);
 
   // Auto-scroll when palette is enabled
   useEffect(() => {
@@ -253,10 +372,11 @@ export default function StudioScreen() {
 
   // Auto-open Gallery drawer on fresh start when no source is selected
   useEffect(() => {
-    if (!authLoading && sourceImages.length === 0 && !activePreviewImage) {
+    // Only open gallery if onboarding is NOT visible (Modal conflict prevention)
+    if (!authLoading && sourceImages.length === 0 && !activePreviewImage && tutorialStep === 'idle') {
       setIsResultsDrawerOpen(true);
     }
-  }, [authLoading]);
+  }, [authLoading, tutorialStep]);
 
   // Persist generation history (user-generated only, excluding demos) whenever it changes
   useEffect(() => {
@@ -309,55 +429,166 @@ export default function StudioScreen() {
     try {
       let images: string[] = [];
       if (activeMode === 'paint' && sourceImages.length >= 1) {
-        const promptToUse = isPro ? (selectedStyle.promptPro || selectedStyle.prompt) : selectedStyle.prompt;
-        const sanitizedPainterPrompt = sanitizePrompt(painterPrompt);
-        const promptParts: string[] = [promptToUse, sanitizedPainterPrompt];
+        
+        // 1. STYLE SECTION
+        let finalStylePrompt = isPro ? (selectedStyle.promptPro || selectedStyle.prompt) : selectedStyle.prompt;
 
+        // 2. COLORS SECTION (Calculated first to inform Effects)
+        let standardColorsList: string[] = [];
+        let metallicColorsList: string[] = [];
+        
+        if (isPaletteEnabled) {
+          // Gather paints
+          let paintsToUse: { name: string, hex: string, finish?: string }[] = [];
+
+          if (selectedColors.length > 0) {
+            paintsToUse = selectedColors;
+          } else if (selectedBrands.length > 0 && loadedPaints.length > 0) {
+             // ... (Existing filtering logic)
+             const normalizedBrands = selectedBrands.map(b => b.toLowerCase().trim());
+             const includesMyPaints = normalizedBrands.includes('my paints');
+             
+             const brandPaints = loadedPaints.filter((p: any) => {
+               const isUserPaint = p._isUserPaint === true;
+               if (isUserPaint) return includesMyPaints;
+               const paintBrand = (p.brand?.trim() || 'Unknown').toLowerCase();
+               return normalizedBrands.some(b => b !== 'my paints' && paintBrand === b);
+             }).filter(p => {
+               const nameLower = p.name.toLowerCase();
+               return !nameLower.includes('cleaner') && 
+                      !nameLower.includes('thinner') && 
+                      !nameLower.includes('reducer') && 
+                      !nameLower.includes('flow improver');
+             });
+             
+             paintsToUse = brandPaints.map(p => ({
+                 name: p.name,
+                 hex: p.hex,
+                 finish: p.finish // Assuming loadedPaints includes finish info, otherwise defaults
+             }));
+          }
+          
+          if (paintsToUse.length > 0) {
+              standardColorsList = paintsToUse
+                .filter(c => c.finish !== 'Metallic')
+                .map(c => `${c.name}: ${c.hex}`);
+              
+              metallicColorsList = paintsToUse
+                .filter(c => c.finish === 'Metallic')
+                .map(c => `${c.name}: ${c.hex}`);
+          }
+        }
+        
+        // 3. EFFECTS SECTION
+        const effectsParts: string[] = [];
+        
         const nmmEffect = effectPrompts['effect.nmm'];
-        if (isNMMEnabled && nmmEffect) {
-          promptParts.push(isPro ? nmmEffect.pro : nmmEffect.default);
-        } else if (nmmEffect) {
-          // Negative Prompts
-          const neg = isPro ? nmmEffect.negative_pro : nmmEffect.negative_default;
-          if (neg) promptParts.push(neg);
+        if (isNMMEnabled) {
+           if (metallicColorsList.length > 0) {
+              // Mixed Mode: NMM enabled but user picked metallic paints
+              const mixedEffect = effectPrompts['effect.nmm.mixed'];
+              if (mixedEffect) {
+                  effectsParts.push(isPro ? mixedEffect.pro : mixedEffect.default);
+              }
+           } else if (nmmEffect) {
+              // Standard NMM
+              effectsParts.push(isPro ? nmmEffect.pro : nmmEffect.default);
+           }
+        } else {
+          // Default TMM / Metallic Instructions (User requested this as the "Default Effect")
+          // Logic: If NMM is NOT enabled, we supply the TMM instructions.
+          // Check if we have a remote "negative" template for NMM (which serves as the "NMM OFF" instruction)
+          if (nmmEffect && (isPro ? nmmEffect.negative_pro : nmmEffect.negative_default)) {
+              effectsParts.push(isPro ? nmmEffect.negative_pro! : nmmEffect.negative_default!);
+          } else {
+              effectsParts.push(METALLIC_PAINT_INSTRUCTIONS);
+          }
         }
 
         const oslEffect = effectPrompts['effect.osl'];
         if (isOSLEnabled && oslEffect) {
-          promptParts.push(isPro ? oslEffect.pro : oslEffect.default);
-        } else if (oslEffect) {
-          // Negative Prompts
-          const neg = isPro ? oslEffect.negative_pro : oslEffect.negative_default;
-          if (neg) promptParts.push(neg);
+          effectsParts.push(isPro ? oslEffect.pro : oslEffect.default);
         }
-        if (isPaletteEnabled) {
-          if (selectedColors.length > 0) {
-            promptParts.push(`strictly using this color palette: ${selectedColors.map(c => {
-              let name = c.name;
-              if (c.finish === 'Metallic') {
-                name = `${name} (Metallic)`;
-              }
-              return `${name} (${c.hex})`;
-            }).join(', ')}`);
-          } else if (selectedBrands.length > 0) {
-            promptParts.push(`using paints from these brands: ${selectedBrands.join(', ')}`);
-          }
+        
+        // Photoshoot effect (if applicable to Paint mode, though usually for Designer)
+        if (isPhotoshootEnabled) {
+             const photoEffect = effectPrompts['effect.photoshoot'];
+             if (photoEffect) effectsParts.push(isPro ? photoEffect.pro : photoEffect.default);
         }
-        promptParts.push("GENERATE THE IMAGE NOW. Do not output conversational text.");
-        const finalPrompt = promptParts.filter(Boolean).join(' ');
+        
+        // --- ASSEMBLY ---
+        
+        // Handle {{METALLIC_PALETTE}} Tag
+        let metallicBlock = "";
+        if (metallicColorsList.length > 0) {
+             metallicBlock = "Metallic Paints (Render with TMM pigment texture based on these hues):\n" + metallicColorsList.join(', ');
+        }
+
+        if (finalStylePrompt.includes('{{METALLIC_PALETTE}}')) {
+             // Inject into style prompt
+             finalStylePrompt = finalStylePrompt.replace('{{METALLIC_PALETTE}}', metallicBlock);
+             metallicBlock = ""; // Clear so it doesn't get added to [Colors]
+        }
+
+        const promptParts: string[] = [];
+        
+        // [Style Prompt Details]
+        promptParts.push("[Style Prompt Details]");
+        promptParts.push(finalStylePrompt);
+        
+        // [Colors] (Only if we have content)
+        if (standardColorsList.length > 0 || metallicBlock.length > 0 || (!isPaletteEnabled && selectedBrands.length > 0)) {
+            promptParts.push("[Colors]");
+            
+            if (isPaletteEnabled) {
+                promptParts.push("STRICT COLOR PALETTE:");
+                if (standardColorsList.length > 0) {
+                    promptParts.push("Standard Colors:");
+                    promptParts.push(standardColorsList.join(', '));
+                }
+                if (metallicBlock.length > 0) {
+                    promptParts.push(metallicBlock);
+                }
+            } else if (selectedBrands.length > 0) {
+                promptParts.push(`using paints from these brands: ${selectedBrands.join(', ')}`);
+            }
+        }
+
+        // [Effects]
+        if (effectsParts.length > 0) {
+            promptParts.push("[Effects]");
+            promptParts.push(effectsParts.join('\n'));
+        }
+
+        // Sanitized User Prompt
+        const sanitizedPainterPrompt = sanitizePrompt(painterPrompt);
+        if (sanitizedPainterPrompt) {
+            // Where does the user input go? Usually interleaved, but here structure is strict.
+            // Putting it after style prompt? Or just appending at end?
+            // "We need to review the way prompts are generated... The color palette template need to look like this..."
+            // I'll append it to Style for now, or maybe as a separate block? 
+            // In the previous logic it was just joined. 
+            // I'll append it to the [Style Prompt Details] block for context.
+            promptParts.splice(2, 0, sanitizedPainterPrompt); 
+        }
+
+        const finalPrompt = promptParts.join('\n\n');
         console.log(finalPrompt);
+        
         images = await generatePaintedMiniature(sourceImages, finalPrompt, 1, model);
       } else if (activeMode === 'sketch' || activeMode === 'sculpt') {
         const characterDesc = sanitizePrompt(designerPrompt).trim() || 'character';
-        const typeToUse = sourceImages.length > 1 ? 'combined' : activeMode;
-        const templateConfig = designerTemplates[typeToUse];
-        let template = isPro ? templateConfig.pro : templateConfig.default;
-
-        if (isPhotoshootEnabled) {
-            const photoEffect = effectPrompts['effect.photoshoot'];
-            if (photoEffect) {
-                template += ` ${isPro ? photoEffect.pro : photoEffect.default}`;
-            }
+        
+        let template: string;
+        if (isPhotoshootEnabled && designerTemplates['pro-shot']) {
+            // Use pro-shot template when Photoshoot is enabled
+            const proShotConfig = designerTemplates['pro-shot'];
+            template = isPro ? proShotConfig.pro : proShotConfig.default;
+        } else {
+            // Use the mode-specific template (sketch or sculpt)
+            const typeToUse = sourceImages.length > 1 ? 'combined' : activeMode;
+            const templateConfig = designerTemplates[typeToUse];
+            template = isPro ? templateConfig.pro : templateConfig.default;
         }
 
         const prompt = template.replace(/{input}/g, characterDesc);
@@ -375,7 +606,7 @@ export default function StudioScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [sourceImages, activeMode, designerPrompt, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPhotoshootEnabled, isPaletteEnabled, selectedColors, selectedBrands]);
+  }, [sourceImages, activeMode, designerPrompt, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPhotoshootEnabled, isPaletteEnabled, selectedColors, selectedBrands, loadedPaints]);
 
   // Handle dynamic aspect ratio for the preview image
   useEffect(() => {
@@ -396,20 +627,7 @@ export default function StudioScreen() {
     setIsLoading(false);
   }, []);
 
-  const handleUpscale = useCallback(async () => {
-    if (!activePreviewImage) return;
-    setIsUpscaling(true);
-    const model = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-    try {
-      const upscaled = await upscaleImage({ base64: activePreviewImage, mimeType: 'image/png' }, model);
-      setActivePreviewImage(upscaled);
-      setGenerationHistory(prev => prev.map(item => item.url === activePreviewImage ? { ...item, url: upscaled, isMaster: true } : item));
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsUpscaling(false);
-    }
-  }, [activePreviewImage, isPro]);
+
 
   const handleDownload = useCallback(async () => {
     if (!activePreviewImage) return;
@@ -578,9 +796,6 @@ export default function StudioScreen() {
   const hasContentToView = hasImageLoaded || generationHistory.length > 0 || exampleAssets.length > 0;
 
   // paintStylesList is now coming from the hook
-
-  // paintStylesList is now coming from the hook
-
   const brandTabs = ['My Paints', 'Army Painter', 'Citadel Colour', 'Scale75', 'Duncan', 'Vallejo'];
 
 
@@ -589,11 +804,23 @@ export default function StudioScreen() {
     <View style={styles.screenContainer}>
       <View style={[styles.statusBarBackground, { height: insets.top }]} />
       <StatusBar barStyle="light-content" backgroundColor="#12121F" />
+      
+      {/* Global Onboarding Overlay (Root Level for correct coordinates) */}
+      <OnboardingOverlay 
+          step={tutorialStep} 
+          onNext={handleTutorialNext} 
+          targetLayout={targetLayout} 
+      />
+
       <View style={styles.container}>
 
         {/* Top Navigation */}
         <View style={styles.topNav}>
-          <View style={styles.topNavLeft}>
+          <View 
+            style={styles.topNavLeft}
+            ref={view => { targetRefs.current['pro_badge'] = view; }}
+            collapsable={false}
+          >
             <ModeBadge isAdvanced={isPro} onToggle={handleProToggle} />
 
           </View>
@@ -636,7 +863,7 @@ export default function StudioScreen() {
                 <>
                   <View style={styles.paintStepSection}>
                     <SectionHeader 
-                      icon={<AiFillFireIcon color="#C16549" size={16} />}
+                      icon={<SectionAccent />}
                       title="ADD EFFECTS"
                     />
                     <TouchableOpacity style={styles.optionItem} onPress={() => setIsPhotoshootEnabled(!isPhotoshootEnabled)} activeOpacity={0.7}>
@@ -649,14 +876,19 @@ export default function StudioScreen() {
                 <>
                   <View style={styles.paintStepSection}>
                     <SectionHeader 
-                      icon={<RiPaintFillIcon color="#49C171" size={16} />}
+                      icon={<SectionAccent />}
                       title="CHOOSE A STYLE"
                     />
-                    <View style={styles.styleGrid}>
+                    <View 
+                       style={styles.styleGrid}
+                       ref={view => { targetRefs.current['style_selector'] = view; }}
+                       collapsable={false}
+                    >
                       {paintStylesList.map((style) => (
                         <TouchableOpacity
                           key={style.id}
-                          onPress={() => setSelectedStyle(paintStylesList.find(s => s.id === style.id) || paintStylesList[0])}
+                          ref={view => { if (style.name === 'Craftworld Studio') targetRefs.current['style_Craftworld Studio'] = view; }}
+                          onPress={() => setSelectedStyleId(style.id)}
                           style={[styles.unifiedOptionButton, selectedStyle?.id === style.id && styles.unifiedOptionButtonActive]}
                           accessibilityRole="button"
                           accessibilityLabel={`Style: ${style.name}`}
@@ -672,7 +904,7 @@ export default function StudioScreen() {
 
                   <View style={styles.paintStepSection}>
                     <SectionHeader 
-                      icon={<AiFillFireIcon color="#C16549" size={16} />}
+                      icon={<SectionAccent />}
                       title="ADD EFFECTS"
                     />
                     <TouchableOpacity style={styles.optionItem} onPress={() => setIsNMMEnabled(!isNMMEnabled)} activeOpacity={0.7}>
@@ -685,16 +917,23 @@ export default function StudioScreen() {
                     </TouchableOpacity>
 
                     <SectionHeader 
-                      icon={<IoMdColorPaletteIcon color="#BF49C1" size={16} />}
+                      icon={<SectionAccent />}
                       title="COLOR PALETTE"
                     />
-                    <TouchableOpacity style={styles.optionItem} onPress={() => setIsPaletteEnabled(!isPaletteEnabled)} activeOpacity={0.7}>
+                    <TouchableOpacity 
+                        style={styles.optionItem} 
+                        onPress={() => setIsPaletteEnabled(!isPaletteEnabled)} 
+                        activeOpacity={0.7}
+                        ref={view => { targetRefs.current['palette_toggle'] = view; }}
+                    >
                       <Text style={[styles.optionLabel, isPaletteEnabled && styles.optionLabelActive]}>Choose from Brands and Paints</Text>
                       <ToggleButton value={isPaletteEnabled} onToggle={() => setIsPaletteEnabled(!isPaletteEnabled)} />
                     </TouchableOpacity>
 
                     {isPaletteEnabled && (
                       <>
+
+
                         {/* Brand Selection Tabs */}
                         <View style={styles.brandTabs}>
                           {brandTabs.map((brand) => {
@@ -704,6 +943,7 @@ export default function StudioScreen() {
                                 key={brand}
                                 onPress={() => handleToggleBrand(brand)}
                                 style={[styles.unifiedOptionButton, isSelected && styles.unifiedOptionButtonActive]}
+                                ref={view => { if (brand === 'Vallejo') targetRefs.current['brand_Vallejo'] = view; }}
                               >
                                 {brand === 'My Paints' && <BiSolidUserCircleIcon size={16} color={isSelected ? '#1D1D1D' : '#F4F4F4'} opacity={1} />}
                                 <Text style={[styles.unifiedOptionText, isSelected && styles.unifiedOptionTextActive]}>{brand}</Text>
@@ -783,6 +1023,10 @@ export default function StudioScreen() {
         {/* Fixed bottom buttons - don't move with keyboard */}
         <View style={[styles.footerContainer, { paddingBottom: Platform.OS === 'android' ? 30 + insets.bottom : insets.bottom + 16 }, !hasImageLoaded && { paddingTop: 32 }]}>
           <View style={styles.bottomButtonsRow}>
+            <View 
+                ref={view => { targetRefs.current['gallery_btn'] = view; }}
+                collapsable={false}
+            >
             <TouchableOpacity
               style={styles.galleryButton}
               onPress={() => setIsResultsDrawerOpen(true)}
@@ -794,6 +1038,12 @@ export default function StudioScreen() {
               <GalleryIcon color="#F4F4F4" />
               <Text style={styles.galleryButtonText}>Gallery</Text>
             </TouchableOpacity>
+            </View>
+            <View 
+                ref={view => { targetRefs.current['create_btn'] = view; }}
+                collapsable={false}
+                style={{ flex: 1 }} // Ensure it takes available space in the row
+            >
             <TouchableOpacity
               style={[styles.createButton, !isPro && styles.createButtonBasic, !hasImageLoaded && styles.buttonDisabled, isLoading && styles.cancelButton]}
               onPress={isLoading ? handleCancelGeneration : handleGenerate}
@@ -809,6 +1059,7 @@ export default function StudioScreen() {
                 <Text style={[styles.createButtonText, isPro && styles.createButtonTextPro, isLoading && styles.cancelButtonText]}>{isLoading ? 'Cancel' : `Create (${isPro ? '2 Tokens' : '1 Token'})`}</Text>
               </View>
             </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -835,7 +1086,15 @@ export default function StudioScreen() {
                 <View style={[styles.resultContainer, { marginBottom: 24 }]}>
                   <Image source={{ uri: activePreviewImage }} style={[styles.activeResultImage, { aspectRatio: previewAspectRatio }]} resizeMode="cover" />
                   <View style={styles.resultActions}>
-                    <TouchableOpacity onPress={handleUseAsSource} style={[styles.resultActionButton, styles.resultActionButtonPrimary]} accessibilityLabel="Use as source image" accessibilityRole="button"><Text style={[styles.resultActionText, styles.resultActionTextDark]}>Use as source</Text></TouchableOpacity>
+                    <TouchableOpacity 
+                        onPress={handleUseAsSource} 
+                        style={[styles.resultActionButton, styles.resultActionButtonPrimary]} 
+                        accessibilityLabel="Use as source image" 
+                        accessibilityRole="button"
+                        ref={view => { targetRefs.current['use_source_btn'] = view; }}
+                    >
+                        <Text style={[styles.resultActionText, styles.resultActionTextDark]}>Use as source</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={handleDownload} style={styles.resultActionButtonIcon} accessibilityLabel="Download image" accessibilityRole="button"><MdFileDownloadIcon color="#F4F4F4" /></TouchableOpacity>
                     <TouchableOpacity onPress={handleShare} style={styles.resultActionButtonIcon} accessibilityLabel="Share image" accessibilityRole="button"><ShareIcon color="#F4F4F4" /></TouchableOpacity>
                   </View>
@@ -858,6 +1117,7 @@ export default function StudioScreen() {
                   return (
                     <TouchableOpacity 
                       key={i} 
+                      ref={view => { if (i === 0) targetRefs.current['demo_image'] = view; }}
                       style={[
                         styles.historyItem, 
                         activePreviewImage === item.url && !isSelectionMode && styles.historyItemActive,
@@ -877,6 +1137,17 @@ export default function StudioScreen() {
                       activeOpacity={0.7}
                     >
                       <Image source={{ uri: item.url }} style={[styles.historyImage, isSelected && { opacity: 0.7 }]} />
+                      
+                      {/* Mode Indicator Dot */}
+                      {!isSelectionMode && (
+                        <View style={styles.modeIndicatorDot}>
+                          <View style={[
+                            styles.modeDot,
+                            { backgroundColor: item.isPro ? '#FF682C' : '#2C59FF' }
+                          ]} />
+                        </View>
+                      )}
+                      
                       {isSelectionMode && (
                         <View style={styles.selectionOverlay}>
                           <View style={[styles.selectionCheck, isSelected ? styles.selectionCheckActive : styles.selectionCheckInactive]}>
@@ -889,6 +1160,12 @@ export default function StudioScreen() {
                 })}
               </View></View>
             </ScrollView>
+             {/* RENDER ONBOARDING OVERLAY INSIDE MODAL TO COVER IT */}
+             <OnboardingOverlay 
+                step={tutorialStep} 
+                onNext={handleTutorialNext} 
+                targetLayout={targetLayout} 
+             />
           </SafeAreaView>
         </Modal>
 
@@ -901,6 +1178,7 @@ export default function StudioScreen() {
           selectedColors={selectedColors}
           onToggleColor={toggleColor}
           triggerLoad={isPaletteEnabled}
+          onPaintsLoaded={setLoadedPaints}
         />
         
         <AppModal
@@ -913,6 +1191,7 @@ export default function StudioScreen() {
             onPress: () => setShowMyPaintsAlert(false)
           }}
         />
+
       </View>
     </View>
   );
@@ -1057,6 +1336,8 @@ const styles = StyleSheet.create({
   selectionCheckActive: { backgroundColor: colors.button.primary, borderColor: colors.button.primary },
   selectionCheckInactive: { backgroundColor: 'rgba(0,0,0,0.3)' },
   historyImage: { width: '100%', height: '100%' },
+  modeIndicatorDot: { position: 'absolute', top: 6, right: 6, zIndex: 1 },
+  modeDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.3)' },
   // FTUE Bottom Sheet
   ftueSheetContent: { flex: 1, backgroundColor: colors.background.secondary },
 });

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import Constants from 'expo-constants';
 import type { ImageFile } from '../types';
 
 let abortController: AbortController | null = null;
@@ -37,6 +38,14 @@ export async function generatePaintedMiniature(
 
     console.log("[Gemini Proxy] Sending request to Supabase Edge Function...");
     console.log(`[Gemini Proxy] Model: ${model}, Prompt Length: ${prompt.length}, Has Image: ${!!baseImagePayload}`);
+    
+    if (baseImagePayload && baseImagePayload.data) {
+        const payloadSizeMB = baseImagePayload.data.length / 1024 / 1024;
+        console.log(`[Gemini Proxy] Image Payload Size: ${payloadSizeMB.toFixed(2)} MB`);
+        if (payloadSizeMB > 6) {
+             console.warn("[Gemini Proxy] WARNING: Image payload > 6MB. May cause network failure.");
+        }
+    }
 
     // Get current session to ensure we pass the fresh token
     const { data: { session } } = await supabase.auth.getSession();
@@ -47,46 +56,84 @@ export async function generatePaintedMiniature(
     }
 
     // Call Supabase Edge Function with explicit Auth header
-    const { data, error } = await supabase.functions.invoke('generate-miniature', {
-        body: {
-            prompt,
-            baseImage: baseImagePayload,
-            model,
-            action: 'generate'
-        },
-        headers: {
-            Authorization: `Bearer ${token}`
+    console.log(`[Gemini Proxy] Signal State before invoke: aborted=${abortController.signal.aborted}`);
+    
+    // Explicitly check if we are already aborted
+    if (abortController.signal.aborted) {
+        throw new Error("Request was aborted before it could start.");
+    }
+    
+    // Construct URL for Edge Function
+    // Fallback to project ID based URL if custom domain not set, but typical usage is via Supabase client URL
+    // Actually, we can retrieve the functions URL from the supabase client internal config, but let's use the explicit one from constants
+    // A safer way consistent with supabase-js is:
+    const functionUrl = `${Constants.expoConfig?.extra?.supabaseUrl}/functions/v1/generate-miniature`;
+
+    try {
+        const response = await fetch(functionUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                prompt,
+                baseImage: baseImagePayload,
+                model,
+                action: 'generate'
+            }),
+            signal: abortController.signal
+        });
+
+        if (!response.ok) {
+           const text = await response.text();
+           let errorJson;
+           try { errorJson = JSON.parse(text); } catch (e) {}
+           
+           throw new Error(errorJson?.error || errorJson?.message || `Server error: ${response.status}`);
         }
-    });
 
-    console.log("[Gemini Proxy] Response received:", JSON.stringify({
-        hasError: !!error,
-        errorMsg: error?.message,
-        hasData: !!data,
-        dataError: data?.error,
-        hasOutput: !!data?.output,
-        outputLength: data?.output?.length
-    }));
+        const data = await response.json();
+        
+        // Post-request cancellation check (just in case race condition)
+        if (abortController.signal.aborted) {
+             throw new Error("Request cancelled by user.");
+        }
 
-    if (error) {
-        console.error("Edge Function Network/Server Error:", error);
-        throw new Error(error.message || "Failed to connect to the AI service. Please check your connection.");
+        console.log("[Gemini Proxy] Response received");
+
+        if (data?.error) {
+            console.error("Edge Function Logic Error:", data.error);
+            throw new Error(data.error);
+        }
+
+        // The Edge Function returns { output: "base64..." or "text..." }
+        const result = data.output;
+        if (result) {
+            return [result.startsWith('data:') ? result : `data:image/png;base64,${result}`];
+        }
+        
+        console.warn("[Gemini Proxy] No output in response");
+        return [];
+
+    } catch (error: any) {
+        if (error.name === 'AbortError' || error.message === 'Aborted' || error.message.includes('cancelled')) {
+             console.log("[Gemini Proxy] Request successfully aborted.");
+             throw new Error("Request cancelled by user.");
+        }
+        
+        console.error("Gemini Proxy Error:", error);
+        let errorMessage = error.message || "Failed to connect to the AI service.";
+        
+        if (errorMessage.includes("Network request failed") || errorMessage.includes("fetch")) {
+             if (baseImagePayload && baseImagePayload.data.length > 5 * 1024 * 1024) {
+                 errorMessage += " The source image might be too large.";
+             } else {
+                 errorMessage += " Please check your internet connection.";
+             }
+        }
+        throw new Error(errorMessage);
     }
-
-    if (data?.error) {
-        console.error("Edge Function Logic Error:", data.error);
-        throw new Error(data.error);
-    }
-
-    // The Edge Function returns { output: "base64..." or "text..." }
-    const result = data.output;
-
-    if (result) {
-        return [result.startsWith('data:') ? result : `data:image/png;base64,${result}`];
-    }
-
-    console.warn("[Gemini Proxy] No output in response");
-    return [];
 }
 
 export async function generateImageFromImage(
@@ -97,39 +144,4 @@ export async function generateImageFromImage(
     return generatePaintedMiniature(baseImages, prompt, 1, model);
 }
 
-export async function upscaleImage(
-    baseImage: ImageFile,
-    model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview' = 'gemini-2.5-flash-image'
-): Promise<string> {
-    const baseImagePayload = prepareImagePayload(baseImage);
 
-    abortController = new AbortController();
-
-    console.log("[Gemini Proxy] Upscale request...");
-
-    // Get current session to ensure we pass the fresh token
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-
-    const { data, error } = await supabase.functions.invoke('generate-miniature', {
-        body: {
-            prompt: "Upscale this image",
-            baseImage: baseImagePayload,
-            model,
-            action: 'upscale'
-        },
-        headers: {
-            Authorization: `Bearer ${token}`
-        }
-    });
-
-    console.log("[Gemini Proxy] Upscale response:", { hasError: !!error, hasOutput: !!data?.output });
-
-    if (error) throw new Error(error.message);
-    if (data?.error) throw new Error(data.error);
-
-    const result = data.output;
-    if (!result) throw new Error("Upscale failed to return data.");
-
-    return result.startsWith('data:') ? result : `data:image/png;base64,${result}`;
-}

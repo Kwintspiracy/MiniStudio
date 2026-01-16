@@ -1,12 +1,19 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet, Platform } from 'react-native';
-import { colors } from '@/theme';
+import { View, Text, TouchableOpacity, Image, StyleSheet, Platform, Dimensions } from 'react-native';
+import { colors, fontFamily } from '@/theme';
 import type { StudioMode } from '@/types';
 
 // Mode card images
 const ImageSketch = require('../../../assets/ImageSketch.png');
 const ImageSculpt = require('../../../assets/ImageSculpt.png');
 const ImagePaint = require('../../../assets/ImagePaint.png');
+
+// Dynamic spacing based on screen width
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const cardGap = SCREEN_WIDTH > 380 ? 8 : SCREEN_WIDTH > 350 ? 4 : 2;
+const iconTextGap = SCREEN_WIDTH > 380 ? -4 : SCREEN_WIDTH > 350 ? -6 : -8;
+const titleFontSize = SCREEN_WIDTH > 380 ? 16 : 14;
+const subtitleFontSize = SCREEN_WIDTH > 380 ? 12 : 11;
 
 interface ModeCardSelectorProps {
   activeMode: StudioMode;
@@ -53,9 +60,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'stretch', 
-    gap: 8, 
+    gap: cardGap, 
     paddingHorizontal: 16, 
-    paddingVertical: 12, 
+    paddingTop: 12, 
+    paddingBottom: 16,
     backgroundColor: 'transparent' 
   },
   modeCard: { 
@@ -71,7 +79,7 @@ const styles = StyleSheet.create({
   modeCardContent: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    gap: -4 
+    gap: iconTextGap 
   },
   modeCardImage: { 
     width: 50, 
@@ -83,20 +91,20 @@ const styles = StyleSheet.create({
     height: 30 
   },
   modeCardTitle: { 
-    fontFamily: Platform.OS === 'ios' ? 'Sarabun' : 'System', 
+    fontFamily: fontFamily.primary, 
     fontWeight: '800', 
-    fontSize: 16, 
-    lineHeight: 16, 
+    fontSize: titleFontSize, 
+    lineHeight: titleFontSize, 
     color: colors.accent.red 
   },
   modeCardTitleActive: { 
     color: colors.text.red 
   },
   modeCardSubtitle: { 
-    fontFamily: Platform.OS === 'ios' ? 'Sarabun' : 'System', 
+    fontFamily: fontFamily.primary, 
     fontWeight: '500', 
-    fontSize: 12, 
-    lineHeight: 14, 
+    fontSize: subtitleFontSize, 
+    lineHeight: subtitleFontSize + 2, 
     color: colors.text.primary 
   },
   modeCardSubtitleActive: { 

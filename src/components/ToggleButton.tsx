@@ -32,7 +32,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   toggleOff: {
-    backgroundColor: colors.background.tertiary,
+    backgroundColor: colors.background.secondary,
     alignItems: 'flex-start',
   },
   toggleCircle: {
@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   toggleCircleActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.palette.white,
   },
   toggleCircleInactive: {
     backgroundColor: colors.text.secondary,

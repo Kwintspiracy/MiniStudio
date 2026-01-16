@@ -1,10 +1,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.21.0'
 
+// SEC-002: Environment-based CORS origins (no wildcard in production)
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") || "").split(",").filter(Boolean);
 const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS[0] : '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
 
 Deno.serve(async (req) => {
     // Handle CORS
@@ -22,6 +25,13 @@ Deno.serve(async (req) => {
             // Create client with Auth context execution
             { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
         )
+
+        // Initialize abort tracking
+        let isAborted = false;
+        req.signal.addEventListener('abort', () => {
+            console.log(`[Edge] Abort signal received via listener.`);
+            isAborted = true;
+        });
 
         const authHeader = req.headers.get('Authorization');
         console.log(`[Edge] Incoming Auth Header: ${authHeader ? (authHeader.substring(0, 15) + '...') : 'MISSING'}`);
@@ -99,7 +109,7 @@ Deno.serve(async (req) => {
             // baseImage is expected to be { mimeType: '...', data: 'base64...' }
             parts.push({ inlineData: { mimeType: baseImage.mimeType, data: baseImage.data } })
         }
-        parts.push({ text: prompt })
+        parts.push({ text: prompt + "\n\nIMPORTANT: Return ONLY the generated image. Do not include any text, chat, or explanations." })
 
         let result;
         try {
@@ -147,17 +157,27 @@ Deno.serve(async (req) => {
         }
 
         // 6. Log Usage (Deduct User Token)
-        try {
-            await supabaseClient
-                .from('generation_logs')
-                .insert({
-                    user_id: user.id,
-                    model_used: targetModel,
-                    cost_units: 1,
-                    action_type: action || 'generate'
-                });
-        } catch (logError) {
-            console.error("[Edge] Logging Error:", logError);
+        // Give the signal a moment to update if the client just disconnected
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        console.log(`[Edge] Abort Status - Listener: ${isAborted}, Signal: ${req.signal.aborted}`);
+
+        if (!isAborted && !req.signal.aborted) {
+            try {
+                await supabaseClient
+                    .from('generation_logs')
+                    .insert({
+                        user_id: user.id,
+                        model_used: targetModel,
+                        cost_units: 1,
+                        action_type: action || 'generate'
+                    });
+            } catch (logError) {
+                console.error("[Edge] Logging Error:", logError);
+            }
+        } else {
+            console.log("[Edge] Request aborted by client. Skipping token deduction.");
+            // If aborted, we could technically just return or throw, but we'll let it finish cleanly
         }
 
         return new Response(JSON.stringify({ output: generatedData }), {
