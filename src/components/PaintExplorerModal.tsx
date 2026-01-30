@@ -131,6 +131,7 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
         }
 
         const normalizedSelectedBrands = selectedBrands.map(b => b.toLowerCase().trim());
+        if (normalizedSelectedBrands.includes('all brands')) return dbColors; // Handle "All Brands" selection
         const hasSelection = normalizedSelectedBrands.length > 0;
 
         return dbColors.filter((c) => {
@@ -139,14 +140,14 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
 
             if (!hasSelection) return true;
 
-            const includesMyPaints = normalizedSelectedBrands.includes('my paints');
+            const includesMyPaints = normalizedSelectedBrands.includes('my collection');
 
             if (isUserPaint) {
                 return includesMyPaints;
             }
 
             const paintBrand = (c.brand?.trim() || 'Unknown').toLowerCase();
-            return normalizedSelectedBrands.some(selected => selected !== 'my paints' && paintBrand === selected);
+            return normalizedSelectedBrands.some(selected => selected !== 'my collection' && paintBrand === selected);
         });
     }, [dbColors, selectedBrands]);
 
@@ -276,7 +277,7 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
                             <View style={styles.emptyContainer}>
                                 <Text style={styles.emptyTitle}>No paints found</Text>
                                 <Text style={styles.emptySubtitle}>
-                                    {selectedBrands.includes('My Paints') && selectedBrands.length === 1
+                                    {selectedBrands.includes('My Collection') && selectedBrands.length === 1
                                         ? 'Download MiniPainterDB to track your paint collection.'
                                         : 'No paints available for these brands.'}
                                 </Text>
@@ -315,7 +316,7 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
 const styles = StyleSheet.create({
     modalContainer: {
         flex: 1,
-        backgroundColor: colors.background.settingsFooter,
+        backgroundColor: colors.background.secondary,
     },
     grabberContainer: {
         width: '100%',

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { EyeIcon, EyeSlashIcon } from '../src/components/Icons';
 import {
   View,
   Text,
@@ -17,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../src/context/AuthContext';
 import { colors, fontFamily } from '../src/theme';
+import { AppModal } from '../src/components/AppModal';
 
 // Google Icon Component
 const GoogleIcon = ({ size = 15 }: { size?: number }) => (
@@ -40,12 +42,37 @@ const AppleIcon = ({ size = 16, color = colors.palette.white }: { size?: number;
 );
 
 export default function SignInScreen() {
-  const { session, loading, signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
+  const { session, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, resendConfirmationEmail, resetPasswordForEmail } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasNavigated = useRef(false);
+
+  // Modal State
+  const [modalConfig, setModalConfig] = useState<{
+      visible: boolean;
+      title: string;
+      message: string;
+      type?: 'default' | 'error' | 'critical';
+      primaryAction?: { label: string; onPress: () => void };
+      secondaryAction?: { label: string; onPress: () => void };
+  }>({ visible: false, title: '', message: '' });
+  
+  const showModal = (
+      title: string, 
+      message: string, 
+      type: 'default' | 'error' | 'critical' = 'default',
+      primaryAction?: { label: string; onPress: () => void },
+      secondaryAction?: { label: string; onPress: () => void }
+  ) => {
+      setModalConfig({ visible: true, title, message, type, primaryAction, secondaryAction });
+  };
+  
+  const hideModal = () => {
+      setModalConfig(prev => ({ ...prev, visible: false }));
+  };
 
   // Monitor Session and navigate appropriately
   useEffect(() => {
@@ -71,6 +98,14 @@ export default function SignInScreen() {
     }
   };
 
+  const handleResendEmail = async () => {
+     if (!email) return;
+     // Don't clear error, just do action
+     setIsSubmitting(true);
+     await resendConfirmationEmail(email);
+     setIsSubmitting(false);
+  };
+
   const handleCreateAccount = async () => {
     if (!email || !password) {
       setError('Please fill in all fields');
@@ -80,6 +115,18 @@ export default function SignInScreen() {
     setIsSubmitting(true);
     try {
       await signUpWithEmail(email, password);
+      // If we get here without error, and no session is set (handled by useEffect), 
+      // it likely means email confirmation is required.
+      if (!session) {
+         // Use a more visible alert for this critical step
+         showModal(
+           "Account Created", 
+           "We've sent a confirmation email to " + email + ". (Note: If this email is already registered, you may not receive a new confirmation link).",
+           'default',
+           { label: "OK", onPress: hideModal }
+         );
+         setError(null);
+      }
     } catch (err: any) {
       setError(err.message || 'Account creation failed');
     } finally {
@@ -87,8 +134,17 @@ export default function SignInScreen() {
     }
   };
 
-  const handleForgotPassword = () => {
-    Linking.openURL('mailto:support@ministudio.app?subject=Password%20Reset');
+  const handleForgotPassword = async () => {
+    if (!email) {
+      showModal("Email Required", "Please enter your email address to reset your password.", 'error');
+      return;
+    }
+    
+    try {
+        await resetPasswordForEmail(email);
+    } catch (e) {
+        // Error handled in context
+    }
   };
 
   const handleGoogleSignIn = async () => {
@@ -148,21 +204,45 @@ export default function SignInScreen() {
                     keyboardType="email-address"
                     accessibilityLabel="Email address"
                     accessibilityHint="Enter your email address"
-                    style={styles.input}
+                    style={[styles.input, email.length > 0 && { color: colors.text.primary }]}
                   />
-                  <TextInput
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder="Password"
-                    placeholderTextColor={colors.text.secondary}
-                    secureTextEntry
-                    accessibilityLabel="Password"
-                    accessibilityHint="Enter your password"
-                    style={styles.input}
-                  />
+                  <View style={styles.passwordContainer}>
+                    <TextInput
+                      value={password}
+                      onChangeText={setPassword}
+                      placeholder="Password"
+                      placeholderTextColor={colors.text.secondary}
+                      secureTextEntry={!isPasswordVisible}
+                      accessibilityLabel="Password"
+                      accessibilityHint="Enter your password"
+                      style={[styles.input, styles.passwordInput, password.length > 0 && { color: colors.text.primary }]}
+                    />
+                    <TouchableOpacity 
+                      onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                      style={styles.eyeIcon}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      {isPasswordVisible ? (
+                         <EyeSlashIcon size={20} color={colors.text.secondary} />
+                      ) : (
+                         <EyeIcon size={20} color={colors.text.secondary} />
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
-                {error && <Text style={styles.errorText}>{error}</Text>}
+                {error && (
+                    <View style={{ gap: 8 }}>
+                        <Text style={styles.errorText}>{error}</Text>
+                        {error.includes("verify your email") && (
+                            <TouchableOpacity onPress={handleResendEmail}>
+                                <Text style={[styles.errorText, { textDecorationLine: 'underline', fontWeight: '600' }]}>
+                                    Resend Confirmation Email
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                )}
 
                 {/* Sign In Button */}
                 <TouchableOpacity
@@ -223,12 +303,10 @@ export default function SignInScreen() {
             <View style={styles.bottomContent}>
               {/* Create Account Button */}
               <TouchableOpacity
-                onPress={handleCreateAccount}
-                disabled={isSubmitting}
+                onPress={() => router.push('/signup')}
                 accessibilityLabel="Create an account"
                 accessibilityRole="button"
-                accessibilityState={{ disabled: isSubmitting }}
-                accessibilityHint="Creates a new account with your email and password"
+                accessibilityHint="Navigates to sign up screen"
                 style={styles.createAccountButton}
                 activeOpacity={0.8}
               >
@@ -250,6 +328,27 @@ export default function SignInScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <AppModal
+        visible={modalConfig.visible}
+        onClose={hideModal}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        type={modalConfig.type}
+        primaryAction={modalConfig.primaryAction ? {
+            ...modalConfig.primaryAction,
+            onPress: () => {
+                modalConfig.primaryAction?.onPress();
+                hideModal();
+            }
+        } : { label: "OK", onPress: hideModal }}
+        secondaryAction={modalConfig.secondaryAction ? {
+            ...modalConfig.secondaryAction,
+            onPress: () => {
+                modalConfig.secondaryAction?.onPress();
+                hideModal();
+            }
+        } : undefined}
+      />
     </SafeAreaView>
   );
 }
@@ -335,10 +434,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 12,
     fontSize: 14,
-    fontWeight: '400',
+    fontWeight: '500',
     color: colors.text.muted,
     fontFamily: fontFamily.primary,
-    lineHeight: 14,
+    lineHeight: 16,
   },
   errorText: {
     color: colors.accent.red,
@@ -367,7 +466,7 @@ const styles = StyleSheet.create({
   // Alternatively Text - stretch, centered
   alternativelyText: {
     width: '100%',
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System',
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto',
     fontSize: 14,
     fontWeight: '500',
     color: colors.text.primary,
@@ -442,7 +541,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   createAccountButtonText: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System',
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto',
     fontSize: 14,
     fontWeight: '500',
     color: colors.text.primary,
@@ -459,11 +558,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   forgotPasswordText: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'System',
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto',
     fontSize: 13,
     fontWeight: '300',
     color: colors.text.primary,
     letterSpacing: -0.41,
     lineHeight: 14,
+  },
+  passwordContainer: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    paddingRight: 40, // Space for the eye icon
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 12,
   },
 });

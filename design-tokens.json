@@ -1,0 +1,186 @@
+{
+  "$themes": [],
+  "$metadata": {
+    "tokenSetOrder": ["core", "semantic"]
+  },
+  "core": {
+    "colors": {
+      "background": {
+        "primary": { "value": "#2C2F3A", "type": "color", "description": "Main screen backgrounds" },
+        "secondary": { "value": "#1F2129", "type": "color", "description": "Headers, footers, navigation bars" },
+        "tertiary": { "value": "#464B5D", "type": "color", "description": "Input containers, option buttons" },
+        "bottom": { "value": "#0F1014", "type": "color", "description": "Footer areas" },
+        "highlight": { "value": "rgba(44, 89, 255, 0.1)", "type": "color", "description": "Blue tinted highlight for cards" },
+        "settings": { "value": "#1E1E2B", "type": "color", "description": "Settings container" },
+        "settingsFooter": { "value": "#12121A", "type": "color", "description": "Settings footer" },
+        "modal": { "value": "#292936", "type": "color", "description": "AppModal background" },
+        "panel": { "value": "#16181D", "type": "color", "description": "Studio footer" },
+        "card": { "value": "#2C3142", "type": "color", "description": "Gallery button" }
+      },
+      "text": {
+        "primary": { "value": "#EFEFF1", "type": "color", "description": "Primary text color" },
+        "secondary": { "value": "#7E808B", "type": "color", "description": "Secondary/muted text" },
+        "muted": { "value": "rgba(244, 244, 244, 0.4)", "type": "color", "description": "Placeholder/subdued text" },
+        "dark": { "value": "#1D1D1D", "type": "color", "description": "Text on light backgrounds" },
+        "textfieldbg": { "value": "#16171D", "type": "color", "description": "Text input background" },
+        "red": { "value": "#C4002B", "type": "color", "description": "Error text" }
+      },
+      "button": {
+        "primary": { "value": "#2C59FF", "type": "color", "description": "Primary CTA buttons" },
+        "danger": { "value": "#FA0439", "type": "color", "description": "Destructive actions" },
+        "dangerDark": { "value": "#91001F", "type": "color", "description": "Sign out red" },
+        "secondary": { "value": "#2C2F3A", "type": "color", "description": "Secondary buttons" },
+        "dark": { "value": "#1D1D1D", "type": "color", "description": "Dark buttons" },
+        "white": { "value": "#F4F4F4", "type": "color", "description": "Light buttons, active states" }
+      },
+      "accent": {
+        "blue": { "value": "#518CFF", "type": "color", "description": "Links, action text" },
+        "red": { "value": "#FA0439", "type": "color", "description": "Errors, warnings" },
+        "purple": { "value": "#BB51FF", "type": "color", "description": "Special highlights" },
+        "yellow": { "value": "#FFD60A", "type": "color", "description": "Warnings, pro features" },
+        "orange": { "value": "#FF682C", "type": "color", "description": "Alternative accent" }
+      },
+      "border": {
+        "subtle": { "value": "rgba(255, 255, 255, 0.05)", "type": "color", "description": "Subtle borders" },
+        "strong": { "value": "#66666B", "type": "color", "description": "Strong/visible borders" }
+      },
+      "overlay": {
+        "soft": { "value": "rgba(255, 255, 255, 0.1)", "type": "color", "description": "Light overlay for cards" },
+        "medium": { "value": "rgba(255, 255, 255, 0.2)", "type": "color", "description": "Grabber handles" },
+        "dark": { "value": "rgba(0, 0, 0, 0.3)", "type": "color", "description": "Dark chip backgrounds" },
+        "heavy": { "value": "rgba(0, 0, 0, 0.6)", "type": "color", "description": "Remove buttons" },
+        "modal": { "value": "rgba(0, 0, 0, 0.7)", "type": "color", "description": "Modal backdrops" }
+      },
+      "palette": {
+        "black": { "value": "#000000", "type": "color" },
+        "white": { "value": "#FFFFFF", "type": "color" }
+      },
+      "social": {
+        "googleBlue": { "value": "#4285F4", "type": "color" },
+        "googleGreen": { "value": "#34A853", "type": "color" },
+        "googleYellow": { "value": "#FBBC05", "type": "color" },
+        "googleRed": { "value": "#EA4335", "type": "color" }
+      }
+    },
+    "typography": {
+      "fontFamily": {
+        "primary": { "value": "SF Pro Display", "type": "fontFamilies", "description": "iOS: SF Pro Display, Android: Roboto" },
+        "secondary": { "value": "SF Pro", "type": "fontFamilies", "description": "iOS: SF Pro, Android: Roboto" },
+        "text": { "value": "SF Pro Text", "type": "fontFamilies", "description": "iOS: SF Pro Text, Android: Roboto" }
+      },
+      "fontSize": {
+        "xs": { "value": "13", "type": "fontSizes" },
+        "sm": { "value": "14", "type": "fontSizes" },
+        "base": { "value": "16", "type": "fontSizes" },
+        "lg": { "value": "18", "type": "fontSizes" },
+        "xl": { "value": "20", "type": "fontSizes" },
+        "2xl": { "value": "24", "type": "fontSizes" },
+        "3xl": { "value": "32", "type": "fontSizes" }
+      },
+      "fontWeight": {
+        "light": { "value": "300", "type": "fontWeights" },
+        "normal": { "value": "400", "type": "fontWeights" },
+        "medium": { "value": "500", "type": "fontWeights" },
+        "semibold": { "value": "600", "type": "fontWeights" },
+        "bold": { "value": "700", "type": "fontWeights" }
+      },
+      "letterSpacing": {
+        "tight": { "value": "-0.41", "type": "letterSpacing" },
+        "normal": { "value": "-0.29", "type": "letterSpacing" },
+        "wide": { "value": "-0.26", "type": "letterSpacing" }
+      }
+    },
+    "spacing": {
+      "xs": { "value": "4", "type": "spacing" },
+      "sm": { "value": "8", "type": "spacing" },
+      "md": { "value": "10", "type": "spacing" },
+      "lg": { "value": "12", "type": "spacing" },
+      "xl": { "value": "16", "type": "spacing" },
+      "2xl": { "value": "20", "type": "spacing" },
+      "3xl": { "value": "24", "type": "spacing" },
+      "4xl": { "value": "32", "type": "spacing" },
+      "5xl": { "value": "48", "type": "spacing" }
+    },
+    "borderRadius": {
+      "sm": { "value": "4", "type": "borderRadius" },
+      "md": { "value": "6", "type": "borderRadius" },
+      "lg": { "value": "8", "type": "borderRadius" },
+      "xl": { "value": "24", "type": "borderRadius" },
+      "full": { "value": "32", "type": "borderRadius" }
+    },
+    "sizing": {
+      "button": {
+        "height": { "value": "48", "type": "sizing" },
+        "heightSmall": { "value": "40", "type": "sizing" }
+      },
+      "input": {
+        "height": { "value": "48", "type": "sizing" }
+      },
+      "modal": {
+        "grabberWidth": { "value": "36", "type": "sizing" },
+        "grabberHeight": { "value": "5", "type": "sizing" }
+      }
+    },
+    "shadow": {
+      "footer": {
+        "value": {
+          "color": "#000000",
+          "type": "dropShadow",
+          "x": "0",
+          "y": "-3",
+          "blur": "16",
+          "spread": "0"
+        },
+        "type": "boxShadow"
+      }
+    }
+  },
+  "semantic": {
+    "textStyles": {
+      "heading": {
+        "value": {
+          "fontFamily": "{core.typography.fontFamily.primary}",
+          "fontWeight": "{core.typography.fontWeight.bold}",
+          "fontSize": "{core.typography.fontSize.3xl}",
+          "letterSpacing": "{core.typography.letterSpacing.tight}"
+        },
+        "type": "typography"
+      },
+      "subheading": {
+        "value": {
+          "fontFamily": "{core.typography.fontFamily.primary}",
+          "fontWeight": "{core.typography.fontWeight.normal}",
+          "fontSize": "{core.typography.fontSize.base}",
+          "letterSpacing": "{core.typography.letterSpacing.wide}"
+        },
+        "type": "typography"
+      },
+      "button": {
+        "value": {
+          "fontFamily": "{core.typography.fontFamily.primary}",
+          "fontWeight": "{core.typography.fontWeight.semibold}",
+          "fontSize": "{core.typography.fontSize.sm}",
+          "letterSpacing": "{core.typography.letterSpacing.tight}"
+        },
+        "type": "typography"
+      },
+      "body": {
+        "value": {
+          "fontFamily": "{core.typography.fontFamily.primary}",
+          "fontWeight": "{core.typography.fontWeight.normal}",
+          "fontSize": "{core.typography.fontSize.sm}"
+        },
+        "type": "typography"
+      },
+      "caption": {
+        "value": {
+          "fontFamily": "{core.typography.fontFamily.secondary}",
+          "fontWeight": "{core.typography.fontWeight.light}",
+          "fontSize": "{core.typography.fontSize.xs}",
+          "letterSpacing": "{core.typography.letterSpacing.tight}"
+        },
+        "type": "typography"
+      }
+    }
+  }
+}

@@ -90,7 +90,20 @@ export async function generatePaintedMiniature(
            let errorJson;
            try { errorJson = JSON.parse(text); } catch (e) {}
            
-           throw new Error(errorJson?.error || errorJson?.message || `Server error: ${response.status}`);
+           // Check for Overloaded Error from Edge Function
+           if (errorJson?.code === 'OVERLOADED' || response.status === 503) {
+               throw new Error("Google Servers Overloaded");
+           }
+           
+           let errorMsg = errorJson?.error || errorJson?.message || `Server error: ${response.status}`;
+           
+           // Client-side cleanup of the specific "undefined/undefined" error if backend isn't fixed yet
+           if (typeof errorMsg === 'string' && errorMsg.includes("undefined/undefined")) {
+               console.warn("[Gemini Proxy] Detected malformed limit error from backend.");
+               errorMsg = "Limit Reached. You have exhausted your daily or monthly quota.";
+           }
+
+           throw new Error(errorMsg);
         }
 
         const data = await response.json();
@@ -122,7 +135,11 @@ export async function generatePaintedMiniature(
              throw new Error("Request cancelled by user.");
         }
         
-        console.error("Gemini Proxy Error:", error);
+        if (!error.message?.includes("Limit Reached")) {
+             console.error("Gemini Proxy Error:", error);
+        } else {
+             console.log("Gemini Proxy Info: Limit Reached (handled by UI)");
+        }
         let errorMessage = error.message || "Failed to connect to the AI service.";
         
         if (errorMessage.includes("Network request failed") || errorMessage.includes("fetch")) {

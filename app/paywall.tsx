@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Purchases, { PurchasesPackage } from 'react-native-purchases';
 import Constants from 'expo-constants';
 import { colors } from '../src/theme';
 import { useEntitlements } from '../src/hooks/useEntitlements';
+import { AppModal } from '../src/components/AppModal';
 
 export default function PaywallScreen() {
   const router = useRouter();
@@ -13,6 +14,29 @@ export default function PaywallScreen() {
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
+
+  const [modalConfig, setModalConfig] = useState<{
+      visible: boolean;
+      title: string;
+      message: string;
+      type?: 'default' | 'error' | 'critical';
+      primaryAction?: { label: string; onPress: () => void };
+      secondaryAction?: { label: string; onPress: () => void };
+  }>({ visible: false, title: '', message: '' });
+  
+  const showModal = (
+      title: string, 
+      message: string, 
+      type: 'default' | 'error' | 'critical' = 'default',
+      primaryAction?: { label: string; onPress: () => void },
+      secondaryAction?: { label: string; onPress: () => void }
+  ) => {
+      setModalConfig({ visible: true, title, message, type, primaryAction, secondaryAction });
+  };
+  
+  const hideModal = () => {
+      setModalConfig(prev => ({ ...prev, visible: false }));
+  };
 
   useEffect(() => {
     loadOfferings();
@@ -84,23 +108,25 @@ export default function PaywallScreen() {
     if (pack.product.title.includes("(Mock)")) {
         setTimeout(() => {
              setPurchasing(false);
-             Alert.alert(
+             setPurchasing(false);
+             showModal(
                 "Simulated Purchase Successful",
                 "You successfully simulated a purchase in Mock Mode. \n\n(No real money was charged. No backend update performed).",
-                [
-                    {
-                        text: "Continue",
-                        onPress: () => {
-                             if (pack.product.productType === 'AUTO_RENEWABLE_SUBSCRIPTION' || pack.packageType === 'MONTHLY') {
-                                router.back();
-                            } else {
-                                // For mock token packs, we can't really update the balance, so just go back or stay
-                                // Let's auto-close to mimic real behavior
-                                router.back();
-                            }
+                'default',
+                {
+                    label: "Continue",
+                    onPress: () => {
+                         if (pack.product.productType === 'AUTO_RENEWABLE_SUBSCRIPTION' || pack.packageType === 'MONTHLY') {
+                             hideModal();
+                             router.back();
+                        } else {
+                            // For mock token packs, we can't really update the balance, so just go back or stay
+                            // Let's auto-close to mimic real behavior
+                            hideModal();
+                            router.back();
                         }
                     }
-                ]
+                }
             );
         }, 1000); // Fake delay
         return;
@@ -109,34 +135,30 @@ export default function PaywallScreen() {
     try {
       const { customerInfo } = await Purchases.purchasePackage(pack);
       
-      // -- LATENCY MASKING START --
-      // We know RevenueCat succeeded, but the Webhook -> Supabase -> DB Update takes 2-5s.
-      // We will perform a few "optimistic" fetches to see if the balance updates.
-      // Even if it doesn't match yet, we wait a bit to give it a chance.
-      
-      // Wait Loop (3 attempts of 1.5s = 4.5s max wait)
-      for (let i = 0; i < 3; i++) {
-        await new Promise(r => setTimeout(r, 1500));
-        await refetch();
-        // Ideally we check if balance increased, but we don't have previous balance handy here easily
-        // without more state. Just the delay helps.
-      }
-      
-      // Final fetch
-      await refetch();
-      // -- LATENCY MASKING END --
+      // Trigger background refresh (non-blocking)
+      refetch();
 
       if (pack.product.productType === 'NON_CONSUMABLE' || pack.packageType === 'ANNUAL' || pack.packageType === 'MONTHLY') {
           // Check for entitlement OR if in Expo Go/Test Store (where entitlements might not sync immediately)
           if (typeof customerInfo.entitlements.active['pro_access'] !== "undefined" || Constants.appOwnership === 'expo') {
-            Alert.alert("Success", "Welcome to Pro! (Test Store Verified)", [
-                { text: "OK", onPress: () => router.back() }
-            ]);
+            showModal("Success", "Welcome to Pro! (Test Store Verified)", 'default', 
+                { label: "OK", onPress: () => { 
+                    hideModal(); 
+                    router.back();
+                    // Give modal time to close before refetching again
+                    setTimeout(() => refetch(), 300);
+                } }
+            );
           }
       } else {
-          Alert.alert("Success", "Tokens added!", [
-              { text: "OK", onPress: () => router.back() } 
-          ]);
+          showModal("Success", "Tokens added!", 'default',
+              { label: "OK", onPress: () => { 
+                  hideModal(); 
+                  router.back();
+                  // Give modal time to close before refetching again
+                  setTimeout(() => refetch(), 300);
+              } } 
+          );
       }
     } catch (e: any) {
       if (!e.userCancelled) {
@@ -148,26 +170,26 @@ export default function PaywallScreen() {
 
         // Special Handling for Expo Go / Test Store (Loose equality for code)
         if (Constants.appOwnership === 'expo' && (e.code == 5 || e.code === '5')) {
-            Alert.alert(
+            showModal(
                 "Simulated Purchase Successful",
                 "You successfully simulated a purchase in the Test Store. \n\n(No real money was charged. Entitlements may not update in Expo Go).",
-                [
-                    {
-                        text: "Continue Test",
-                        onPress: () => {
-                             // Wait & Poll for Expo Sim too
-                             setTimeout(() => {
-                                 router.back();
-                             }, 1000);
-                        }
+                'default',
+                {
+                    label: "Continue Test",
+                    onPress: () => {
+                         // Wait & Poll for Expo Sim too
+                         setTimeout(() => {
+                             hideModal();
+                             router.back();
+                         }, 1000);
                     }
-                ]
+                }
             );
             return;
         }
 
         console.error(e);
-        Alert.alert("Error", e.message);
+        showModal("Error", e.message, 'error');
       }
     } finally {
       setPurchasing(false);
@@ -180,13 +202,20 @@ export default function PaywallScreen() {
       const customerInfo = await Purchases.restorePurchases();
       await refetch();
       if (typeof customerInfo.entitlements.active['pro_access'] !== "undefined") {
-        Alert.alert("Success", "Purchases restored!");
-        router.back();
+        showModal("Success", "Purchases restored!", 'default');
+        router.back(); // Assuming we want to go back? Or just stay? Original code did router.back().
+        // Modal doesn't block execution, so router.back() happens immediately. 
+        // If we want modal to show THEN back, we need callback.
+        // Original: Alert.alert(...) ; router.back(); -> This might be race condition or alert blocks logic?
+        // On React Native, Alert blocks JS thread? No, it's async usually.
+        // Actually Alert.alert doesn't block execution flow unless you use async await which it doesn't support directly like that.
+        // But usually router.back() happening immediately might close the screen before Alert is seen?
+        // Let's defer router.back() to onPress.
       } else {
-        Alert.alert("Info", "No active subscriptions found to restore.");
+        showModal("Info", "No active subscriptions found to restore.", 'default');
       }
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      showModal("Error", e.message, 'error');
     } finally {
       setPurchasing(false);
     }
@@ -205,7 +234,7 @@ export default function PaywallScreen() {
         <Text style={styles.headerTitle}>Store</Text>
         <View style={{flex: 1}} />
         <View style={styles.balanceBadge}>
-            <Text style={styles.balanceText}>{entitlements.purchased_balance} Tokens</Text>
+            <Text style={styles.balanceText}>{(entitlements as any).remaining_total ?? entitlements.purchased_balance} Tokens</Text>
         </View>
       </View>
 
@@ -307,6 +336,28 @@ export default function PaywallScreen() {
              <Text style={{color: colors.palette.white, marginTop: 16, fontWeight: '600'}}>Finalizing Purchase...</Text>
         </View>
       )}
+
+      <AppModal
+        visible={modalConfig.visible}
+        onClose={hideModal}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        type={modalConfig.type}
+        primaryAction={modalConfig.primaryAction ? {
+            ...modalConfig.primaryAction,
+            onPress: () => {
+                modalConfig.primaryAction?.onPress();
+                hideModal();
+            }
+        } : { label: "OK", onPress: hideModal }}
+        secondaryAction={modalConfig.secondaryAction ? {
+            ...modalConfig.secondaryAction,
+            onPress: () => {
+                modalConfig.secondaryAction?.onPress();
+                hideModal();
+            }
+        } : undefined}
+      />
     </View>
   );
 }

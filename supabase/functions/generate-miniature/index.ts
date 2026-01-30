@@ -8,6 +8,11 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Helper to fetch full paint inventory
+// Replaced by Client-side injection to avoid conflicts and token usage
+// async function fetchPaints(supabaseClient: any) { ... }
+
+
 
 Deno.serve(async (req) => {
     // Handle CORS
@@ -18,47 +23,38 @@ Deno.serve(async (req) => {
     try {
         // 1. Authenticate User
         const supabaseClient = createClient(
-            // Supabase API URL - Env var automatically injected
             Deno.env.get('SUPABASE_URL') ?? '',
-            // Supabase Anon Key - Env var automatically injected
             Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            // Create client with Auth context execution
             { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
         )
 
-        // Initialize abort tracking
         let isAborted = false;
         req.signal.addEventListener('abort', () => {
-            console.log(`[Edge] Abort signal received via listener.`);
             isAborted = true;
         });
 
         const authHeader = req.headers.get('Authorization');
-        console.log(`[Edge] Incoming Auth Header: ${authHeader ? (authHeader.substring(0, 15) + '...') : 'MISSING'}`);
-
         const token = authHeader?.replace('Bearer ', '') ?? '';
-        // console.log(`[Edge] Validating token: ${token.substring(0, 10)}...`);
-
+        
         const {
             data: { user },
             error: authError
         } = await supabaseClient.auth.getUser(token)
 
         if (!user) {
-            console.error(`[Edge] Unauthorized: ${authError?.message}`);
             return new Response(JSON.stringify({ error: `Unauthorized: ${authError?.message}` }), { status: 401, headers: corsHeaders })
         }
 
         // 2. Parse Request
-        const { prompt, baseImage, model, action } = await req.json()
+        const { prompt, baseImage, model, action, useArtDirector } = await req.json()
 
-        console.log(`[Edge] Request received. Model: ${model || 'unknown'}, PromptLen: ${prompt?.length}, User: ${user.id}`);
+        console.log(`[Edge] Request: Model=${model}, ArtDirector=${useArtDirector}, User=${user.id}`);
 
         if (!prompt) {
             return new Response("Missing prompt", { status: 400, headers: corsHeaders })
         }
 
-        // 3a. Authorize Generation (Check Limits)
+        // 3a. Authorize Generation
         const { data: authData, error: authCheckError } = await supabaseClient.rpc('authorize_generation', {
             p_user_id: user.id,
             p_model: model || 'gemini-2.5-flash-image'
@@ -66,118 +62,107 @@ Deno.serve(async (req) => {
 
         if (authCheckError) {
             console.error("[Edge] Auth RPC Error:", authCheckError);
-            // Fail open or closed? Failing closed for safety.
             return new Response(JSON.stringify({ error: "System Error: Unable to verify limits." }), { status: 500, headers: corsHeaders });
         }
 
-        console.log(`[Edge] Limit Check:`, authData);
-
         if (authData && authData.allowed === false) {
+             let errorMessage = "Limit Reached.";
+             
+             if (authData.message) {
+                 errorMessage = `Limit Reached: ${authData.message}`;
+             } else if (authData.usage !== undefined && authData.limit !== undefined) {
+                 errorMessage = `Limit Reached. You have used ${authData.usage}/${authData.limit} ${authData.limit_type || 'generations'} this month.`;
+             } else {
+                 errorMessage = "Limit Reached. You have exhausted your daily free tokens or monthly quota.";
+             }
+
              return new Response(JSON.stringify({ 
-                 error: `Limit Reached. You have used ${authData.usage}/${authData.limit} ${authData.type} generations this month.` 
+                 error: errorMessage
              }), { status: 403, headers: corsHeaders });
         }
 
         // 4. API Key Check
         const apiKey = Deno.env.get('GOOGLE_API_KEY')
         if (!apiKey) {
-            console.error("[Edge] API Key missing in environment variables");
             return new Response(JSON.stringify({ error: "Server Configuration Error: API Key missing" }), { status: 200, headers: corsHeaders })
         }
-
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        // --- UPDATED MODEL HANDLING ---
-        // User provided docs confirm 'gemini-2.5-flash-image' and 'gemini-3-pro-image-preview' are valid.
-        // We will respect the requested model string.
         const targetModel = model || 'gemini-2.5-flash-image';
+        console.log(`[Edge] Executing Final Generation. Model: ${targetModel}`);
+        
+        const aiModel = genAI.getGenerativeModel({ model: targetModel });
 
-        console.log(`[Edge] Using Model: ${targetModel}`);
-
-        const aiModel = genAI.getGenerativeModel({
-            model: targetModel,
-            generationConfig: {
-                // Explicitly set modalities if needed, though default usually works.
-                // Docs say default is ['Text', 'Image'].
-                // Removed responseMimeType: "application/json" as it is not supported by Nano Banana models
-            }
-        });
-
-        // Construct parts
         const parts = []
         if (baseImage) {
-            // baseImage is expected to be { mimeType: '...', data: 'base64...' }
             parts.push({ inlineData: { mimeType: baseImage.mimeType, data: baseImage.data } })
         }
-        parts.push({ text: prompt + "\n\nIMPORTANT: Return ONLY the generated image. Do not include any text, chat, or explanations." })
+        parts.push({ text: prompt + "\n\nIMPORTANT: Return ONLY the generated image." })
 
         let result;
         try {
-            // Generate logic
             result = await aiModel.generateContent({
                 contents: [{ role: 'user', parts: parts }],
             });
         } catch (genError) {
             console.error("[Edge] Gemini API Error:", genError);
             const message = genError instanceof Error ? genError.message : String(genError);
+            
+            // Pass 503 status/Overloaded specifically to client
+            if (message.includes("503") || message.includes("overloaded")) {
+                 return new Response(JSON.stringify({ 
+                     error: "Google Servers Overloaded", 
+                     details: "The AI model is currently at capacity. Please try again in a moment.",
+                     code: "OVERLOADED"
+                 }), { status: 503, headers: corsHeaders });
+            }
+
             return new Response(JSON.stringify({ error: `Gemini API Error: ${message}` }), { status: 200, headers: corsHeaders });
         }
 
-        const response = await result.response;
-        console.log("[Edge] Gemini Response received.");
+        if (!result) {
+             return new Response(JSON.stringify({ error: "Gemini API failed." }), { status: 200, headers: corsHeaders });
+        }
 
+        const response = await result.response;
+        
         // 5. Extract Output
         let generatedData = "";
         try {
             const candidateParts = response.candidates?.[0]?.content?.parts;
             if (candidateParts) {
                 for (const part of candidateParts) {
-                    // Check for inlineData (image)
                     if (part.inlineData && part.inlineData.data) {
                         generatedData = part.inlineData.data;
                         break;
                     }
-                    // Check for text
                     if (part.text) {
                         generatedData += part.text;
                     }
                 }
             }
-
             if (!generatedData) {
-                try { generatedData = response.text(); } catch (_e) { /* Fallback attempt - ignore if text() fails */ }
+                try { generatedData = response.text(); } catch (_e) { /* Ignore text parse error */ }
             }
         } catch (parseError) {
             console.error("[Edge] Parsing Error:", parseError);
         }
 
         if (!generatedData) {
-            console.error("[Edge] No content extracted from response:", JSON.stringify(response));
-            return new Response(JSON.stringify({ error: "AI returned no content. (Model may have refused)" }), { status: 200, headers: corsHeaders });
+            return new Response(JSON.stringify({ error: "AI returned no content." }), { status: 200, headers: corsHeaders });
         }
 
-        // 6. Log Usage (Deduct User Token)
-        // Give the signal a moment to update if the client just disconnected
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        console.log(`[Edge] Abort Status - Listener: ${isAborted}, Signal: ${req.signal.aborted}`);
-
+        // 6. Log Usage (Pro = 2 tokens, Basic/Flash = 1 token)
         if (!isAborted && !req.signal.aborted) {
-            try {
-                await supabaseClient
-                    .from('generation_logs')
-                    .insert({
-                        user_id: user.id,
-                        model_used: targetModel,
-                        cost_units: 1,
-                        action_type: action || 'generate'
-                    });
-            } catch (logError) {
-                console.error("[Edge] Logging Error:", logError);
-            }
-        } else {
-            console.log("[Edge] Request aborted by client. Skipping token deduction.");
-            // If aborted, we could technically just return or throw, but we'll let it finish cleanly
+            const isPro = targetModel.includes('pro') || targetModel.includes('2.5-flash-preview');
+            const tokenCost = isPro ? 2 : 1;
+            
+            await supabaseClient.from('generation_logs').insert({
+                user_id: user.id,
+                model_used: targetModel,
+                cost_units: tokenCost,
+                action_type: action || 'generate'
+            });
         }
 
         return new Response(JSON.stringify({ output: generatedData }), {
@@ -186,10 +171,8 @@ Deno.serve(async (req) => {
 
     } catch (error) {
         console.error("[Edge] Critical Uncaught Error:", error);
-        const message = error instanceof Error ? error.message : "Internal Server Error";
-        return new Response(JSON.stringify({ error: message }), {
-            status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Internal Server Error" }), {
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
     }
 })

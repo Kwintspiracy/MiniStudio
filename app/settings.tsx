@@ -1,43 +1,65 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ScrollView, RefreshControl, Modal, Pressable, Dimensions } from 'react-native';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { GradientBackground } from '../src/components/GradientBackground';
 import { useAuth } from '../src/context/AuthContext';
 import { colors, fontFamily } from '../src/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppModal } from '../src/components/AppModal';
+import { useEntitlements } from '../src/hooks/useEntitlements';
+import { PaywallDrawer } from '../src/components/PaywallDrawer';
 
-import { UsageTracker, UsageTrackerRef } from '../src/components/UsageTracker';
+// Import treasure image
+const treasureImage = require('../assets/treasure.png');
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function SettingsScreen() {
     const { user, signOut } = useAuth();
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
+    const [isMenuVisible, setIsMenuVisible] = useState(false);
+    const [isPaywallVisible, setIsPaywallVisible] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
-    const usageTrackerRef = useRef<UsageTrackerRef>(null);
+    const { entitlements, refetch: refetchEntitlements } = useEntitlements();
 
     const onRefresh = async () => {
         setRefreshing(true);
-        await usageTrackerRef.current?.refresh();
+        await refetchEntitlements();
         setRefreshing(false);
     };
 
     useFocusEffect(
         useCallback(() => {
-            usageTrackerRef.current?.refresh();
-        }, [])
+            console.log('[Settings] Screen focused, calling refetchEntitlements');
+            refetchEntitlements();
+            console.log('[Settings] refetchEntitlements called (non-blocking)');
+        }, [refetchEntitlements])
     );
 
+    const handleSignOutPress = () => {
+        setIsMenuVisible(false);
+        setIsSignOutModalVisible(true);
+    };
+
     return (
-        <View style={styles.container}>
+        <GradientBackground
+            colors={[colors.background.secondary, colors.background.primary, colors.background.primary]}
+            locations={[0, 0.5, 1]}
+            style={styles.container}
+        >
+
             <Stack.Screen
                 options={{
                     headerShown: true,
                     title: 'User Settings',
+                    contentStyle: { backgroundColor: 'transparent' },
                     headerStyle: { backgroundColor: colors.background.secondary },
                     headerTintColor: colors.accent.blue,
                     headerTitleStyle: {
-                        fontFamily: 'SF Pro Text',
+                        fontFamily: Platform.OS === 'ios' ? 'SF Pro Text' : 'Roboto',
                         fontWeight: '600',
                         fontSize: 17,
                         color: colors.text.primary,
@@ -52,6 +74,17 @@ export default function SettingsScreen() {
                             accessibilityRole="button"
                         >
                             <Text style={{ color: colors.accent.blue, fontSize: 17 }}>{'‹ Back'}</Text>
+                        </TouchableOpacity>
+                    ),
+                    headerRight: () => (
+                        <TouchableOpacity 
+                            onPress={() => setIsMenuVisible(true)} 
+                            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                            style={{ paddingHorizontal: 8 }}
+                            accessibilityLabel="More options"
+                            accessibilityRole="button"
+                        >
+                            <Ionicons name="ellipsis-horizontal" size={24} color={colors.text.primary} />
                         </TouchableOpacity>
                     ),
                 }}
@@ -69,61 +102,75 @@ export default function SettingsScreen() {
                     />
                 }
             >
-                <View style={styles.profileCard}>
-                    <View style={styles.profileInfo}>
-                        <View style={styles.avatarContainer}>
-                            {user?.user_metadata?.avatar_url ? (
-                                <Image
-                                    source={{ uri: user.user_metadata.avatar_url }}
-                                    style={styles.avatar}
-                                />
-                            ) : (
-                                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                                    <Text style={styles.avatarText}>
-                                        {user?.email?.charAt(0).toUpperCase() ?? 'U'}
-                                    </Text>
-                                </View>
-                            )}
-                        </View>
-                        <View style={styles.userDetails}>
-                            <Text style={styles.userName}>ACCOUNT</Text>
-                            <Text style={styles.userEmail}>{user?.email}</Text>
-                        </View>
+                {/* Profile Section - Centered */}
+                <View style={styles.profileSection}>
+                    <View style={styles.avatarContainer}>
+                        {user?.user_metadata?.avatar_url ? (
+                            <Image
+                                source={{ uri: user.user_metadata.avatar_url }}
+                                style={styles.avatar}
+                            />
+                        ) : (
+                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                <Text style={styles.avatarText}>
+                                    {user?.email?.charAt(0).toUpperCase() ?? 'U'}
+                                </Text>
+                            </View>
+                        )}
                     </View>
+                    <Text style={styles.userEmail}>{user?.email}</Text>
                 </View>
 
-                <View style={{ marginBottom: 16 }}>
-                    <TouchableOpacity
-                        style={{
-                            backgroundColor: colors.button.primary,
-                            padding: 16,
-                            borderRadius: 8,
-                            alignItems: 'center',
-                            flexDirection: 'row',
-                            justifyContent: 'center',
-                            gap: 8
-                        }}
-                        onPress={() => router.push('/paywall')}
-                    >
-                        <Text style={{ color: colors.text.primary, fontWeight: 'bold', fontSize: 16 }}>Manage Subscription & Tokens</Text>
-                    </TouchableOpacity>
-                </View>
+                {/* Divider */}
+                <View style={styles.divider} />
 
-                {/* Usage Tracker */}
-                <UsageTracker ref={usageTrackerRef} />
+                {/* Token Display Section */}
+                <View style={styles.tokenSection}>
+                    <Image 
+                        source={treasureImage} 
+                        style={styles.treasureImage}
+                        resizeMode="contain"
+                    />
+                    <Text style={styles.tokenCount}>
+                        {entitlements.remaining_total ?? entitlements.purchased_balance ?? 0}
+                    </Text>
+                    <Text style={styles.tokenLabel}>CREATIVE TOKENS</Text>
+                </View>
             </ScrollView>
 
-            <View style={[styles.footerContainer, Platform.OS === 'android' && { paddingBottom: 30 + insets.bottom }]}>
-                <View style={styles.bottomButtonsRow}>
-                    <TouchableOpacity
-                        style={styles.signOutButton}
-                        onPress={() => setIsSignOutModalVisible(true)}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={styles.signOutText}>Sign Out</Text>
-                    </TouchableOpacity>
-                </View>
+            {/* Footer with Get more Tokens button */}
+            <View style={[styles.footerContainer, { paddingBottom: Math.max(insets.bottom + 16, 24) }]}>
+                <TouchableOpacity
+                    style={styles.getTokensButton}
+                    onPress={() => setIsPaywallVisible(true)}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.getTokensText}>Get more Tokens</Text>
+                </TouchableOpacity>
             </View>
+
+            {/* Menu Dropdown */}
+            <Modal
+                visible={isMenuVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setIsMenuVisible(false)}
+            >
+                <Pressable 
+                    style={styles.menuOverlay} 
+                    onPress={() => setIsMenuVisible(false)}
+                >
+                    <View style={[styles.menuContainer, { top: insets.top + 50 }]}>
+                        <TouchableOpacity 
+                            style={styles.menuItem}
+                            onPress={handleSignOutPress}
+                        >
+                            <Ionicons name="log-out-outline" size={20} color={colors.accent.red} />
+                            <Text style={styles.menuItemText}>Sign Out</Text>
+                        </TouchableOpacity>
+                    </View>
+                </Pressable>
+            </Modal>
 
             <AppModal
                 visible={isSignOutModalVisible}
@@ -143,40 +190,40 @@ export default function SettingsScreen() {
                     onPress: () => setIsSignOutModalVisible(false)
                 }}
             />
-        </View>
+
+            <PaywallDrawer 
+                visible={isPaywallVisible} 
+                onClose={() => setIsPaywallVisible(false)} 
+            />
+        </GradientBackground>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background.primary,
     },
+    // backgroundGradient removed
     content: {
         flex: 1,
-        paddingHorizontal: 16,
     },
     contentContainer: {
-        paddingTop: 17,
-        gap: 16,
-    },
-    profileCard: {
-        backgroundColor: colors.button.secondary, // using secondary button bg (transparent white)
-        borderRadius: 8,
-        padding: 16,
-    },
-    profileInfo: {
-        flexDirection: 'row',
+        paddingTop: 40,
         alignItems: 'center',
-        gap: 16,
+    },
+    // Profile Section
+    profileSection: {
+        alignItems: 'center',
+        marginBottom: 16,
     },
     avatarContainer: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        borderWidth: 3,
-        borderColor: colors.button.primary,
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        borderWidth: 4,
+        borderColor: colors.palette.white,
         overflow: 'hidden',
+        marginBottom: 12,
     },
     avatar: {
         width: '100%',
@@ -189,54 +236,101 @@ const styles = StyleSheet.create({
     },
     avatarText: {
         color: colors.text.primary,
-        fontSize: 18,
+        fontSize: 36,
         fontWeight: '600',
-    },
-    userDetails: {
-        flex: 1,
-        justifyContent: 'center',
-    },
-    userName: {
-        color: colors.text.secondary,
-        fontFamily: fontFamily.primary,
-        fontWeight: '700',
-        fontSize: 12,
-        marginBottom: 2,
     },
     userEmail: {
         color: colors.text.primary,
         fontFamily: fontFamily.primary,
         fontWeight: '400',
-        fontSize: 13,
+        fontSize: 15,
     },
+    // Divider
+    divider: {
+        width: 313,
+        height: 1,
+        backgroundColor: colors.overlay.soft,
+        marginVertical: 20,
+    },
+    // Token Section
+    tokenSection: {
+        alignItems: 'center',
+        paddingVertical: 20,
+    },
+    treasureImage: {
+        width: 200,
+        height: 180,
+        marginBottom: 16,
+    },
+    tokenCount: {
+        fontSize: 72,
+        fontWeight: '700',
+        color: colors.text.primary,
+        fontFamily: fontFamily.primary,
+        letterSpacing: -2,
+    },
+    tokenLabel: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: colors.text.secondary,
+        fontFamily: fontFamily.primary,
+        letterSpacing: 1,
+        marginTop: 4,
+    },
+    // Footer - Standardized to match mainView
     footerContainer: {
-        alignSelf: 'stretch',
-        backgroundColor: colors.background.secondary,
-        paddingTop: 32,
-        paddingHorizontal: 16,
-        paddingBottom: 50,
-        shadowColor: colors.palette.black,
-        shadowOffset: { width: 0, height: -3 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 20,
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'transparent',
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+        paddingHorizontal: 24,
+        paddingTop: 12,
     },
-    bottomButtonsRow: {
-        flexDirection: 'row',
-        alignSelf: 'stretch',
-    },
-    signOutButton: {
-        flex: 1,
+    getTokensButton: {
         height: 52,
-        backgroundColor: colors.button.dangerDark, // Standardized to design system danger color
-        borderRadius: 24,
+        backgroundColor: colors.palette.white,
+        borderRadius: 26,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    signOutText: {
-        color: colors.text.primary,
+    getTokensText: {
+        color: colors.text.dark,
         fontFamily: fontFamily.primary,
         fontWeight: '500',
+        fontSize: 15,
+    },
+    // Menu
+    menuOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    menuContainer: {
+        position: 'absolute',
+        right: 16,
+        backgroundColor: colors.background.secondary,
+        borderRadius: 12,
+        paddingVertical: 8,
+        minWidth: 150,
+        shadowColor: colors.palette.black,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    menuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        gap: 12,
+    },
+    menuItemText: {
+        color: colors.accent.red,
         fontSize: 16,
+        fontWeight: '500',
+        fontFamily: fontFamily.primary,
     },
 });

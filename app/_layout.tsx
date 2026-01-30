@@ -7,6 +7,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { AuthProvider } from '../src/context/AuthContext';
 import { ImageProvider } from '../src/context/ImageContext';
+import { EntitlementsProvider } from '../src/context/EntitlementsContext';
 import { colors } from '../src/theme';
 import Purchases from 'react-native-purchases';
 import { REVENUECAT_KEYS } from '../src/constants';
@@ -41,9 +42,11 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <StatusBar style="light" />
         <AuthProvider>
-          <ImageProvider>
-            <RootLayoutNav />
-          </ImageProvider>
+          <EntitlementsProvider>
+            <ImageProvider>
+              <RootLayoutNav />
+            </ImageProvider>
+          </EntitlementsProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
@@ -110,6 +113,7 @@ function RootLayoutNav() {
         name="settings"
         options={{
           animation: 'slide_from_right',
+          contentStyle: { backgroundColor: 'transparent' },
         }}
       />
       <Stack.Screen

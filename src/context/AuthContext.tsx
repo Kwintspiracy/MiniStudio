@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase';
@@ -7,6 +7,7 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import Purchases from 'react-native-purchases';
+import { AppModal } from '../components/AppModal';
 
 // Ensure WebBrowser works correctly on the web
 WebBrowser.maybeCompleteAuthSession();
@@ -18,6 +19,8 @@ interface AuthContextType {
     signInWithGoogle: () => Promise<void>;
     signInWithEmail: (email: string, password: string) => Promise<void>;
     signUpWithEmail: (email: string, password: string) => Promise<void>;
+    resendConfirmationEmail: (email: string) => Promise<void>;
+    resetPasswordForEmail: (email: string) => Promise<void>;
     signOut: () => Promise<void>;
 }
 
@@ -28,6 +31,8 @@ const AuthContext = createContext<AuthContextType>({
     signInWithGoogle: async () => { },
     signInWithEmail: async () => { },
     signUpWithEmail: async () => { },
+    resendConfirmationEmail: async () => { },
+    resetPasswordForEmail: async () => { },
     signOut: async () => { },
 });
 
@@ -40,6 +45,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const lastAuthUrlRef = useRef<string | null>(null);
+
+    const [modalConfig, setModalConfig] = useState<{
+        visible: boolean;
+        title: string;
+        message: string;
+        type?: 'default' | 'error' | 'critical';
+        primaryAction?: { label: string; onPress: () => void };
+        secondaryAction?: { label: string; onPress: () => void };
+    }>({ visible: false, title: '', message: '' });
+
+    const showModal = (
+        title: string, 
+        message: string, 
+        type: 'default' | 'error' | 'critical' = 'default',
+        primaryAction?: { label: string; onPress: () => void },
+        secondaryAction?: { label: string; onPress: () => void }
+    ) => {
+        setModalConfig({ visible: true, title, message, type, primaryAction, secondaryAction });
+    };
+
+    const hideModal = () => {
+        setModalConfig(prev => ({ ...prev, visible: false }));
+    };
 
     useEffect(() => {
         // 1. Initial Session Check
@@ -101,6 +129,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setUser(null);
                 setLoading(false);
                 return;
+            }
+
+            if (event === 'PASSWORD_RECOVERY') {
+                if (__DEV__) console.log("Password Recovery Event detected, redirecting...");
+                // Use a timeout to ensure navigation occurs after the session is set
+                setTimeout(() => {
+                     // We use the imported 'router' from expo-router which acts as a global singleton
+                     // This is safe to use in event callbacks
+                     try {
+                         const { router } = require('expo-router');
+                         router.replace('/update-password');
+                     } catch (e) {
+                         console.error("Navigation failed", e);
+                     }
+                }, 500);
             }
 
             if (event === 'SIGNED_IN' && Platform.OS === 'web') {
@@ -181,7 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (errorDesc) {
-                Alert.alert("Auth Error", errorDesc);
+                showModal("Auth Error", errorDesc, 'error');
                 return;
             }
 
@@ -195,7 +238,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (error) {
                     if (__DEV__) console.error("[AUTH] setSession Failed:", error.message);
                     if (!error.message.includes('signature is invalid')) {
-                        Alert.alert("Session Error", error.message);
+                        showModal("Session Error", error.message, 'error');
                     }
                 } else {
                     if (__DEV__) console.log("[AUTH] setSession Success for:", data.session?.user?.email);
@@ -273,21 +316,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }
             }
         } catch (error: any) {
-            Alert.alert("Sign In Error", error.message);
+            showModal("Sign In Error", error.message, 'error');
         }
     };
 
     const signInWithEmail = async (email: string, password: string) => {
         setLoading(true);
         try {
-            const { error } = await supabase.auth.signInWithPassword({
+            const { data, error } = await supabase.auth.signInWithPassword({
                 email,
                 password,
             });
-            if (error) throw error;
+            
+            if (error) {
+                 if (error.message.includes("Email not confirmed")) {
+                     throw new Error("Please verify your email address before signing in. Check your inbox (and spam folder) for the confirmation link.");
+                 }
+                 throw error;
+            }
         } catch (error: any) {
-            Alert.alert("Sign In Error", error.message);
-            throw error; // Re-throw to let caller know it failed
+            // Let the caller handle the UI alert so we can position it better or style it
+            throw error; 
         } finally {
             setLoading(false);
         }
@@ -299,7 +348,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const { data, error } = await supabase.auth.signUp({
                 email,
                 password,
+                // Add redirect option to ensure deep linking works if configured
+                options: {
+                    emailRedirectTo: Constants.expoConfig?.scheme 
+                        ? `${Constants.expoConfig.scheme}://auth-callback`
+                        : undefined
+                }
             });
+            
             if (error) throw error;
 
             if (data?.session) {
@@ -308,10 +364,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setUser(data.user);
             } else if (data?.user && !data.session) {
                 // User created but waiting for confirmation
-                Alert.alert("Check your email", "We've sent you a confirmation link to complete your registration.");
+                // We throw a specific "success" error to let the UI know it needs to show a message
+                // Or we can return a specific status. For now, let's just let it resolve successfully 
+                // and let the UI check for session vs no session.
+                return; 
             }
         } catch (error: any) {
-            Alert.alert("Sign Up Error", error.message);
+            throw error;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const resendConfirmationEmail = async (email: string) => {
+        setLoading(true);
+        try {
+            const { error } = await supabase.auth.resend({
+                type: 'signup',
+                email: email,
+                options: {
+                    emailRedirectTo: Constants.expoConfig?.scheme 
+                        ? `${Constants.expoConfig.scheme}://auth-callback`
+                        : undefined
+                }
+            });
+            if (error) throw error;
+            showModal("Email Sent", "We sent another confirmation email to " + email, 'default');
+        } catch (error: any) {
+             // Rate limit errors are common here
+            showModal("Request Failed", error.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const resetPasswordForEmail = async (email: string) => {
+        setLoading(true);
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: Constants.expoConfig?.scheme 
+                        ? `${Constants.expoConfig.scheme}://reset-callback`
+                        : undefined
+            });
+            
+            if (error) throw error;
+            
+            showModal(
+                "Check your email", 
+                "We've sent a password reset link to " + email,
+                'default'
+            );
+        } catch (error: any) {
+            showModal("Reset Failed", error.message, 'error');
             throw error;
         } finally {
             setLoading(false);
@@ -338,7 +442,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (__DEV__) console.warn("Supabase SignOut Exception: Session was already missing.");
             } else {
                 if (__DEV__) console.error("Sign Out Exception:", e);
-                Alert.alert("Sign Out Exception", e.message);
+                showModal("Sign Out Exception", e.message, 'error');
             }
         } finally {
             // Always clear local state
@@ -366,8 +470,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithGoogle,
         signInWithEmail,
         signUpWithEmail,
+        resendConfirmationEmail,
+        resetPasswordForEmail,
         signOut,
     };
 
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    return (
+        <AuthContext.Provider value={value}>
+            {children}
+            <AppModal
+                visible={modalConfig.visible}
+                onClose={hideModal}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                primaryAction={modalConfig.primaryAction ? {
+                    ...modalConfig.primaryAction,
+                    onPress: () => {
+                        modalConfig.primaryAction?.onPress();
+                        hideModal();
+                    }
+                } : { label: "OK", onPress: hideModal }}
+                secondaryAction={modalConfig.secondaryAction ? {
+                    ...modalConfig.secondaryAction,
+                    onPress: () => {
+                        modalConfig.secondaryAction?.onPress();
+                        hideModal();
+                    }
+                } : undefined}
+            />
+        </AuthContext.Provider>
+    );
 }

@@ -159,6 +159,60 @@ export async function adminUpdatePrompt(
 
     return { data, error };
 }
+
+/**
+ * Ensures only one version is active per key.
+ * Finds all keys with multiple active versions and deactivates all but the latest one.
+ */
+export async function adminRepairIntegrity(): Promise<{ success: boolean; error: any }> {
+    try {
+        // 1. Fetch all active prompts
+        const { data, error } = await supabase
+            .from('prompt_configs')
+            .select('id, key, created_at')
+            .eq('is_active', true);
+
+        if (error) throw error;
+        if (!data) return { success: true, error: null };
+
+        // 2. Group by key
+        const groups: Record<string, typeof data> = {};
+        data.forEach(row => {
+            if (!groups[row.key]) groups[row.key] = [];
+            groups[row.key].push(row);
+        });
+
+        // 3. Find keys with > 1 active
+        const repairs = [];
+        for (const key in groups) {
+            const group = groups[key];
+            if (group.length > 1) {
+                // Sort by date desc
+                group.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                // IDs to deactivate (all but the first one)
+                const toDeactivate = group.slice(1).map(item => item.id);
+                repairs.push(
+                    supabase
+                        .from('prompt_configs')
+                        .update({ is_active: false })
+                        .in('id', toDeactivate)
+                );
+            }
+        }
+
+        if (repairs.length > 0) {
+            const results = await Promise.all(repairs);
+            const firstError = results.find(r => r.error)?.error;
+            if (firstError) throw firstError;
+        }
+
+        return { success: true, error: null };
+    } catch (err) {
+        console.error('[PromptService] Integrity Repair Failed:', err);
+        return { success: false, error: err };
+    }
+}
+
 // --- Asset Methods ---
 
 /**

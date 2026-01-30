@@ -10,10 +10,12 @@ const ImagePaint = require('../../../assets/ImagePaint.png');
 
 // Dynamic spacing based on screen width
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const cardGap = SCREEN_WIDTH > 380 ? 8 : SCREEN_WIDTH > 350 ? 4 : 2;
-const iconTextGap = SCREEN_WIDTH > 380 ? -4 : SCREEN_WIDTH > 350 ? -6 : -8;
-const titleFontSize = SCREEN_WIDTH > 380 ? 16 : 14;
-const subtitleFontSize = SCREEN_WIDTH > 380 ? 12 : 11;
+const cardGap = SCREEN_WIDTH > 390 ? 8 : SCREEN_WIDTH > 350 ? 4 : 2;
+const iconTextGap = SCREEN_WIDTH > 390 ? -4 : SCREEN_WIDTH > 350 ? -6 : -8;
+const titleFontSize = SCREEN_WIDTH > 390 ? 16 : 14;
+const subtitleFontSize = SCREEN_WIDTH > 390 ? 12 : 12;
+const imageSize = SCREEN_WIDTH > 390 ? 50 : 30;
+const textGap = SCREEN_WIDTH > 390 ? 2 : 1;
 
 interface ModeCardSelectorProps {
   activeMode: StudioMode;
@@ -22,9 +24,9 @@ interface ModeCardSelectorProps {
 
 // Mode Card Data
 const MODE_CARDS: { id: StudioMode; title: string; subtitle: string; image: any }[] = [
-  { id: 'paint', title: 'Paint', subtitle: 'Explore', image: ImagePaint },
-  { id: 'sculpt', title: 'Sculpt', subtitle: 'Prototype', image: ImageSculpt },
-  { id: 'sketch', title: 'Sketch', subtitle: 'Explore', image: ImageSketch },
+  { id: 'paint', title: 'Paint', subtitle: 'Result', image: ImagePaint },
+  { id: 'sculpt', title: 'Sculpt', subtitle: 'Concept', image: ImageSculpt },
+  { id: 'sketch', title: 'Sketch', subtitle: 'Design', image: ImageSketch },
 ];
 
 export const ModeCardSelector = ({ activeMode, onModeChange }: ModeCardSelectorProps) => (
@@ -68,7 +70,7 @@ const styles = StyleSheet.create({
   },
   modeCard: { 
     flex: 1, 
-    backgroundColor: colors.background.secondary, 
+    backgroundColor: colors.background.bottom, 
     borderRadius: 8, 
     padding: 12, 
     gap: 8 
@@ -82,13 +84,13 @@ const styles = StyleSheet.create({
     gap: iconTextGap 
   },
   modeCardImage: { 
-    width: 50, 
-    height: 50, 
+    width: imageSize, 
+    height: imageSize, 
     borderRadius: 64 
   },
   modeCardText: { 
-    justifyContent: 'space-between', 
-    height: 30 
+    justifyContent: 'center', 
+    gap: textGap
   },
   modeCardTitle: { 
     fontFamily: fontFamily.primary, 
@@ -104,7 +106,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.primary, 
     fontWeight: '500', 
     fontSize: subtitleFontSize, 
-    lineHeight: subtitleFontSize + 2, 
+    lineHeight: subtitleFontSize, 
     color: colors.text.primary 
   },
   modeCardSubtitleActive: { 

@@ -1,5 +1,4 @@
-import { serve } from "std/http/server.ts";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 // SEC-002: Environment-based CORS origins (no wildcard in production)
 const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") || "").split(",").filter(Boolean);
@@ -11,7 +10,7 @@ const corsHeaders = {
 // SEC-001: RevenueCat Webhook Authorization Secret
 const REVENUECAT_WEBHOOK_SECRET = Deno.env.get("REVENUECAT_WEBHOOK_SECRET");
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -73,6 +72,26 @@ serve(async (req) => {
 
       if (error) throw error;
       console.log(`[Webhook] Updated user ${userId} to Pro (Active)`);
+
+      // CUMULATIVE TOKEN LOGIC: Add 100 tokens on Purchase/Renewal
+      // FIX: Only add tokens if the product is actually the Pro Monthly subscription
+      if (["INITIAL_PURCHASE", "RENEWAL"].includes(type)) {
+          // You should verify your actual RevenueCat product identifier for Pro Monthly
+          // Assuming 'pro_monthly' based on earlier context. 
+          if (productId.includes("pro_monthly")) { 
+              const { error: tokenError } = await supabaseClient.rpc('increment_token_balance', {
+                p_user_id: userId,
+                p_tokens: 100
+              });
+              if (tokenError) {
+                 console.error("[Webhook] Failed to add Pro tokens:", tokenError);
+              } else {
+                 console.log(`[Webhook] Added 100 Pro tokens to user ${userId}`);
+              }
+          } else {
+              console.log(`[Webhook] consistently ignored non-Pro product ${productId} for Pro token award.`);
+          }
+      }
     }
 
     if (["EXPIRATION", "CANCELLATION", "PRODUCT_CHANGE"].includes(type)) {

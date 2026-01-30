@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, StatusBar, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, StatusBar } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
 import { useRouter, Stack } from 'expo-router';
 import { colors } from '../src/theme';
 import { XMarkIcon, ArrowsPointingOutIcon, CameraLensIcon } from '../src/components/Icons';
 import { useImageContext } from '../src/context/ImageContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AppModal } from '../src/components/AppModal';
 
 export default function CameraScreen() {
     const [permission, requestPermission] = useCameraPermissions();
@@ -14,6 +15,29 @@ export default function CameraScreen() {
     const cameraRef = useRef<CameraView>(null);
     const router = useRouter();
     const { setSelectedImage } = useImageContext();
+
+    const [modalConfig, setModalConfig] = useState<{
+        visible: boolean;
+        title: string;
+        message: string;
+        type?: 'default' | 'error' | 'critical';
+        primaryAction?: { label: string; onPress: () => void };
+        secondaryAction?: { label: string; onPress: () => void };
+    }>({ visible: false, title: '', message: '' });
+
+    const showModal = (
+        title: string, 
+        message: string, 
+        type: 'default' | 'error' | 'critical' = 'default',
+        primaryAction?: { label: string; onPress: () => void },
+        secondaryAction?: { label: string; onPress: () => void }
+    ) => {
+        setModalConfig({ visible: true, title, message, type, primaryAction, secondaryAction });
+    };
+
+    const hideModal = () => {
+        setModalConfig(prev => ({ ...prev, visible: false }));
+    };
 
     if (!permission) {
         // Camera permissions are still loading.
@@ -62,7 +86,7 @@ export default function CameraScreen() {
                 }
             } catch (error) {
                 console.error("Failed to take picture:", error);
-                Alert.alert("Error", "Failed to take selected photo.");
+                showModal("Error", "Failed to take selected photo.", 'error');
             } finally {
                 setIsCapturing(false);
             }
@@ -101,6 +125,27 @@ export default function CameraScreen() {
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>
+            <AppModal
+                visible={modalConfig.visible}
+                onClose={hideModal}
+                title={modalConfig.title}
+                message={modalConfig.message}
+                type={modalConfig.type}
+                primaryAction={modalConfig.primaryAction ? {
+                    ...modalConfig.primaryAction,
+                    onPress: () => {
+                        modalConfig.primaryAction?.onPress();
+                        hideModal();
+                    }
+                } : { label: "OK", onPress: hideModal }}
+                secondaryAction={modalConfig.secondaryAction ? {
+                    ...modalConfig.secondaryAction,
+                    onPress: () => {
+                        modalConfig.secondaryAction?.onPress();
+                        hideModal();
+                    }
+                } : undefined}
+            />
         </View>
     );
 }

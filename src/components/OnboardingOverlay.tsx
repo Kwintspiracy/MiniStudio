@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Platform } from 'react-native';
+import Svg, { Defs, Rect, Mask } from 'react-native-svg';
 import { SparklesIcon } from './Icons';
 import { useHaptics } from '../hooks/useHaptics';
 
@@ -70,9 +71,8 @@ export const OnboardingOverlay = ({ step, onNext, targetLayout }: OnboardingOver
         );
     }
 
-    // --- Interactive Tooltips with Blocking Spotlight ---
+    // --- Interactive Tooltips with SVG Spotlight ---
     
-    // Fallback if no layout yet (show nothing or a full blocker? Let's show nothing to avoid blocking prematurely)
     if (!targetLayout) return null;
 
     let tooltipText = "";
@@ -87,44 +87,76 @@ export const OnboardingOverlay = ({ step, onNext, targetLayout }: OnboardingOver
         case 'generate': tooltipText = "Ready? Tap here to create!"; break;
     }
 
-    // Calculate Spotlight Rectangles
+    // Calculate Spotlight Geometry
     const { x, y, width, height } = targetLayout;
-    // Add some padding to the hole so it's not too tight
+    
+    // Add padding to the hole
     const PADDING = 8; 
     const holeX = x - PADDING;
     const holeY = y - PADDING;
     const holeW = width + (PADDING * 2);
     const holeH = height + (PADDING * 2);
 
-    const overlayColor = 'rgba(0,0,0,0.5)'; // Lighter overlay
-
-    // Top, Bottom, Left, Right blockers
-    const topStyle = { top: 0, left: 0, right: 0, height: holeY, backgroundColor: overlayColor, position: 'absolute' as const };
-    const bottomStyle = { top: holeY + holeH, left: 0, right: 0, bottom: 0, backgroundColor: overlayColor, position: 'absolute' as const };
-    const leftStyle = { top: holeY, left: 0, width: holeX, height: holeH, backgroundColor: overlayColor, position: 'absolute' as const };
-    const rightStyle = { top: holeY, left: holeX + holeW, right: 0, height: holeH, backgroundColor: overlayColor, position: 'absolute' as const };
-
-
     // Calculate Tooltip Position
     const isAbove = y > 200;
     const tooltipY = isAbove 
-        ? y - 120 
-        : y + height + 20;
+        ? y - 90 
+        : y + height + 22;
 
     let tooltipX = x + (width / 2) - 140; 
     tooltipX = Math.max(16, Math.min(tooltipX, SCREEN_WIDTH - 280 - 16));
-
     const arrowX = x + (width / 2) - tooltipX - 10;
+
+    // INTERACTION BLOCKERS (Transparent, Square)
+    // These block touches outside the hole area.
+    const topStyle = { top: 0, left: 0, right: 0, height: holeY, position: 'absolute' as const };
+    const bottomStyle = { top: holeY + holeH, left: 0, right: 0, bottom: 0, position: 'absolute' as const };
+    const leftStyle = { top: holeY, left: 0, width: holeX, height: holeH, position: 'absolute' as const };
+    const rightStyle = { top: holeY, left: holeX + holeW, right: 0, height: holeH, position: 'absolute' as const };
 
     return (
         <View style={styles.interactiveOverlay} pointerEvents="box-none">
-            {/* Blocking Views */}
-            <View style={topStyle} pointerEvents="auto" />
-            <View style={bottomStyle} pointerEvents="auto" />
-            <View style={leftStyle} pointerEvents="auto" />
-            <View style={rightStyle} pointerEvents="auto" />
+            
+            {/* 1. VISUAL LAYER: Full Screen SVG with Mask */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                <Svg height="100%" width="100%">
+                    <Defs>
+                        <Mask id="spotlightMask">
+                            {/* Everything is white (visible) by default */}
+                            <Rect x="0" y="0" width="100%" height="100%" fill="white" />
+                            {/* The hole is black (hidden/transparent) */}
+                            {/* Using rounded corners rx/ry for smoother look */}
+                            <Rect 
+                                x={holeX} 
+                                y={holeY} 
+                                width={holeW} 
+                                height={holeH} 
+                                rx="12" 
+                                ry="12" 
+                                fill="black" 
+                            />
+                        </Mask>
+                    </Defs>
+                    {/* The Overlay Color, masked by the definition above */}
+                    <Rect 
+                        x="0" 
+                        y="0" 
+                        width="100%" 
+                        height="100%" 
+                        fill="rgba(0,0,0,0.6)" 
+                        mask="url(#spotlightMask)" 
+                    />
+                </Svg>
+            </View>
 
-            {/* Tooltip */}
+            {/* 2. LOGIC LAYER: Transparent Blockers */}
+            {/* These exist solely to catch touches outside the hole */}
+            <View style={topStyle} pointerEvents="auto" onStartShouldSetResponder={() => true} />
+            <View style={bottomStyle} pointerEvents="auto" onStartShouldSetResponder={() => true} />
+            <View style={leftStyle} pointerEvents="auto" onStartShouldSetResponder={() => true} />
+            <View style={rightStyle} pointerEvents="auto" onStartShouldSetResponder={() => true} />
+
+            {/* 3. TOOLTIP LAYER */}
             <Animated.View 
                 style={[
                     styles.tooltipContainer, 
@@ -222,8 +254,9 @@ const styles = StyleSheet.create({
     tooltipText: {
         color: 'white',
         fontWeight: '700',
-        fontSize: 16,
+        fontSize: 15,
         textAlign: 'center',
+        lineHeight: 20,
     },
     arrow: {
         position: 'absolute',

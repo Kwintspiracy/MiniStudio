@@ -110,7 +110,7 @@ export const UsageTracker = forwardRef<UsageTrackerRef>((_, ref) => {
 
              <View style={styles.tokenSection}>
                 <View style={styles.tokenRow}>
-                    <Text style={styles.tokenValue}>{entitlements.purchased_balance}</Text>
+                    <Text style={styles.tokenValue}>{entitlements.remaining_total ?? entitlements.purchased_balance}</Text>
                     <Text style={styles.tokenLabel}>Tokens</Text>
                 </View>
                 <Text style={styles.tokenHint}>Tokens are used to generate miniatures.</Text>

@@ -1,0 +1,25 @@
+Scenario ID,Mode,Style,NMM Effect,OSL Effect,Photoshoot Effect,Brand Selection,Custom Palette,Colors Section Content,Effects Section Content,Notes
+1,BASE,Any Style,OFF,OFF,OFF,All Brands,None,"Smart filtered from all brands (categories: Flesh Tones, Neutrals, Colors, Metallics)",TMM default instructions,Default scenario with all brands available
+2,BASE,Any Style,OFF,OFF,OFF,Specific Brand(s),None,"Brand paints - smart filtered if >50, direct list if ≤50",TMM default instructions,Single or multiple brand selection
+3,BASE,Any Style,OFF,OFF,OFF,My Collection,None,User's saved paints only,TMM default instructions,Requires MiniPainterDB integration
+4,BASE,Any Style,OFF,OFF,OFF,Any,User Selected Colors,"STRICT COLOR PALETTE: exact user-selected colors (Standard + Metallic separated)",TMM default instructions,Custom palette overrides brand selection
+5,BASE,Any Style,ON,OFF,OFF,All Brands,None,"Smart filtered with NMM recipes for metallics",NMM instructions,Non-metallic metal rendering
+6,BASE,Any Style,ON,OFF,OFF,Specific Brand(s),None,"Brand paints with NMM metallic recipes",NMM instructions,NMM with brand constraint
+7,BASE,Any Style,ON,OFF,OFF,Any,User Selected Colors (no metallics),"STRICT COLOR PALETTE: user colors",Standard NMM instructions,Pure NMM - no actual metallics
+8,BASE,Any Style,ON,OFF,OFF,Any,User Selected Colors (with metallics),"STRICT COLOR PALETTE: user colors including metallics",NMM.mixed instructions (hybrid TMM/NMM),Mixed mode - some real metallics with NMM technique
+9,BASE,Any Style,OFF,ON,OFF,Any,Any,Colors based on brand/palette selection,TMM default + OSL instructions,Object source lighting effect
+10,BASE,Any Style,ON,ON,OFF,Any,Any,Colors based on brand/palette selection,NMM + OSL instructions,Combined NMM and OSL effects
+11,BASE,Any Style,OFF,OFF,ON,Any,Any,Colors based on brand/palette selection,TMM default + Photoshoot instructions,Studio lighting effect
+12,BASE,Any Style,ON,OFF,ON,Any,Any,Colors based on brand/palette selection,NMM + Photoshoot instructions,NMM with studio lighting
+13,BASE,Any Style,OFF,ON,ON,Any,Any,Colors based on brand/palette selection,TMM + OSL + Photoshoot instructions,OSL with studio lighting
+14,BASE,Any Style,ON,ON,ON,Any,Any,Colors based on brand/palette selection,NMM + OSL + Photoshoot instructions,All effects enabled (BASE)
+15,PRO,Any Style,OFF,OFF,OFF,All Brands,None,"Smart filtered from all brands",TMM Pro instructions,PRO mode with enhanced prompts
+16,PRO,Any Style,OFF,OFF,OFF,Specific Brand(s),None,"Brand paints - smart filtered if >50",TMM Pro instructions,PRO with brand selection
+17,PRO,Any Style,OFF,OFF,OFF,My Collection,None,User's saved paints only,TMM Pro instructions,PRO with user collection
+18,PRO,Any Style,OFF,OFF,OFF,Any,User Selected Colors,"STRICT COLOR PALETTE: exact user colors",TMM Pro instructions,PRO with custom palette
+19,PRO,Any Style,ON,OFF,OFF,Any,None,Colors with NMM Pro recipes,NMM Pro instructions,PRO NMM rendering
+20,PRO,Any Style,ON,OFF,OFF,Any,User Selected Colors (with metallics),"STRICT COLOR PALETTE with metallics",NMM.mixed Pro instructions,PRO mixed metallic mode
+21,PRO,Any Style,OFF,ON,OFF,Any,Any,Colors based on selection,TMM Pro + OSL Pro instructions,PRO OSL effect
+22,PRO,Any Style,ON,ON,OFF,Any,Any,Colors based on selection,NMM Pro + OSL Pro instructions,PRO NMM + OSL
+23,PRO,Any Style,OFF,OFF,ON,Any,Any,Colors based on selection,TMM Pro + Photoshoot Pro instructions,PRO Photoshoot
+24,PRO,Any Style,ON,ON,ON,Any,Any,Colors based on selection,NMM Pro + OSL Pro + Photoshoot Pro,All PRO effects enabled
