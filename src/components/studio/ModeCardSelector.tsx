@@ -10,12 +10,12 @@ const ImagePaint = require('../../../assets/ImagePaint.png');
 
 // Dynamic spacing based on screen width
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const cardGap = SCREEN_WIDTH > 390 ? 8 : SCREEN_WIDTH > 350 ? 4 : 2;
-const iconTextGap = SCREEN_WIDTH > 390 ? -4 : SCREEN_WIDTH > 350 ? -6 : -8;
-const titleFontSize = SCREEN_WIDTH > 390 ? 16 : 14;
-const subtitleFontSize = SCREEN_WIDTH > 390 ? 12 : 12;
-const imageSize = SCREEN_WIDTH > 390 ? 50 : 30;
-const textGap = SCREEN_WIDTH > 390 ? 2 : 1;
+const cardGap = SCREEN_WIDTH > 420 ? 8 : SCREEN_WIDTH > 350 ? 8 : 2;
+const iconTextGap = SCREEN_WIDTH > 414 ? -4 : SCREEN_WIDTH > 350 ? 8 : -8;
+const titleFontSize = SCREEN_WIDTH > 420 ? 16 : 14;
+const subtitleFontSize = SCREEN_WIDTH > 420 ? 12 : 12;
+const imageSize = SCREEN_WIDTH > 420 ? 50 : 30;
+const textGap = SCREEN_WIDTH > 420 ? 2 : 1;
 
 interface ModeCardSelectorProps {
   activeMode: StudioMode;

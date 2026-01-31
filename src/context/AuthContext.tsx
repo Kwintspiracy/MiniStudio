@@ -287,6 +287,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const scheme = Constants.expoConfig?.scheme;
                 const redirectUrl = `${scheme}://google-auth`;
 
+                // Dismiss any stale sessions to prevent "Another web browser is already open" errors
+                try {
+                    await WebBrowser.dismissAuthSession();
+                } catch (e) {
+                    // Ignore if no session is open
+                }
+
                 if (__DEV__) {
                     console.log("--- AUTH DEBUG START ---");
                     console.log("[AUTH] Explicit Redirect URL Generated:", redirectUrl);

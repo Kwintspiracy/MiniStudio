@@ -19,11 +19,20 @@ export function useMediaSave(): UseMediaSaveResult {
     setError(null);
 
     try {
-      // Request permission
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
-        setError('Permission to save to media library was denied');
-        return false;
+      // Check existing permissions first to avoid repetitive prompts
+      const permission = await MediaLibrary.getPermissionsAsync(true);
+      
+      if (permission.status === 'granted' || permission.accessPrivileges === 'limited') {
+        // We have permission (full or limited), proceed
+      } else if (permission.status === 'undetermined' || permission.canAskAgain) {
+         const { status } = await MediaLibrary.requestPermissionsAsync(true);
+         if (status !== 'granted') {
+           setError('Permission to save to media library was denied');
+           return false;
+         }
+      } else {
+         setError('Permission to save to media library was denied');
+         return false;
       }
 
       let fileUri: string;
@@ -43,16 +52,8 @@ export function useMediaSave(): UseMediaSaveResult {
         fileUri = base64OrUri;
       }
 
-      // Save to media library
-      const asset = await MediaLibrary.createAssetAsync(fileUri);
-
-      // Optionally create or add to album
-      const album = await MediaLibrary.getAlbumAsync('MiniStudio');
-      if (album === null) {
-        await MediaLibrary.createAlbumAsync('MiniStudio', asset, false);
-      } else {
-        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-      }
+      // Save to media library (Directly to camera roll)
+      await MediaLibrary.createAssetAsync(fileUri);
 
       return true;
     } catch (err) {

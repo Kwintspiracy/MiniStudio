@@ -13,6 +13,11 @@ export const PAINTING_STYLES: StyleOption[] = [
 
 export const BACKGROUND_THEMES = ['None', 'Fantasy', 'Sci-Fi', 'Modern', 'History'];
 
+export const SKETCH_STYLE_OPTIONS = [
+  { id: 'fantasy', label: 'Fantasy / D&D' },
+  { id: 'sci-fi', label: 'Sci-Fi / Cyberpunk' },
+] as const;
+
 export interface PaintColor {
   name: string;
   hex: string;
@@ -70,11 +75,12 @@ export const COLOR_BRANDS: ColorBrand[] = [
 ];
 
 export const DEFAULT_DESIGNER_TEMPLATES = {
-  sketch: "Inspired by these images make a high-detail professional character concept art sketch, in the style of fantasy illustration. Use precise and clean linework with a consistent line weight to define the forms. {input}",
+  sketch: "Inspired by this image {input} make a high-detail professional character concept art sketch, in the style of a {style} illustration. Use precise and clean linework with a consistent line weight to define the forms, and a slightly thicker, more confident line weight to emphasize key details and outlines. The style is best described as highly polished and suitable for use in video game or book production. The drawing should be presented as a clean, black-and-white line art sketch on a plain background.\n\nThe drawing should feature intricate and elaborate textures, and material differences as well as accessories related to its class, race. The character should have balanced, realistic proportions within a stylized context. The composition should be clear, with the character as the central focus.\n\n{creativity}",
   sculpt: "A professional, high-resolution product photograph of a 32mm miniature. The figure, a {input}, is rendered as an unpainted, dark grey resin print. Emphasize extreme, hyperrealistic photorealism.",
   miniature: "A professional, high-resolution product photograph of a 32mm miniature. The figure, a {input}, is rendered as an unpainted, dark grey resin print. Emphasize extreme, hyperrealistic photorealism.",
   'pro-shot': "A studio product shot of a grey {input} miniature on a seamless black background. Soft diffused lighting.",
-  combined: `Role: You are a Concept Artist using a "Style Transfer" workflow. Result: The subject described in my text, but painted as if it belongs in the universe of the reference images.`
+  combined: `Role: You are a Concept Artist using a "Style Transfer" workflow. Result: The subject described in my text, but painted as if it belongs in the universe of the reference images.`,
+  creativity_level: "AI CREATIVITY INTENSITY: {percentage}% (0%=Strict Adherence, 100%=Max Artistic License). Adjust the level of detail, material variation, and stylized interpretation to match this exact percentage."
 };
 
 // Keys are now loaded from app.json / app.config.ts via Expo Constants

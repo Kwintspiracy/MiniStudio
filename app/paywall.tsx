@@ -56,10 +56,23 @@ export default function PaywallScreen() {
                    packageType: 'MONTHLY',
                    product: {
                        identifier: 'pro_monthly',
-                       description: 'Unlimited Access + 100 Tokens/mo',
+                       description: 'Unlimited Access + 60 Tokens/mo',
                        title: 'Pro Monthly (Mock)',
-                       price: 9.99,
-                       priceString: '$9.99',
+                       price: 5.99,
+                       priceString: '$5.99',
+                       currencyCode: 'USD',
+                       productType: 'AUTO_RENEWABLE_SUBSCRIPTION',
+                   }
+               },
+               {
+                   identifier: 'Annual',
+                   packageType: 'ANNUAL',
+                   product: {
+                       identifier: 'pro_annual',
+                       description: 'Unlimited Access + 60 Tokens/mo',
+                       title: 'Pro Annual (Mock)',
+                       price: 53.88,
+                       priceString: '$53.88',
                        currencyCode: 'USD',
                        productType: 'AUTO_RENEWABLE_SUBSCRIPTION',
                    }
@@ -71,8 +84,8 @@ export default function PaywallScreen() {
                        identifier: 'tokens_200',
                        description: '200 Tokens (Consumable)',
                        title: '200 Tokens (Mock)',
-                       price: 14.99,
-                       priceString: '$14.99',
+                       price: 17.99,
+                       priceString: '$17.99',
                        currencyCode: 'USD',
                        productType: 'CONSUMABLE', // or NON_RENEWING_SUBSCRIPTION if that's what we call it
                    }
@@ -87,12 +100,17 @@ export default function PaywallScreen() {
                {
                    identifier: 'Monthly',
                    packageType: 'MONTHLY',
-                   product: { identifier: 'pro_monthly', description: 'Unlimited Access + 100 Tokens/mo', title: 'Pro Monthly (Mock)', priceString: '$9.99', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
+                   product: { identifier: 'pro_monthly', description: 'Unlimited Access + 100 Tokens/mo', title: 'Pro Monthly (Mock)', priceString: '$5.99', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
+               },
+               {
+                   identifier: 'Annual',
+                   packageType: 'ANNUAL',
+                   product: { identifier: 'pro_annual', description: 'Unlimited Access + 100 Tokens/mo', title: 'Pro Annual (Mock)', priceString: '$53.88', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
                },
                {
                    identifier: 'Tokens_200',
                    packageType: 'CUSTOM',
-                   product: { identifier: 'tokens_200', description: '200 Tokens', title: '200 Tokens (Mock)', priceString: '$14.99', productType: 'CONSUMABLE' }
+                   product: { identifier: 'tokens_200', description: '200 Tokens', title: '200 Tokens (Mock)', priceString: '$17.99', productType: 'CONSUMABLE' }
                }
            ] as any);
     } finally {

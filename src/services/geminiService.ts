@@ -29,7 +29,8 @@ export async function generatePaintedMiniature(
     baseImages: ImageFile | ImageFile[] | null,
     prompt: string,
     numberOfImages: number,
-    model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview'
+    model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview',
+    temperature?: number
 ): Promise<string[]> {
     const imagesToProcess = Array.isArray(baseImages) ? baseImages : (baseImages ? [baseImages] : []);
     const baseImagePayload = imagesToProcess.length > 0 ? prepareImagePayload(imagesToProcess[0]) : undefined;
@@ -80,7 +81,8 @@ export async function generatePaintedMiniature(
                 prompt,
                 baseImage: baseImagePayload,
                 model,
-                action: 'generate'
+                action: 'generate',
+                temperature
             }),
             signal: abortController.signal
         });
@@ -113,17 +115,107 @@ export async function generatePaintedMiniature(
              throw new Error("Request cancelled by user.");
         }
 
-        console.log("[Gemini Proxy] Response received");
+        console.log("[Gemini Proxy] Response received:", data);
 
         if (data?.error) {
             console.error("Edge Function Logic Error:", data.error);
             throw new Error(data.error);
         }
 
-        // The Edge Function returns { output: "base64..." or "text..." }
-        const result = data.output;
-        if (result) {
+        // ================================================================
+        // Handle dual response patterns
+        // ================================================================
+        
+        // SYNC RESPONSE (Gemini): Image returned immediately
+        if (data.output) {
+            console.log("[Gemini Proxy] Sync response - image received directly");
+            const result = data.output;
             return [result.startsWith('data:') ? result : `data:image/png;base64,${result}`];
+        }
+        
+        // ASYNC RESPONSE (PoYo): Subscribe to Realtime for job updates
+        if (data.status === 'processing' && data.job_id) {
+            console.log(`[Gemini Proxy] Async response - subscribing to job ${data.job_id}`);
+            
+            return new Promise<string[]>((resolve, reject) => {
+                const TIMEOUT_MS = 180000; // 3 minute timeout for webhook
+                let resolved = false;
+                
+                // Setup timeout
+                const timeoutId = setTimeout(() => {
+                    if (!resolved) {
+                        resolved = true;
+                        subscription.unsubscribe();
+                        reject(new Error('Image generation timed out. Please try again.'));
+                    }
+                }, TIMEOUT_MS);
+                
+                // Handle abort signal
+                const handleAbort = () => {
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timeoutId);
+                        subscription.unsubscribe();
+                        reject(new Error('Request cancelled by user.'));
+                    }
+                };
+                abortController?.signal.addEventListener('abort', handleAbort);
+                
+                // Subscribe to Realtime updates for this job
+                const subscription = supabase
+                    .channel(`job-${data.job_id}`)
+                    .on('postgres_changes', {
+                        event: 'UPDATE',
+                        schema: 'public',
+                        table: 'generation_jobs',
+                        filter: `id=eq.${data.job_id}`
+                    }, async (payload) => {
+                        console.log('[Gemini Proxy] Realtime update:', payload.new);
+                        
+                        const job = payload.new as { 
+                            status: string; 
+                            result_image_url?: string; 
+                            error_message?: string;
+                        };
+                        
+                        if (job.status === 'completed' && job.result_image_url) {
+                            if (!resolved) {
+                                resolved = true;
+                                clearTimeout(timeoutId);
+                                abortController?.signal.removeEventListener('abort', handleAbort);
+                                subscription.unsubscribe();
+                                
+                                console.log('[Gemini Proxy] Job completed! Fetching image...');
+                                
+                                try {
+                                    // Fetch image and convert to base64
+                                    const imageResponse = await fetch(job.result_image_url);
+                                    const blob = await imageResponse.blob();
+                                    const reader = new FileReader();
+                                    const base64 = await new Promise<string>((res, rej) => {
+                                        reader.onloadend = () => res(reader.result as string);
+                                        reader.onerror = rej;
+                                        reader.readAsDataURL(blob);
+                                    });
+                                    resolve([base64]);
+                                } catch (fetchError) {
+                                    reject(new Error('Failed to fetch generated image'));
+                                }
+                            }
+                        } else if (job.status === 'failed') {
+                            if (!resolved) {
+                                resolved = true;
+                                clearTimeout(timeoutId);
+                                abortController?.signal.removeEventListener('abort', handleAbort);
+                                subscription.unsubscribe();
+                                reject(new Error(job.error_message || 'Image generation failed'));
+                            }
+                        }
+                    })
+                    .subscribe((status) => {
+                        console.log(`[Gemini Proxy] Realtime subscription status: ${status}`);
+                    });
+            });
         }
         
         console.warn("[Gemini Proxy] No output in response");
@@ -156,9 +248,10 @@ export async function generatePaintedMiniature(
 export async function generateImageFromImage(
     baseImages: ImageFile | ImageFile[],
     prompt: string,
-    model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview'
+    model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview',
+    temperature?: number
 ): Promise<string[]> {
-    return generatePaintedMiniature(baseImages, prompt, 1, model);
+    return generatePaintedMiniature(baseImages, prompt, 1, model, temperature);
 }
 
 

@@ -2,13 +2,19 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   View, Text, TouchableOpacity, ScrollView, Image, TextInput,
   ActivityIndicator, Alert, Modal, StyleSheet, Platform, Dimensions, StatusBar, Share,
-  KeyboardAvoidingView, Keyboard
+  KeyboardAvoidingView, Keyboard, Pressable
 } from 'react-native';
+import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
   withSpring, 
-  withTiming
+  withTiming,
+  runOnJS,
+  useAnimatedReaction,
+  interpolate,
+  Extrapolation,
+  useDerivedValue
 } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +26,7 @@ import {
   CameraLensIcon, CloseIcon,
   FileDownloadIcon as MdFileDownloadIcon, SpinnerIcon, TbProgressCheckIcon, ShareIcon, GalleryIcon
 } from '@/components/Icons';
+import AppTitleSvg from '../../assets/icons/react-icons/apptitle.svg';
 import type { ImageFile, DesignerType, HistoryItem, StyleOption, StudioMode } from '@/types';
 import { sanitizePrompt } from '@/utils/sanitization';
 import { generatePaintPrompt } from '@/utils/promptGenerator';
@@ -41,13 +48,16 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { ModeCardSelector } from '@/components/studio/ModeCardSelector';
 import { SourceContainer } from '@/components/studio/SourceContainer';
 import { OnboardingOverlay, TutorialStep } from '@/components/OnboardingOverlay';
+import { GenerationTooltip } from '@/components/GenerationTooltip';
+import { BreathingGradientButton } from '@/components/BreathingGradientButton';
 import { colors, spacing, borderRadius, fontFamily, textStyles } from '@/theme';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { shareAsync, isAvailableAsync } from 'expo-sharing';
+import { Toast } from '@/components/Toast';
 
 // Get screen dimensions
-import { DEFAULT_DESIGNER_TEMPLATES, METALLIC_PAINT_INSTRUCTIONS } from '@/constants';
+import { DEFAULT_DESIGNER_TEMPLATES, METALLIC_PAINT_INSTRUCTIONS, SKETCH_STYLE_OPTIONS } from '@/constants';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Dynamic Grid Calculation
@@ -72,9 +82,108 @@ const SectionAccent = () => (
     <View style={{ width: 4, height: 16, backgroundColor: colors.button.primary, borderRadius: 0 }} />
 );
 
+const CreativitySlider = React.memo(({ initialValue, onValueChange }: { initialValue: number, onValueChange: (val: number) => void }) => {
+  const widthSV = useSharedValue(0);
+  const position = useSharedValue(initialValue);
+  
+  // Padding for the thumb constraint
+  const EDGE_PADDING = 5; // 5px from left/right edges of container
+  const THUMB_WIDTH = 5;
+  const THUMB_INSIDE_OFFSET = 5; // How much "fill" extends past the thumb
+
+  // Sync shared value with initialValue when it changes externally
+  useEffect(() => {
+    position.value = initialValue;
+  }, [initialValue]);
+
+  // Derive the exact pixel X position of the thumb
+  // We cannot use useDerivedValue easily for styling due to widthSV dependency in layout?
+  // actually we can.
+  
+  const thumbTranslateX = useDerivedValue(() => {
+     if (widthSV.value === 0) return 0;
+     const maxLeft = widthSV.value - EDGE_PADDING - THUMB_WIDTH;
+     const minLeft = EDGE_PADDING;
+     
+     return interpolate(
+      position.value,
+      [0, 1],
+      [minLeft, maxLeft],
+      Extrapolation.CLAMP
+    );
+  }, [widthSV, position]);
+
+
+  const animatedFillStyle = useAnimatedStyle(() => {
+    // Fill width must cover the thumb position + width + extra spacing
+    // If widthSV is 0, defaults to percentage
+    if (widthSV.value === 0) return { width: `${position.value * 100}%` };
+    
+    // Width = ThumbLeft + ThumbWidth + Spacing
+    return {
+       width: thumbTranslateX.value + THUMB_WIDTH + THUMB_INSIDE_OFFSET
+    };
+  });
+
+  const animatedThumbStyle = useAnimatedStyle(() => {
+    return {
+      left: 0, 
+      transform: [{ translateX: thumbTranslateX.value }]
+    };
+  });
+
+  // Calculate value from X coordinate
+  const updateValue = (x: number, w: number) => {
+    'worklet';
+    if (w <= 0) return;
+    // We need to reverse the interpolation to get value from X
+    // Range: [EDGE_PADDING, w - EDGE_PADDING - THUMB_WIDTH]
+    const minLeft = EDGE_PADDING;
+    const maxLeft = w - EDGE_PADDING - THUMB_WIDTH;
+    
+    // Clamp X to valid range
+    const clampedX = Math.max(minLeft, Math.min(x, maxLeft));
+    
+    // Reverse interpolate: (x - min) / (max - min)
+    const val = (clampedX - minLeft) / (maxLeft - minLeft);
+    const clampedVal = Math.max(0, Math.min(1, val));
+
+    position.value = clampedVal;
+    runOnJS(onValueChange)(clampedVal);
+  };
+
+  const gesture = Gesture.Pan()
+    .onBegin((e) => {
+      updateValue(e.x, widthSV.value);
+    })
+    .onUpdate((e) => {
+      updateValue(e.x, widthSV.value);
+    });
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <View 
+        style={{ paddingTop: 0, paddingBottom: 5, justifyContent: 'center' }}
+        onLayout={(e) => {
+           widthSV.value = e.nativeEvent.layout.width;
+        }}
+      >
+        <View style={styles.sliderTrack}>
+          <Animated.View style={[styles.sliderFill, animatedFillStyle]} pointerEvents="none" />
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center' }} pointerEvents="none">
+             <Animated.View style={[styles.sliderThumb, animatedThumbStyle]} pointerEvents="none" />
+          </View>
+        </View>
+      </View>
+    </GestureDetector>
+  );
+});
+
 const AnimatedTextInput = Animated.createAnimatedComponent(TextInput);
-const LINE_HEIGHT = 20;
-const INITIAL_INPUT_HEIGHT = 48; // Increased slightly for placeholder comfort
+const LINE_HEIGHT = 18;
+const INITIAL_INPUT_HEIGHT = 40;
+const MAX_INPUT_LINES = 4;
+const INPUT_VERTICAL_PADDING = 10; // (18 * 4) + (10 * 2) = 92px max
 
 // --- Figma Components ---
 
@@ -166,6 +275,15 @@ export default function StudioScreen() {
   const [designerPrompt, setDesignerPrompt] = useState('');
   const [painterPrompt, setPainterPrompt] = useState('');
   
+  // Sketch Feature Enhancements
+  const [sketchStyle, setSketchStyle] = useState<'fantasy' | 'sci-fi'>('fantasy');
+  const [creativityLevel, setCreativityLevel] = useState(0.7); // Default to 0.7 for good balance
+  const [sliderWidth, setSliderWidth] = useState(0);
+
+  const handleCreativityChange = useCallback((val: number) => {
+      setCreativityLevel(val);
+  }, []);
+  
   // Replace local state with Entitlements hook
   const { entitlements, refetch, loading: entitlementsLoading } = useEntitlements();
   // Reverted to local state per user request (was strictly entitlements.is_pro)
@@ -212,6 +330,20 @@ export default function StudioScreen() {
 
 
   const [isLoading, setIsLoading] = useState(false);
+  const [showLongGenerationTooltip, setShowLongGenerationTooltip] = useState(false);
+
+  // Long generation tooltip timer
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    if (isLoading) {
+        timer = setTimeout(() => {
+            setShowLongGenerationTooltip(true);
+        }, 10000); // 10 seconds
+    } else {
+        setShowLongGenerationTooltip(false);
+    }
+    return () => clearTimeout(timer);
+  }, [isLoading]);
 
   const [isResultsDrawerOpen, setIsResultsDrawerOpen] = useState(false);
   const [isPaintExplorerOpen, setIsPaintExplorerOpen] = useState(false);
@@ -235,9 +367,9 @@ export default function StudioScreen() {
       setModalConfig({ visible: true, title, message, type, primaryAction, secondaryAction });
   };
 
-  const hideModal = () => {
+  const hideModal = useCallback(() => {
       setModalConfig(prev => ({ ...prev, visible: false }));
-  };
+  }, []);
 
   const [showMyPaintsAlert, setShowMyPaintsAlert] = useState(false);
   // Tutorial State
@@ -254,37 +386,46 @@ export default function StudioScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const cameFromGalleryRef = useRef(false); // Track if we navigated to camera from gallery
 
+  // Toast State
+  const [toastConfig, setToastConfig] = useState<{ visible: boolean; message: string }>({ 
+      visible: false, 
+      message: '' 
+  });
+
+  const showToast = useCallback((message: string) => {
+      setToastConfig({ visible: true, message });
+  }, []);
+
+  const hideToast = useCallback(() => {
+      setToastConfig(prev => ({ ...prev, visible: false }));
+  }, []);
+
   // Textfield Dynamic Sizing State
   const [isInputFocused, setIsInputFocused] = useState(false);
   const inputContentHeight = useSharedValue(INITIAL_INPUT_HEIGHT);
   const animatedHeight = useSharedValue(INITIAL_INPUT_HEIGHT);
 
   const animatedInputStyle = useAnimatedStyle(() => {
-    // Logic: 
-    // If Focused: Target is contentHeight (no max, sits above keyboard)
-    // If Blurred: Target is MIN(contentHeight, LINE_HEIGHT * 4)
+    // 1. Calculate max height (4 lines of text + padding)
+    const maxAllowedHeight = (LINE_HEIGHT * MAX_INPUT_LINES) + (INPUT_VERTICAL_PADDING * 2);
     
-    let targetHeight = inputContentHeight.value;
-    if (!isInputFocused) {
-        // When blurred, cap at 4 lines (plus some padding)
-        const maxBlurredHeight = LINE_HEIGHT * 4 + 24; 
-        targetHeight = Math.min(targetHeight, maxBlurredHeight);
-        
-        // If empty, force to initial height
-        const currentText = activeMode === 'paint' ? painterPrompt : designerPrompt;
-        if (!currentText) {
-            targetHeight = INITIAL_INPUT_HEIGHT;
-        }
+    // 2. Determine target height based on focus
+    if (isInputFocused) {
+      // Focused: (Content Height + Padding) clamped between 40px and maxAllowedHeight
+      // inputContentHeight.value is the raw height of the text block
+      const targetHeight = inputContentHeight.value + (INPUT_VERTICAL_PADDING * 2);
+      const clampedHeight = Math.max(INITIAL_INPUT_HEIGHT, Math.min(targetHeight, maxAllowedHeight));
+      
+      return {
+        height: withTiming(clampedHeight, { duration: 250 }),
+      };
+    } else {
+      // Unfocused: Smoothly collapse to fixed 40px
+      return {
+        height: withTiming(INITIAL_INPUT_HEIGHT, { duration: 250 }),
+      };
     }
-
-    return {
-      height: withSpring(targetHeight, {
-        damping: 20,
-        stiffness: 100,
-        mass: 0.5,
-      }),
-    };
-  }, [isInputFocused, activeMode, painterPrompt, designerPrompt]);
+  }, [isInputFocused]);
 
   const { pickMultipleImages, pickDocument } = useImagePicker();
   const { saveImage } = useMediaSave();
@@ -515,7 +656,9 @@ export default function StudioScreen() {
     }
     setIsLoading(true);
     // setError(null); // No longer needed
-    const model = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
+    // Unified 1-token cost for all generations as per user request.
+    // Logic preserved for future use: const model = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
+    const model = 'gemini-2.5-flash-image';
     try {
       let images: string[] = [];
       if (activeMode === 'paint' && sourceImages.length >= 1) {
@@ -540,7 +683,7 @@ export default function StudioScreen() {
         const characterDesc = sanitizePrompt(designerPrompt).trim() || 'character';
         
         let template: string;
-        if (isPhotoshootEnabled && designerTemplates['pro-shot']) {
+        if (activeMode === 'sculpt' && isPhotoshootEnabled && designerTemplates['pro-shot']) {
             // Use pro-shot template when Photoshoot is enabled
             const proShotConfig = designerTemplates['pro-shot'];
             template = isPro ? proShotConfig.pro : proShotConfig.default;
@@ -551,9 +694,22 @@ export default function StudioScreen() {
             template = isPro ? templateConfig.pro : templateConfig.default;
         }
 
-        const prompt = template.replace(/{input}/g, characterDesc);
-        console.log(prompt);
-        images = await generateImageFromImage(sourceImages, prompt, model);
+        // Fetch the creativity template from remote config (or default)
+        const creativityConfig = designerTemplates['creativity_level'];
+        // Fallback string if config is missing (though constants ensure it exists locally)
+        const creativityTemplateString = creativityConfig 
+            ? (isPro ? creativityConfig.pro : creativityConfig.default) 
+            : "AI CREATIVITY INTENSITY: {percentage}% (0%=Strict Adherence, 100%=Max Artistic License). Adjust the level of detail, material variation, and stylized interpretation to match this exact percentage.";
+        
+        const resolvedCreativity = creativityTemplateString.replace(/{percentage}/g, (creativityLevel * 100).toFixed(0));
+
+        const prompt = template
+          .replace(/{input}/g, characterDesc)
+          .replace(/{style}/g, sketchStyle)
+          .replace(/{creativity}/g, resolvedCreativity);
+
+        console.log(`\n--- ${activeMode.toUpperCase()} PROMPT (Temp: ${creativityLevel}) ---\n${prompt}\n----------------------------------\n`);
+        images = await generatePaintedMiniature(sourceImages, prompt, 1, model, creativityLevel);
       }
       if (images && images.length > 0) {
         const resultUrl = images[0];
@@ -593,7 +749,7 @@ export default function StudioScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [sourceImages, activeMode, designerPrompt, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPhotoshootEnabled, isPaletteEnabled, selectedColors, selectedBrands, loadedPaints]);
+  }, [sourceImages, activeMode, designerPrompt, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPhotoshootEnabled, isPaletteEnabled, selectedColors, selectedBrands, loadedPaints, sketchStyle, creativityLevel]);
 
   // Handle dynamic aspect ratio for the preview image
   useEffect(() => {
@@ -610,17 +766,34 @@ export default function StudioScreen() {
   }, [activePreviewImage]);
 
   const handleCancelGeneration = useCallback(() => {
-    cancelGeneration();
-    setIsLoading(false);
-  }, []);
+    showModal(
+        "Confirm Cancel?",
+        "Image generation usually takes around 30 seconds. Are you sure you want to stop now?",
+        'default',
+        { 
+            label: "Confirm Cancel", 
+            onPress: () => {
+                cancelGeneration();
+                setIsLoading(false);
+                hideModal();
+            } 
+        },
+        { 
+            label: "Wait", 
+            onPress: hideModal 
+        }
+    );
+  }, [hideModal]);
 
 
 
   const handleDownload = useCallback(async () => {
     if (!activePreviewImage) return;
     const success = await saveImage(activePreviewImage);
-    if (success) showModal('Success', 'Image saved to your photo library!', 'default');
-  }, [activePreviewImage, saveImage]);
+    if (success) {
+      showToast("Image saved to your gallery!");
+    }
+  }, [activePreviewImage, saveImage, showToast]);
 
   const handleShare = useCallback(async () => {
     if (!activePreviewImage) return;
@@ -801,7 +974,8 @@ export default function StudioScreen() {
 
 
   return (
-    <View style={styles.screenContainer}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View style={styles.screenContainer}>
       <View style={[styles.statusBarBackground, { height: insets.top }]} />
       <StatusBar barStyle="light-content" backgroundColor="#12121F" />
       
@@ -821,8 +995,8 @@ export default function StudioScreen() {
             ref={view => { targetRefs.current['pro_badge'] = view; }}
             collapsable={false}
           >
-            <ModeBadge isAdvanced={isPro} onToggle={handleProToggle} />
-
+            {/* <ModeBadge isAdvanced={isPro} onToggle={handleProToggle} /> */}
+            <AppTitleSvg width={182} height={14} />
           </View>
           <View style={styles.topNavTitle}>
             {/* App title removed per design */}
@@ -857,7 +1031,57 @@ export default function StudioScreen() {
           {/* DESIGN: Mode-Specific Content */}
           <View style={styles.modeContent}>
               {activeMode === 'sketch' ? (
-                <>{/* Sketch mode has no additional effects */}</>
+                <>
+                  <View style={styles.paintStepSection}>
+                    <SectionHeader 
+                      icon={<RiPaintFillIcon size={16} color="#32D278" />}
+                      title="CHOOSE A STYLE"
+                    />
+                    <View style={styles.styleGrid}>
+                      {SKETCH_STYLE_OPTIONS.map((option) => (
+                        <TouchableOpacity
+                          key={option.id}
+                          onPress={() => setSketchStyle(option.id)}
+                          style={[styles.unifiedOptionButton, sketchStyle === option.id && styles.unifiedOptionButtonActive]}
+                          activeOpacity={0.7}
+                        >
+                          {/* STABILITY FIX: Render bold text invisibly to reserve space, preventing layout jump */}
+                          <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={[styles.unifiedOptionText, { fontWeight: '600', opacity: 0 }]}>
+                              {option.label}
+                            </Text>
+                            <Text style={[
+                              styles.unifiedOptionText, 
+                              { position: 'absolute' },
+                              sketchStyle === option.id && { fontWeight: '600', color: colors.text.dark }
+                            ]}>
+                              {option.label}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.paintStepSection}>
+                    <View style={styles.sectionHeader}>
+                       <AiFillFireIcon size={14} color="#FFD60A" />
+                       <Text style={styles.sectionHeaderText}>
+                         CREATIVITY LEVEL: <Text style={{ color: '#FFD60A' }}>{(creativityLevel * 100).toFixed(0)}%</Text>
+                       </Text>
+                    </View>
+                     <View>
+                       <CreativitySlider 
+                         initialValue={creativityLevel} 
+                         onValueChange={handleCreativityChange} 
+                       />
+                       <View style={styles.sliderLabels}>
+                          <Text style={styles.sliderLabelText}>Cautious</Text>
+                          <Text style={styles.sliderLabelText}>Creative</Text>
+                       </View>
+                    </View>
+                  </View>
+                </>
               ) : activeMode === 'sculpt' ? (
                 <>
                   <View style={styles.paintStepSection}>
@@ -992,7 +1216,7 @@ export default function StudioScreen() {
             <View style={styles.floatingTextContainer}>
               <AnimatedTextInput
                 style={[styles.footerPromptInput, animatedInputStyle]}
-                placeholder={`Any specific details to add to your ${activeMode === 'paint' ? 'painting' : activeMode === 'sculpt' ? 'render' : 'drawing'}...`}
+                placeholder="Extra details help generate better results"
                 placeholderTextColor={colors.text.secondary}
                 multiline
                 value={activeMode === 'paint' ? painterPrompt : designerPrompt}
@@ -1000,7 +1224,7 @@ export default function StudioScreen() {
                 onFocus={() => setIsInputFocused(true)}
                 onBlur={() => setIsInputFocused(false)}
                 onContentSizeChange={(e) => {
-                  inputContentHeight.value = Math.max(INITIAL_INPUT_HEIGHT, e.nativeEvent.contentSize.height);
+                  inputContentHeight.value = e.nativeEvent.contentSize.height;
                 }}
                 blurOnSubmit={false}
               />
@@ -1052,21 +1276,38 @@ export default function StudioScreen() {
                           collapsable={false}
                           style={{ flex: 1 }} // Ensure it takes available space in the row
                       >
-                          <TouchableOpacity
-                          style={[styles.createButton, !isPro && styles.createButtonBasic, !hasImageLoaded && styles.buttonDisabled, isLoading && styles.cancelButton]}
-                          onPress={isLoading ? handleCancelGeneration : handleGenerate}
-                          activeOpacity={0.8}
-                          disabled={!hasImageLoaded && !isLoading}
-                          accessibilityLabel={isLoading ? 'Cancel generation' : `Create image in ${isPro ? 'Pro' : 'Basic'} mode`}
-                          accessibilityRole="button"
-                          accessibilityHint={isLoading ? 'Stops the current image generation' : 'Generates a new image based on your settings'}
-                          >
-                          <View style={styles.createButtonContent}>
-                              {!isLoading && <MagicWandIcon color={isPro ? colors.button.dark : colors.text.primary} />}
-                              {isLoading && <SpinnerIcon color={colors.text.primary} />}
-                              <Text style={[styles.createButtonText, isPro && styles.createButtonTextPro, isLoading && styles.cancelButtonText]}>{isLoading ? 'Cancel' : `Create (${isPro ? '2 Tokens' : '1 Token'})`}</Text>
-                          </View>
-                          </TouchableOpacity>
+                          {isLoading ? (
+                            <BreathingGradientButton
+                              onPress={handleCancelGeneration}
+                              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: 62 }}
+                            >
+                                <SpinnerIcon size={24} color="white" />
+                                <Text style={{ 
+                                  color: 'white', 
+                                  fontWeight: '700', 
+                                  fontSize: 16, 
+                                  fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto',
+                                  marginLeft: 12 
+                                }}>
+                                  Stop
+                                </Text>
+                            </BreathingGradientButton>
+                          ) : (
+                            <TouchableOpacity
+                              style={[styles.createButton, styles.createButtonBasic, !hasImageLoaded && styles.buttonDisabled]}
+                              onPress={handleGenerate}
+                              activeOpacity={0.8}
+                              disabled={!hasImageLoaded}
+                              accessibilityLabel={'Create image'}
+                              accessibilityRole="button"
+                              accessibilityHint={'Generates a new image based on your settings'}
+                            >
+                              <View style={styles.createButtonContent}>
+                                  <MagicWandIcon color={colors.text.primary} />
+                                  <Text style={styles.createButtonText}>Create</Text>
+                              </View>
+                            </TouchableOpacity>
+                          )}
                       </View>
                   </>
               )}
@@ -1149,7 +1390,7 @@ export default function StudioScreen() {
                     >
                       <Image source={{ uri: item.url }} style={[styles.historyImage, isSelected && { opacity: 0.7 }]} />
                       
-                      {/* Mode Indicator Dot (Pro only) */}
+                      {/* Mode Indicator Dot (Pro only) - Hidden per user request 
                       {!isSelectionMode && item.isPro && (
                         <View style={styles.modeIndicatorDot}>
                           <View style={[
@@ -1158,6 +1399,7 @@ export default function StudioScreen() {
                           ]} />
                         </View>
                       )}
+                      */}
                       
                       {isSelectionMode && (
                         <View style={styles.selectionOverlay}>
@@ -1177,9 +1419,21 @@ export default function StudioScreen() {
                 onNext={handleTutorialNext} 
                 targetLayout={targetLayout} 
              />
+             <Toast 
+                visible={toastConfig.visible} 
+                message={toastConfig.message} 
+                onDismiss={hideToast}
+                useNativeModal={false}
+             />
           </SafeAreaView>
         </Modal>
 
+
+        {/* NEW: Generation Tooltip */}
+        <GenerationTooltip 
+            visible={showLongGenerationTooltip} 
+            onDismiss={() => setShowLongGenerationTooltip(false)} 
+        />
 
         {/* Paint Explorer Modal */}
         <PaintExplorerModal
@@ -1225,9 +1479,14 @@ export default function StudioScreen() {
                 }
             } : undefined}
         />
-
+        <Toast 
+          visible={toastConfig.visible}
+          message={toastConfig.message}
+          onDismiss={hideToast}
+        />
       </View>
     </View>
+    </GestureHandlerRootView>
   );
 }
 
@@ -1244,17 +1503,17 @@ const styles = StyleSheet.create({
   modeBadgeTextBasic: { color: colors.text.primary },
   modeBadgeTextPro: { color: colors.button.dark },
   // Unified Option Button Styles
-  unifiedOptionButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4, padding: 12, borderRadius: 4, backgroundColor: colors.background.tertiary },
+  unifiedOptionButton: { flexDirection: 'row', gap: 6, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 4, backgroundColor: colors.background.tertiary, borderWidth: 0, justifyContent: 'center', alignItems: 'center' },
   unifiedOptionButtonActive: { backgroundColor: colors.button.white },
-  unifiedOptionText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '600', fontSize: 13, color: colors.text.primary },
-  unifiedOptionTextActive: { fontWeight: '600', color: colors.text.dark },
+  unifiedOptionText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '500', fontSize: 14, color: colors.text.primary },
+  unifiedOptionTextActive: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '500', fontSize: 14, color: colors.text.dark },
   screenContainer: { flex: 1, backgroundColor: colors.background.secondary },
   statusBarBackground: { height: 0, backgroundColor: colors.background.secondary },
   container: { flex: 1, backgroundColor: colors.background.primary },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background.primary },
   topNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 64, paddingHorizontal: 0, backgroundColor: colors.background.secondary },
-  topNavLeft: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 16 },
-  topNavRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 16 },
+  topNavLeft: { height: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 16 },
+  topNavRight: { height: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 16 },
   topNavTitle: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   userAvatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 3, borderColor: colors.button.primary, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   topNavSide: { width: 91, alignItems: 'center', justifyContent: 'center' },
@@ -1293,6 +1552,12 @@ const styles = StyleSheet.create({
   conceptTabContainer: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', gap: 4 },
 
   styleGrid: { flexDirection: 'row', alignSelf: 'stretch', flexWrap: 'wrap', gap: 4 },
+  sliderContainer: { alignSelf: 'stretch', paddingVertical: 0, paddingHorizontal: 0,},
+  sliderTrack: { height: 40, backgroundColor: colors.background.secondary, borderRadius: 6, position: 'relative', overflow: 'hidden' }, // Matches Figma dark track
+  sliderFill: { position: 'absolute', top: 0, left: 0, height: '100%', backgroundColor: colors.button.primary, borderRadius: 6 }, // Solid blue fill
+  sliderThumb: { position: 'absolute', width: 5, height: 25, borderRadius: 2.5, backgroundColor: 'rgba(244, 244, 244, 0.4)'}, // Vertical bar
+  sliderLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 0, paddingHorizontal: 0 },
+  sliderLabelText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Text' : 'Roboto', fontSize: 13, color: colors.text.secondary, fontWeight: '600' },
 
   optionItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 4, backgroundColor: colors.background.tertiary },
   optionLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '400', fontSize: 14, color: colors.text.primary },
@@ -1329,17 +1594,18 @@ const styles = StyleSheet.create({
   explorerButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '600', fontSize: 14, color: colors.text.dark },
   keyboardAvoidingFooter: { position: 'absolute', bottom: 0, left: 0, right: 0 },
   keyboardAvoidingTextArea: { position: 'absolute', bottom: 90, left: 0, right: 0 },
-  floatingTextContainer: { backgroundColor: colors.background.secondary, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32 },
-  footerContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.background.secondary, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 16 },
+  floatingTextContainer: { backgroundColor: colors.background.secondary, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
+  floatingInputLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontSize: 12, fontWeight: '600', color: colors.text.secondary, marginBottom: 8, letterSpacing: 0.5 },
+  footerContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.background.secondary, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 },
   footerInner: { gap: 16, justifyContent: 'space-between', alignItems: 'center' },
-  footerPromptInput: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto', fontWeight: '400', fontSize: 14, lineHeight: 20, color: colors.text.primary, alignSelf: 'stretch', paddingVertical: 12, textAlignVertical: 'top' },
+  footerPromptInput: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto', fontWeight: '400', fontSize: 14, lineHeight: LINE_HEIGHT, color: colors.text.secondary, alignSelf: 'stretch', paddingTop: INPUT_VERTICAL_PADDING, paddingBottom: INPUT_VERTICAL_PADDING, paddingHorizontal: 16, textAlignVertical: 'top', backgroundColor: colors.background.primary, borderRadius: 16 },
   bottomButtonsRow: { flexDirection: 'row', alignSelf: 'stretch', gap: 8 },
-  galleryButton: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 6, paddingRight: 16, paddingVertical: 6, backgroundColor: colors.background.tertiary, borderRadius: 32, justifyContent: 'center' },
+  galleryButton: { height: 56, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 6, paddingRight: 16, backgroundColor: colors.background.primary, borderRadius: 32, justifyContent: 'center' },
   galleryButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '500', fontSize: 16, color: colors.text.primary, letterSpacing: -0.41 },
   sourceButtonThumbnail: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  pickSourceButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 18, backgroundColor: colors.background.tertiary, borderRadius: 32 },
+  pickSourceButton: { flex: 1, height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.background.tertiary, borderRadius: 32 },
   pickSourceButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '500', fontSize: 16, color: colors.text.primary },
-  createButton: { flex: 1, paddingVertical: 16, backgroundColor: colors.accent.orange, borderRadius: 62, justifyContent: 'center', alignItems: 'center' },
+  createButton: { flex: 1, height: 56, backgroundColor: colors.accent.orange, borderRadius: 62, justifyContent: 'center', alignItems: 'center' },
   createButtonBasic: { backgroundColor: colors.button.primary },
   createButtonContent: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   createButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '500', fontSize: 16, color: colors.text.primary },

@@ -1,18 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, StatusBar } from 'react-native';
-import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, StatusBar, Pressable, Animated as RNAnimated, Dimensions } from 'react-native';
+import { CameraView, useCameraPermissions, CameraType, FlashMode } from 'expo-camera';
 import { useRouter, Stack } from 'expo-router';
 import { colors } from '../src/theme';
-import { XMarkIcon, ArrowsPointingOutIcon, CameraLensIcon } from '../src/components/Icons';
+import { XMarkIcon, FlashOnIcon, FlashOffIcon, FlashAutoIcon, CameraFlipIcon } from '../src/components/Icons';
 import { useImageContext } from '../src/context/ImageContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppModal } from '../src/components/AppModal';
+import * as Haptics from 'expo-haptics';
 
 export default function CameraScreen() {
     const [permission, requestPermission] = useCameraPermissions();
     const [facing, setFacing] = useState<CameraType>('back');
+    const [flash, setFlash] = useState<FlashMode>('off');
     const [isCapturing, setIsCapturing] = useState(false);
+    const [focusPoint, setFocusPoint] = useState<{ x: number, y: number } | null>(null);
     const cameraRef = useRef<CameraView>(null);
+    const focusAnim = useRef(new RNAnimated.Value(0)).current;
+    const flashAnim = useRef(new RNAnimated.Value(0)).current;
     const router = useRouter();
     const { setSelectedImage } = useImageContext();
 
@@ -61,18 +66,58 @@ export default function CameraScreen() {
         );
     }
 
-    const toggleCameraFacing = () => {
-        setFacing(current => (current === 'back' ? 'front' : 'back'));
+    const toggleFlash = () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setFlash(current => {
+            if (current === 'off') return 'on';
+            if (current === 'on') return 'auto';
+            return 'off';
+        });
+    };
+
+    const handleTapToFocus = (event: any) => {
+        const { locationX, locationY } = event.nativeEvent;
+        setFocusPoint({ x: locationX, y: locationY });
+
+        // Visual feedback
+        focusAnim.setValue(0);
+        RNAnimated.sequence([
+            RNAnimated.timing(focusAnim, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+            }),
+            RNAnimated.delay(800),
+            RNAnimated.timing(focusAnim, {
+                toValue: 0,
+                duration: 300,
+                useNativeDriver: true,
+            })
+        ]).start(() => setFocusPoint(null));
+    };
+
+    const renderFlashIcon = () => {
+        if (flash === 'on') return <FlashOnIcon color={colors.palette.white} size={24} />;
+        if (flash === 'auto') return <FlashAutoIcon color={colors.palette.white} size={24} />;
+        return <FlashOffIcon color={colors.palette.white} size={24} />;
     };
 
     const takePicture = async () => {
         if (cameraRef.current && !isCapturing) {
             try {
                 setIsCapturing(true);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                
+                // Shutter animation
+                RNAnimated.sequence([
+                    RNAnimated.timing(flashAnim, { toValue: 1, duration: 50, useNativeDriver: true }),
+                    RNAnimated.timing(flashAnim, { toValue: 0, duration: 150, useNativeDriver: true })
+                ]).start();
+
                 const photo = await cameraRef.current.takePictureAsync({
                     quality: 0.8,
                     base64: true,
-                    skipProcessing: true, // Faster capture
+                    skipProcessing: false, // Better quality for "source"
                 });
 
                 if (photo) {
@@ -98,31 +143,73 @@ export default function CameraScreen() {
             <Stack.Screen options={{ headerShown: false }} />
             <StatusBar barStyle="light-content" hidden />
 
-            <CameraView
-                style={styles.camera}
-                facing={facing}
-                ref={cameraRef}
+            <Pressable 
+                style={styles.camera} 
+                onPress={handleTapToFocus}
+            >
+                <CameraView
+                    style={StyleSheet.absoluteFill}
+                    facing={facing}
+                    flash={flash}
+                    ref={cameraRef}
+                />
+                
+                {focusPoint && (
+                    <RNAnimated.View 
+                        style={[
+                            styles.focusRing,
+                            { 
+                                top: focusPoint.y - 35, 
+                                left: focusPoint.x - 35,
+                                opacity: focusAnim,
+                                transform: [{ scale: focusAnim.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: [1.2, 1]
+                                }) }]
+                            }
+                        ]}
+                    />
+                )}
+            </Pressable>
+
+            {/* Shutter Flash Overlay */}
+            <RNAnimated.View 
+                style={[
+                    styles.shutterOverlay, 
+                    { opacity: flashAnim }
+                ]} 
+                pointerEvents="none" 
             />
+
             <SafeAreaView style={styles.uiOverlay} pointerEvents="box-none">
-                {/* Top Bar */}
-                <View style={styles.topBar}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
-                        <XMarkIcon color={colors.palette.white} size={28} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={toggleCameraFacing} style={styles.iconButton}>
-                        <ArrowsPointingOutIcon color={colors.palette.white} size={28} />
+                {/* Close Button - 24/24 Inset */}
+                <View style={styles.closeButtonContainer}>
+                    <TouchableOpacity 
+                        onPress={() => router.back()} 
+                        style={styles.iconButton}
+                    >
+                        <XMarkIcon color={colors.palette.white} size={24} />
                     </TouchableOpacity>
                 </View>
 
                 {/* Bottom Controls */}
                 <View style={styles.bottomBar}>
-                    <TouchableOpacity
-                        style={styles.captureButtonOuter}
-                        onPress={takePicture}
-                        disabled={isCapturing}
-                    >
-                        <View style={[styles.captureButtonInner, isCapturing && styles.capturing]} />
-                    </TouchableOpacity>
+                    <View style={styles.controlsRow}>
+                        {/* Placeholder for left symmetry if needed, currently empty to keep flash on right */}
+                        <View style={styles.sideButtonPlaceholder} />
+                        
+                        <TouchableOpacity
+                            style={styles.captureButtonOuter}
+                            onPress={takePicture}
+                            disabled={isCapturing}
+                        >
+                            <View style={[styles.captureButtonInner, isCapturing && styles.capturing]} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity onPress={toggleFlash} style={styles.sideButton}>
+                            {renderFlashIcon()}
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </SafeAreaView>
             <AppModal
@@ -189,42 +276,76 @@ const styles = StyleSheet.create({
     },
     uiOverlay: {
         ...StyleSheet.absoluteFillObject,
-        justifyContent: 'space-between',
+        justifyContent: 'flex-end', // Changed from space-between to push controls to bottom
     },
-    topBar: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingTop: 10,
+    closeButtonContainer: {
+        position: 'absolute',
+        top: 24,
+        left: 24,
+        zIndex: 20,
     },
     iconButton: {
-        padding: 10,
-        backgroundColor: 'rgba(0,0,0,0.3)',
-        borderRadius: 20,
+        width: 44,
+        height: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.35)',
+        borderRadius: 22,
     },
     bottomBar: {
         paddingBottom: 40,
+        width: '100%',
+    },
+    controlsRow: {
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        paddingHorizontal: 30,
     },
     captureButtonOuter: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        borderWidth: 4,
+        width: 74,
+        height: 74,
+        borderRadius: 37,
+        borderWidth: 5,
         borderColor: colors.palette.white,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0,0,0,0.1)',
+        backgroundColor: 'transparent',
+    },
+    sideButton: {
+        width: 44,
+        height: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        borderRadius: 22,
+        marginLeft: 30,
+    },
+    sideButtonPlaceholder: {
+        width: 44,
+        marginRight: 30,
     },
     captureButtonInner: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
+        width: 58,
+        height: 58,
+        borderRadius: 29,
         backgroundColor: colors.palette.white,
     },
+    focusRing: {
+        position: 'absolute',
+        width: 70,
+        height: 70,
+        borderWidth: 1.5,
+        borderColor: '#FFD700', // Gold color for focus
+        borderRadius: 4,
+    },
+    shutterOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: colors.palette.white,
+        zIndex: 10,
+    },
     capturing: {
-        backgroundColor: colors.accent.red,
+        backgroundColor: colors.text.muted,
         transform: [{ scale: 0.9 }],
     },
 });

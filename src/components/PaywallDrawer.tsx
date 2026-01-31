@@ -70,15 +70,15 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
             id: 'monthly',
             title: 'Monthly',
             subtitle: '60 Monthly Tokens',
-            price: '$9.99 / Month',
+            price: '$5.99 / Month',
             packageIdentifier: '$rc_monthly',
         },
         {
             id: 'annual',
             title: '12 Months',
             subtitle: '60 Monthly Tokens',
-            price: '$5.99 / Month',
-            originalPrice: '$9.99',
+            price: '$4.49 / Month',
+            originalPrice: '$5.99',
             badge: 'Best Value!',
             packageIdentifier: '$rc_annual',
         },
@@ -86,7 +86,7 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
             id: 'tokens',
             title: '200 Tokens Pack',
             subtitle: 'Cumulative tokens packs',
-            price: '$49.99',
+            price: '$17.99',
             packageIdentifier: 'Tokens_200',
         },
     ];
@@ -115,8 +115,21 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
                             identifier: 'pro_monthly',
                             description: '60 Monthly Tokens',
                             title: 'Monthly',
-                            price: 9.99,
-                            priceString: '$9.99',
+                            price: 5.99,
+                            priceString: '$5.99',
+                            currencyCode: 'USD',
+                            productType: 'AUTO_RENEWABLE_SUBSCRIPTION',
+                        }
+                    },
+                    {
+                        identifier: 'Annual',
+                        packageType: 'ANNUAL',
+                        product: {
+                            identifier: 'pro_annual',
+                            description: '60 Monthly Tokens',
+                            title: 'Annual',
+                            price: 53.88,
+                            priceString: '$53.88',
                             currencyCode: 'USD',
                             productType: 'AUTO_RENEWABLE_SUBSCRIPTION',
                         }
@@ -128,8 +141,8 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
                             identifier: 'tokens_200',
                             description: '200 Tokens',
                             title: 'Pack of Tokens',
-                            price: 49.99,
-                            priceString: '$49.99',
+                            price: 17.99,
+                            priceString: '$17.99',
                             currencyCode: 'USD',
                             productType: 'CONSUMABLE',
                         }
@@ -143,12 +156,17 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
                 {
                     identifier: 'Monthly',
                     packageType: 'MONTHLY',
-                    product: { identifier: 'pro_monthly', description: '60 Monthly Tokens', title: 'Monthly', priceString: '$9.99', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
+                    product: { identifier: 'pro_monthly', description: '60 Monthly Tokens', title: 'Monthly', priceString: '$5.99', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
+                },
+                {
+                    identifier: 'Annual',
+                    packageType: 'ANNUAL',
+                    product: { identifier: 'pro_annual', description: '60 Monthly Tokens', title: 'Annual', priceString: '$53.88', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
                 },
                 {
                     identifier: 'Tokens_200',
                     packageType: 'CUSTOM',
-                    product: { identifier: 'tokens_200', description: '200 Tokens', title: 'Pack of Tokens', priceString: '$49.99', productType: 'CONSUMABLE' }
+                    product: { identifier: 'tokens_200', description: '200 Tokens', title: 'Pack of Tokens', priceString: '$17.99', productType: 'CONSUMABLE' }
                 }
             ] as any);
         } finally {
@@ -271,6 +289,7 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
         const plan = plans.find(p => p.id === selectedPlan);
         if (!plan) return 'Purchase';
         if (selectedPlan === 'tokens') return `Purchase ${plan.price}`;
+        if (selectedPlan === 'annual') return `Purchase Yearly ($53.88)`;
         return `Purchase ${plan.price.replace(' / Month', '')} Monthly`;
     };
 

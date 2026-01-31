@@ -240,13 +240,38 @@ export const SculptIcon = ({ color = "#F4F4F4" }: { color?: string }) => (
   </Svg>
 );
 
+export const FlashOnIcon: React.FC<IconProps> = ({ size = 24, color = 'currentColor' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+    <Path strokeLinecap="round" strokeLinejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+  </Svg>
+);
+
+export const FlashOffIcon: React.FC<IconProps> = ({ size = 24, color = 'currentColor' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+    <Path strokeLinecap="round" strokeLinejoin="round" d="M11.412 15.655 9.75 21.75l3.745-4.012M9.257 13.5H3.75l2.659-2.849m2.048-2.194L14.25 2.25 12 10.5h8.25l-1.655 1.773M15 5.25l.008.008H15V5.25Zm.008 6.508L15 11.75l-.008-.008.008.008Zm-3.518-1.518-1.5-1.5.008-.008 1.5 1.5-.008.008ZM3 3l18 18" />
+  </Svg>
+);
+
+export const FlashAutoIcon: React.FC<IconProps> = ({ size = 24, color = 'currentColor' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+    <Path strokeLinecap="round" strokeLinejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+    <Path strokeLinecap="round" strokeLinejoin="round" d="M16.5 16.5h3m-1.5-1.5v3" />
+  </Svg>
+);
+
+export const CameraFlipIcon: React.FC<IconProps> = ({ size = 24, color = 'currentColor' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+    <Path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+  </Svg>
+);
+
 export const CameraLensIcon = ({ color = "#F4F4F4" }: { color?: string }) => (
   <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
     <Path d="M6.55167 14.5085L9.53976 9.33301L11.8944 13.4113C10.7988 14.2011 9.45383 14.6663 8.00016 14.6663C7.5027 14.6663 7.01803 14.6119 6.55167 14.5085ZM5.26006 14.079C3.54116 13.303 2.21027 11.8195 1.6387 9.99967H7.61523L5.26006 14.079ZM1.36642 8.66634C1.34464 8.44707 1.3335 8.22467 1.3335 7.99967C1.3335 6.26157 1.99865 4.67881 3.0883 3.49207L6.07566 8.66634H1.36642ZM4.10594 2.58801C5.20148 1.79827 6.54649 1.33301 8.00016 1.33301C8.49763 1.33301 8.9823 1.38749 9.44863 1.49081L6.46056 6.66634L4.10594 2.58801ZM10.7402 1.92035C12.4592 2.69631 13.79 4.17986 14.3616 5.99967H8.3851L10.7402 1.92035ZM14.6339 7.33301C14.6557 7.55227 14.6668 7.77467 14.6668 7.99967C14.6668 9.73781 14.0017 11.3205 12.912 12.5073L9.9247 7.33301H14.6339Z" fill={color} />
   </Svg>
 );
 
-export const SpinnerIcon = ({ color = "#FFFFFF" }: { color?: string }) => {
+export const SpinnerIcon = ({ color = "#FFFFFF", size = 16 }: { color?: string; size?: number }) => {
   const spinValue = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
@@ -267,7 +292,7 @@ export const SpinnerIcon = ({ color = "#FFFFFF" }: { color?: string }) => {
 
   return (
     <Animated.View style={{ transform: [{ rotate: spin }] }}>
-      <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+      <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
         <Path opacity="0.2" fillRule="evenodd" clipRule="evenodd" d="M8.00016 12.6663C10.5775 12.6663 12.6668 10.577 12.6668 7.99967C12.6668 5.42235 10.5775 3.33301 8.00016 3.33301C5.42284 3.33301 3.3335 5.42235 3.3335 7.99967C3.3335 10.577 5.42284 12.6663 8.00016 12.6663ZM8.00016 14.6663C11.682 14.6663 14.6668 11.6815 14.6668 7.99967C14.6668 4.31777 11.682 1.33301 8.00016 1.33301C4.31826 1.33301 1.3335 4.31777 1.3335 7.99967C1.3335 11.6815 4.31826 14.6663 8.00016 14.6663Z" fill={color} />
         <Path d="M1.3335 7.99967C1.3335 4.31777 4.31826 1.33301 8.00016 1.33301V3.33301C5.42284 3.33301 3.3335 5.42235 3.3335 7.99967H1.3335Z" fill={color} />
       </Svg>

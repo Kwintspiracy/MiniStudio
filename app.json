@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "MiniPainterStudio",
+    "name": "MiniStudio",
     "slug": "minipainterstudio",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,12 +12,13 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.minipainterstudio.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "MiniPainterStudio needs camera access to capture photos of your miniatures.",
-        "NSPhotoLibraryUsageDescription": "MiniPainterStudio needs photo library access to import miniature images.",
-        "NSPhotoLibraryAddUsageDescription": "MiniMiniPainterStudioStudio needs permission to save generated images to your photo library.",
-        "ITSAppUsesNonExemptEncryption": false
+        "NSCameraUsageDescription": "Allow MiniStudio to use your camera to capture photos of your miniatures.",
+        "NSPhotoLibraryUsageDescription": "Allow MiniStudio to access your photos to import miniature images.",
+        "NSPhotoLibraryAddUsageDescription": "Allow MiniStudio to save generated images to your photo library.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "PHPhotoLibraryPreventAutomaticLimitedAccessAlert": true
       },
-      "buildNumber": "14"
+      "buildNumber": "16"
     },
     "android": {
       "adaptiveIcon": {
@@ -43,20 +44,20 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow MiniPainterStudio to access your camera to capture miniature photos."
+          "cameraPermission": "Allow MiniStudio to access your camera to capture miniature photos."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow MiniPainterStudio to access your photos to import miniature images."
+          "photosPermission": "Allow MiniStudio to access your photos to import miniature images."
         }
       ],
       [
         "expo-media-library",
         {
-          "photosPermission": "Allow MiniPainterStudio to save generated images to your photo library.",
-          "savePhotosPermission": "Allow MiniPainterStudio to save photos to your library.",
+          "photosPermission": "Allow MiniStudio to save generated images to your photo library.",
+          "savePhotosPermission": "Allow MiniStudio to save photos to your library.",
           "isAccessMediaLocationEnabled": true
         }
       ],

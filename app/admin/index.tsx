@@ -440,7 +440,8 @@ export default function AdminDashboard() {
                                             style={[styles.navItem, isActive && styles.navItemActive]}
                                         >
                                             <Text style={[styles.navItemText, isActive && styles.navItemTextActive]} numberOfLines={1}>
-                                                {name.replace(' Style', '').replace(' Template', '').replace(' Effect', '')}
+                                                {name.replace(' Style', '').replace(' Template', '').replace(' Effect', '')
+                                                   .split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                                                 {groupedPrompts[key].filter(v => v.is_active).length > 1 && <Text style={{ color: colors.button.danger }}> ⚠️</Text>}
                                             </Text>
                                             <Text style={styles.navItemSubtitle} numberOfLines={1}>{key}</Text>
