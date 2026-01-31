@@ -14,6 +14,7 @@ module.exports = {
           secondary: '#12121F',
           tertiary: '#8B8B91',
           bottom: '#8B8B91',
+          modal: '#292936',
         },
         text: {
           primary: '#F4F4F4',
@@ -34,8 +35,16 @@ module.exports = {
         border: {
           subtle: 'rgba(255, 255, 255, 0.05)',
         },
+        overlay: {
+          soft: 'rgba(255, 255, 255, 0.1)',
+          medium: 'rgba(255, 255, 255, 0.2)',
+          dark: 'rgba(0, 0, 0, 0.3)',
+          heavy: 'rgba(0, 0, 0, 0.6)',
+          modal: 'rgba(0, 0, 0, 0.7)',
+        },
       },
       fontFamily: {
+        primary: ['SF Pro Display', 'System', 'sans-serif'],
         sans: ['System', 'SF Pro Display', 'sans-serif'],
         display: ['SF Pro Display', 'System', 'sans-serif'],
         text: ['SF Pro Text', 'System', 'sans-serif'],

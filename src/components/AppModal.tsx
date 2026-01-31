@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, StyleSheet, Dimensions, Platform } from 'react-native';
 import { colors, fontFamily } from '../theme';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface AppModalProps {
     visible: boolean;
@@ -46,19 +48,21 @@ export const AppModal: React.FC<AppModalProps> = ({
             onRequestClose={onClose}
         >
             <View style={styles.overlay}>
-                <View style={styles.container}>
-                    <View style={styles.content}>
+                <View style={styles.modalContainer}>
+                    <View style={styles.contentContainer}>
                         <Text style={styles.title}>{title}</Text>
                         <Text style={styles.message}>{message}</Text>
                     </View>
                     
-                    <View style={styles.buttonContainer}>
+                    <View style={styles.actionsContainer}>
                         {secondaryAction && (
                             <TouchableOpacity
                                 style={styles.secondaryButton}
                                 onPress={secondaryAction.onPress}
                             >
-                                <Text style={styles.buttonText}>{secondaryAction.label}</Text>
+                                <Text style={styles.secondaryButtonText}>
+                                    {secondaryAction.label}
+                                </Text>
                             </TouchableOpacity>
                         )}
                         
@@ -67,7 +71,9 @@ export const AppModal: React.FC<AppModalProps> = ({
                                 style={[styles.primaryButton, { backgroundColor: getPrimaryButtonColor() }]}
                                 onPress={primaryAction.onPress}
                             >
-                                <Text style={styles.buttonText}>{primaryAction.label}</Text>
+                                <Text style={styles.primaryButtonText}>
+                                    {primaryAction.label}
+                                </Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -80,12 +86,12 @@ export const AppModal: React.FC<AppModalProps> = ({
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)', // Modal overlay opacity
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: colors.overlay.modal,
         padding: 24,
     },
-    container: {
+    modalContainer: {
         width: '100%',
         maxWidth: 345,
         backgroundColor: colors.background.modal,
@@ -93,7 +99,7 @@ const styles = StyleSheet.create({
         padding: 24,
         gap: 24,
     },
-    content: {
+    contentContainer: {
         gap: 8,
     },
     title: {
@@ -109,28 +115,34 @@ const styles = StyleSheet.create({
         color: colors.text.secondary,
         lineHeight: 21,
     },
-    buttonContainer: {
+    actionsContainer: {
         flexDirection: 'row',
         gap: 8,
-    },
-    primaryButton: {
-        flex: 1,
-        height: 52,
-        borderRadius: 24,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 12,
     },
     secondaryButton: {
         flex: 1,
         height: 52,
-        backgroundColor: colors.button.secondary, // Standardized to theme
-        borderRadius: 24,
+        backgroundColor: colors.button.secondary,
+        borderRadius: 26,
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 12,
     },
-    buttonText: {
+    secondaryButtonText: {
+        fontFamily: fontFamily.primary,
+        fontWeight: '500',
+        fontSize: 16,
+        color: colors.text.primary,
+    },
+    primaryButton: {
+        flex: 1,
+        height: 52,
+        borderRadius: 26,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+    },
+    primaryButtonText: {
         fontFamily: fontFamily.primary,
         fontWeight: '500',
         fontSize: 16,

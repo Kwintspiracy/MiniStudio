@@ -67,13 +67,6 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
     // Plan options based on Figma design
     const plans: PlanOption[] = [
         {
-            id: 'monthly',
-            title: 'Monthly',
-            subtitle: '60 Monthly Tokens',
-            price: '$5.99 / Month',
-            packageIdentifier: '$rc_monthly',
-        },
-        {
             id: 'annual',
             title: '12 Months',
             subtitle: '60 Monthly Tokens',
@@ -81,6 +74,13 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
             originalPrice: '$5.99',
             badge: 'Best Value!',
             packageIdentifier: '$rc_annual',
+        },
+        {
+            id: 'monthly',
+            title: 'Monthly',
+            subtitle: '60 Monthly Tokens',
+            price: '$5.99 / Month',
+            packageIdentifier: '$rc_monthly',
         },
         {
             id: 'tokens',

@@ -15,8 +15,9 @@ export const cancelGeneration = () => {
  * Prepares image data for the Edge Function.
  */
 const prepareImagePayload = (image: ImageFile) => {
-    const base64Data = image.base64.includes(',')
-        ? image.base64.split(',')[1]
+    // Optimization: Avoid create split array, just slice the string
+    const base64Data = image.base64.startsWith('data:') 
+        ? image.base64.substring(image.base64.indexOf(',') + 1)
         : image.base64;
 
     return {

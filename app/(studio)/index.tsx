@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, Image, TextInput,
+  View, Text, TouchableOpacity, ScrollView, Image, TextInput, FlatList,
   ActivityIndicator, Alert, Modal, StyleSheet, Platform, Dimensions, StatusBar, Share,
   KeyboardAvoidingView, Keyboard, Pressable
 } from 'react-native';
@@ -38,10 +38,12 @@ import { filterPaintsByDiversity, getNMMRecipes } from '@/utils/paintFilter';
 import { useImagePicker } from '@/hooks/useImagePicker';
 import { useMediaSave } from '@/hooks/useMediaSave';
 import { useAuth } from '@/context/AuthContext';
+import { saveBase64ToFile } from '@/services/fileSystemService';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { useImageContext } from '@/context/ImageContext';
 import { PaintExplorerModal } from '@/components/PaintExplorerModal';
 import { AppModal } from '@/components/AppModal';
+import { PaywallDrawer } from '@/components/PaywallDrawer';
 import { supabase } from '@/services/supabase';
 import { ToggleButton } from '@/components/ToggleButton';
 import { SectionHeader } from '@/components/SectionHeader';
@@ -347,6 +349,7 @@ export default function StudioScreen() {
 
   const [isResultsDrawerOpen, setIsResultsDrawerOpen] = useState(false);
   const [isPaintExplorerOpen, setIsPaintExplorerOpen] = useState(false);
+  const [isPaywallVisible, setIsPaywallVisible] = useState(false);
   // Replaced generic error string state with Modal State object
   const [modalConfig, setModalConfig] = useState<{
     visible: boolean;
@@ -462,6 +465,41 @@ export default function StudioScreen() {
     checkTutorial();
 
   }, []);
+
+  // Performance Optimization: Migrate base64 history to local files
+  useEffect(() => {
+    if (generationHistory.length === 0) return;
+
+    const migrationNeeded = generationHistory.some(item => item.url.startsWith('data:image'));
+    if (!migrationNeeded) return;
+
+    console.log('[Gallery] Migration needed: converting base64 history to local files...');
+    
+    const migrateHistory = async () => {
+      let changed = false;
+      const migratedHistory = await Promise.all(generationHistory.map(async (item) => {
+        if (item.url.startsWith('data:image')) {
+          try {
+            const fileUri = await saveBase64ToFile(item.url, 'history_');
+            changed = true;
+            return { ...item, url: fileUri };
+          } catch (e) {
+            console.error('Migration failed for item:', item.url.substring(0, 50));
+            return item;
+          }
+        }
+        return item;
+      }));
+
+      if (changed) {
+        setGenerationHistory(migratedHistory);
+        await AsyncStorage.setItem('generation_history', JSON.stringify(migratedHistory.filter(i => i.timestamp !== 0)));
+        console.log('[Gallery] Migration complete.');
+      }
+    };
+
+    migrateHistory();
+  }, [generationHistory.length]); // Only run when length changes or on mount
 
   const handleTutorialNext = () => {
     if (tutorialStep === 'welcome') {
@@ -660,8 +698,27 @@ export default function StudioScreen() {
     // Logic preserved for future use: const model = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
     const model = 'gemini-2.5-flash-image';
     try {
+      // Prepare source images: if they are file URIs, read as base64
+      const preparedSources = await Promise.all(sourceImages.map(async img => {
+        if (img.base64.startsWith('file://')) {
+          try {
+            const base64 = await FileSystem.readAsStringAsync(img.base64, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            return {
+              ...img,
+              base64: `data:${img.mimeType || 'image/png'};base64,${base64}`
+            };
+          } catch (e) {
+            console.error('Failed to read source image from file:', img.base64);
+            return img;
+          }
+        }
+        return img;
+      }));
+
       let images: string[] = [];
-      if (activeMode === 'paint' && sourceImages.length >= 1) {
+      if (activeMode === 'paint' && preparedSources.length >= 1) {
         const finalPrompt = generatePaintPrompt({
           isPro,
           selectedStyle,
@@ -678,7 +735,7 @@ export default function StudioScreen() {
 
         console.log(`\n--- GENERATION PROMPT (${new Date().toLocaleTimeString()}) ---\n${finalPrompt}\n----------------------------------\n`);
         
-        images = await generatePaintedMiniature(sourceImages, finalPrompt, 1, model);
+        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, model);
       } else if (activeMode === 'sketch' || activeMode === 'sculpt') {
         const characterDesc = sanitizePrompt(designerPrompt).trim() || 'character';
         
@@ -689,7 +746,7 @@ export default function StudioScreen() {
             template = isPro ? proShotConfig.pro : proShotConfig.default;
         } else {
             // Use the mode-specific template (sketch or sculpt)
-            const typeToUse = (sourceImages.length > 1) ? 'combined' : activeMode;
+            const typeToUse = (preparedSources.length > 1) ? 'combined' : activeMode;
             const templateConfig = designerTemplates[typeToUse];
             template = isPro ? templateConfig.pro : templateConfig.default;
         }
@@ -709,12 +766,21 @@ export default function StudioScreen() {
           .replace(/{creativity}/g, resolvedCreativity);
 
         console.log(`\n--- ${activeMode.toUpperCase()} PROMPT (Temp: ${creativityLevel}) ---\n${prompt}\n----------------------------------\n`);
-        images = await generatePaintedMiniature(sourceImages, prompt, 1, model, creativityLevel);
+        images = await generatePaintedMiniature(preparedSources, prompt, 1, model, creativityLevel);
       }
       if (images && images.length > 0) {
         const resultUrl = images[0];
-        setActivePreviewImage(resultUrl);
-        setGenerationHistory(prev => [{ url: resultUrl, isPro, isMaster: false, modelName: model, timestamp: Date.now() }, ...prev]);
+        
+        // Save the result base64 to a local file permanently
+        let persistentUrl = resultUrl;
+        try {
+          persistentUrl = await saveBase64ToFile(resultUrl, 'gen_');
+        } catch (e) {
+          console.error('Failed to save generated image to file:', e);
+        }
+
+        setActivePreviewImage(persistentUrl);
+        setGenerationHistory(prev => [{ url: persistentUrl, isPro, isMaster: false, modelName: model, timestamp: Date.now() }, ...prev]);
         setIsResultsDrawerOpen(true);
         
         // Complete onboarding only AFTER successful generation
@@ -741,7 +807,10 @@ export default function StudioScreen() {
           }
           // Check for Limit Reached specific formatting if we want custom actions
           else if (errorMessage.includes("Limit Reached")) {
-              showModal("Limit Reached", errorMessage, 'error');
+              showModal("Limit Reached", errorMessage, 'error', {
+                  label: "Get Tokens",
+                  onPress: () => setIsPaywallVisible(true)
+              });
           } else {
               showModal("Generation Failed", errorMessage, 'error');
           }
@@ -805,18 +874,22 @@ export default function StudioScreen() {
         return;
       }
 
-      // Generate a temporary file path
-      const filename = `ministudio_share_${Date.now()}.png`;
-      const fileUri = FileSystem.cacheDirectory + filename;
+      let fileUri = activePreviewImage;
 
-      // The base64 data usually comes with prefix "data:image/png;base64,", strip it if needed for writeAsStringAsync
-      // But passing base64 directly to writeAsStringAsync with encoding base64 expects pure base64.
-      // activePreviewImage includes "data:image/png;base64," prefix.
-      const base64Data = activePreviewImage.split(',')[1];
+      // If it's a base64 data URI, we need to save it to a temporary file for sharing
+      if (activePreviewImage.startsWith('data:')) {
+        const filename = `ministudio_share_${Date.now()}.png`;
+        fileUri = FileSystem.cacheDirectory + filename;
 
-      await FileSystem.writeAsStringAsync(fileUri, base64Data, {
-        encoding: 'base64',
-      });
+        // The base64 data usually comes with prefix "data:image/png;base64,", strip it if needed
+        const base64Data = activePreviewImage.includes(',') 
+          ? activePreviewImage.split(',')[1] 
+          : activePreviewImage;
+
+        await FileSystem.writeAsStringAsync(fileUri, base64Data, {
+          encoding: 'base64',
+        });
+      }
 
       if (Platform.OS === 'ios') {
         await Share.share({
@@ -837,6 +910,15 @@ export default function StudioScreen() {
 
   const loadHistoryItemAsSource = useCallback(async (url: string) => {
     let imageData = url;
+    
+    // Efficiency: If it's already a local file or data URI, we don't need to do anything
+    // the UI components handle both file:// and data: URIs natively.
+    if (url.startsWith('file://') || url.startsWith('data:')) {
+      const newImage: ImageFile = { base64: url, mimeType: 'image/png' };
+      setSourceImages([newImage]);
+      return;
+    }
+
     // If it's a remote URL (not a data URL), fetch and convert to base64
     if (url.startsWith('http')) {
       try {
@@ -1333,86 +1415,90 @@ export default function StudioScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-              {activePreviewImage ? (
-                <View style={[styles.resultContainer, { marginBottom: 24 }]}>
-                  <Image source={{ uri: activePreviewImage }} style={[styles.activeResultImage, { aspectRatio: previewAspectRatio }]} resizeMode="cover" />
-                  <View style={styles.resultActions}>
-                    <TouchableOpacity 
-                        onPress={handleUseAsSource} 
-                        style={[styles.resultActionButton, styles.resultActionButtonPrimary]} 
-                        accessibilityLabel="Use as source image" 
-                        accessibilityRole="button"
-                        ref={view => { targetRefs.current['use_source_btn'] = view; }}
-                    >
-                        <Text style={[styles.resultActionText, styles.resultActionTextDark]}>Use as source</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={handleDownload} style={styles.resultActionButtonIcon} accessibilityLabel="Download image" accessibilityRole="button"><MdFileDownloadIcon color="#F4F4F4" /></TouchableOpacity>
-                    <TouchableOpacity onPress={handleShare} style={styles.resultActionButtonIcon} accessibilityLabel="Share image" accessibilityRole="button"><ShareIcon color="#F4F4F4" /></TouchableOpacity>
-                  </View>
-                </View>
-              ) : null}
+            <FlatList
+              data={generationHistory}
+              keyExtractor={(item) => item.url}
+              numColumns={numHistoryColumns}
+              columnWrapperStyle={{ gap: HISTORY_GRID_GAP, marginBottom: HISTORY_GRID_GAP }}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: 24 }}
+              showsVerticalScrollIndicator={false}
+              removeClippedSubviews={true}
+              initialNumToRender={6}
+              maxToRenderPerBatch={4}
+              windowSize={3}
+              key={numHistoryColumns} // Force re-render if columns change
+              ListHeaderComponent={
+                <>
+                  {activePreviewImage ? (
+                    <View style={[styles.resultContainer, { marginBottom: 24 }]}>
+                      <Image source={{ uri: activePreviewImage }} style={[styles.activeResultImage, { aspectRatio: previewAspectRatio }]} resizeMode="cover" />
+                      <View style={styles.resultActions}>
+                        <TouchableOpacity 
+                            onPress={handleUseAsSource} 
+                            style={[styles.resultActionButton, styles.resultActionButtonPrimary]} 
+                            accessibilityLabel="Use as source image" 
+                            accessibilityRole="button"
+                            ref={view => { targetRefs.current['use_source_btn'] = view; }}
+                        >
+                            <Text style={[styles.resultActionText, styles.resultActionTextDark]}>Use as source</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleDownload} style={styles.resultActionButtonIcon} accessibilityLabel="Download image" accessibilityRole="button"><MdFileDownloadIcon color="#F4F4F4" /></TouchableOpacity>
+                        <TouchableOpacity onPress={handleShare} style={styles.resultActionButtonIcon} accessibilityLabel="Share image" accessibilityRole="button"><ShareIcon color="#F4F4F4" /></TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : null}
 
-              <View style={[styles.historyContainer, { paddingBottom: 0, marginBottom: 24 }]}>
-                <Text style={styles.historyTitle}>Source</Text>
-                <SourceContainer 
-                  sourceImages={sourceImages}
-                  activePreviewImage={activePreviewImage}
-                  onClearImage={() => { setSourceImages([]); setActivePreviewImage(null); }}
-                  onCameraPress={() => { cameFromGalleryRef.current = true; setIsResultsDrawerOpen(false); router.push('/camera'); }}
-                  onFilesPress={handleFilesPress}
-                />
-              </View>
-              <View style={[styles.historyContainer, { paddingBottom: 80 + insets.bottom }]}><Text style={styles.historyTitle}>History</Text><View style={styles.historyGrid}>
-                {generationHistory.map((item, i) => {
-                  const isSelected = selectedHistoryItems.has(item.url);
-                  return (
-                    <TouchableOpacity 
-                      key={i} 
-                      ref={view => { if (i === 1) targetRefs.current['demo_image'] = view; }}
-                      style={[
-                        styles.historyItem, 
-                        activePreviewImage === item.url && !isSelectionMode && styles.historyItemActive,
-                        isSelected && styles.historyItemSelected
-                      ]} 
-                      onPress={() => {
-                        if (isSelectionMode) {
-                          toggleSelection(item.url);
-                        } else {
-                          setActivePreviewImage(item.url);
-                          // Only set as source if there isn't one already
-                          if (sourceImages.length === 0) {
-                            loadHistoryItemAsSource(item.url);
-                          }
+                  <View style={[styles.historyContainer, { paddingBottom: 0, marginBottom: 24 }]}>
+                    <Text style={styles.historyTitle}>Source</Text>
+                    <SourceContainer 
+                      sourceImages={sourceImages}
+                      activePreviewImage={activePreviewImage}
+                      onClearImage={() => { setSourceImages([]); setActivePreviewImage(null); }}
+                      onCameraPress={() => { cameFromGalleryRef.current = true; setIsResultsDrawerOpen(false); router.push('/camera'); }}
+                      onFilesPress={handleFilesPress}
+                    />
+                  </View>
+                  <Text style={[styles.historyTitle, { marginBottom: 12 }]}>History</Text>
+                </>
+              }
+              renderItem={({ item, index }) => {
+                const isSelected = selectedHistoryItems.has(item.url);
+                return (
+                  <TouchableOpacity 
+                    ref={view => { if (index === 1) targetRefs.current['demo_image'] = view; }}
+                    style={[
+                      styles.historyItem, 
+                      activePreviewImage === item.url && !isSelectionMode && styles.historyItemActive,
+                      isSelected && styles.historyItemSelected
+                    ]} 
+                    onPress={() => {
+                      if (isSelectionMode) {
+                        toggleSelection(item.url);
+                      } else {
+                        setActivePreviewImage(item.url);
+                        // Only set as source if there isn't one already
+                        if (sourceImages.length === 0) {
+                          loadHistoryItemAsSource(item.url);
                         }
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Image source={{ uri: item.url }} style={[styles.historyImage, isSelected && { opacity: 0.7 }]} />
-                      
-                      {/* Mode Indicator Dot (Pro only) - Hidden per user request 
-                      {!isSelectionMode && item.isPro && (
-                        <View style={styles.modeIndicatorDot}>
-                          <View style={[
-                            styles.modeDot,
-                            { backgroundColor: '#FF682C' } // Pro Orange
-                          ]} />
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Image source={{ uri: item.url }} style={[styles.historyImage, isSelected && { opacity: 0.7 }]} />
+                    
+                    {isSelectionMode && (
+                      <View style={styles.selectionOverlay}>
+                        <View style={[styles.selectionCheck, isSelected ? styles.selectionCheckActive : styles.selectionCheckInactive]}>
+                          {isSelected && <CheckIcon size={12} color="#FFF" />}
                         </View>
-                      )}
-                      */}
-                      
-                      {isSelectionMode && (
-                        <View style={styles.selectionOverlay}>
-                          <View style={[styles.selectionCheck, isSelected ? styles.selectionCheckActive : styles.selectionCheckInactive]}>
-                            {isSelected && <CheckIcon size={12} color="#FFF" />}
-                          </View>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View></View>
-            </ScrollView>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+              ListFooterComponent={<View style={{ height: 80 + insets.bottom }} />} // Bottom padding replacement
+            />
              {/* RENDER ONBOARDING OVERLAY INSIDE MODAL TO COVER IT */}
              <OnboardingOverlay 
                 step={tutorialStep} 
@@ -1483,6 +1569,10 @@ export default function StudioScreen() {
           visible={toastConfig.visible}
           message={toastConfig.message}
           onDismiss={hideToast}
+        />
+        <PaywallDrawer 
+            visible={isPaywallVisible} 
+            onClose={() => setIsPaywallVisible(false)} 
         />
       </View>
     </View>

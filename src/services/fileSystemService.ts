@@ -2,6 +2,31 @@ import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
 
 /**
+ * Save a base64 string to a local file in the document directory
+ * Returns the file URI
+ */
+export const saveBase64ToFile = async (base64Data: string, prefix: string = 'mini_'): Promise<string> => {
+    try {
+        const filename = `${prefix}${Date.now()}.png`;
+        const fileUri = `${FileSystem.documentDirectory}${filename}`;
+        
+        // Strip data URI prefix if present
+        const pureBase64 = base64Data.includes('base64,') 
+            ? base64Data.split('base64,')[1] 
+            : base64Data;
+        
+        await FileSystem.writeAsStringAsync(fileUri, pureBase64, {
+            encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        return fileUri;
+    } catch (error) {
+        console.error('Error saving base64 to file:', error);
+        throw error;
+    }
+};
+
+/**
  * Save a base64 image or remote URL to the device gallery
  */
 export const saveImageToGallery = async (uri: string): Promise<boolean> => {
@@ -16,8 +41,8 @@ export const saveImageToGallery = async (uri: string): Promise<boolean> => {
 
         // If it's a base64 data URI, we need to save it to a temporary file first
         if (uri.startsWith('data:')) {
-            const base64Code = uri.split('data:image/png;base64,')[1];
-            const filename = FileSystem.documentDirectory + `ministudio_${Date.now()}.png`;
+            const base64Code = uri.includes('base64,') ? uri.split('base64,')[1] : uri;
+            const filename = FileSystem.cacheDirectory + `ministudio_${Date.now()}.png`;
             await FileSystem.writeAsStringAsync(filename, base64Code, {
                 encoding: FileSystem.EncodingType.Base64,
             });
@@ -25,7 +50,13 @@ export const saveImageToGallery = async (uri: string): Promise<boolean> => {
         }
 
         const asset = await MediaLibrary.createAssetAsync(fileUri);
-        await MediaLibrary.createAlbumAsync('MiniStudio', asset, false);
+        // Only try to create/add to album if on iOS or if needed on Android
+        // createAlbumAsync behaves differently across platforms
+        try {
+            await MediaLibrary.createAlbumAsync('MiniStudio', asset, false);
+        } catch (albumError) {
+            console.warn('Could not create or add to MiniStudio album:', albumError);
+        }
         return true;
     } catch (error) {
         console.error('Error saving image:', error);
