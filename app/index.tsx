@@ -17,12 +17,8 @@ export default function Index() {
 
     hasNavigated.current = true;
 
-    if (!session) {
-      router.replace('/signin');
-    } else {
-      // User is authenticated, proceed directly to Studio (Backend Gateway handles API keys now)
-      router.replace('/(studio)');
-    }
+    // Proceed to Studio. AuthContext will ensure either a real or anonymous session is present.
+    router.replace('/(studio)');
   }, [session, loading]);
 
   return (

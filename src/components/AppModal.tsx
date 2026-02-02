@@ -58,7 +58,12 @@ export const AppModal: React.FC<AppModalProps> = ({
                         {secondaryAction && (
                             <TouchableOpacity
                                 style={styles.secondaryButton}
-                                onPress={secondaryAction.onPress}
+                                onPress={() => {
+                                    onClose();
+                                    setTimeout(() => {
+                                        secondaryAction.onPress();
+                                    }, 100);
+                                }}
                             >
                                 <Text style={styles.secondaryButtonText}>
                                     {secondaryAction.label}
@@ -69,7 +74,12 @@ export const AppModal: React.FC<AppModalProps> = ({
                         {primaryAction && (
                             <TouchableOpacity
                                 style={[styles.primaryButton, { backgroundColor: getPrimaryButtonColor() }]}
-                                onPress={primaryAction.onPress}
+                                onPress={() => {
+                                    onClose();
+                                    setTimeout(() => {
+                                        primaryAction.onPress();
+                                    }, 100);
+                                }}
                             >
                                 <Text style={styles.primaryButtonText}>
                                     {primaryAction.label}
@@ -94,7 +104,7 @@ const styles = StyleSheet.create({
     modalContainer: {
         width: '100%',
         maxWidth: 345,
-        backgroundColor: colors.background.modal,
+        backgroundColor: colors.text.primary,
         borderRadius: 32,
         padding: 24,
         gap: 24,
@@ -106,13 +116,13 @@ const styles = StyleSheet.create({
         fontFamily: fontFamily.primary,
         fontWeight: '700',
         fontSize: 20,
-        color: colors.text.primary,
+        color: colors.text.dark,
     },
     message: {
         fontFamily: fontFamily.primary,
         fontWeight: '400',
         fontSize: 16,
-        color: colors.text.secondary,
+        color: colors.background.primary,
         lineHeight: 21,
     },
     actionsContainer: {
@@ -122,7 +132,7 @@ const styles = StyleSheet.create({
     secondaryButton: {
         flex: 1,
         height: 52,
-        backgroundColor: colors.button.secondary,
+        backgroundColor: colors.background.secondary,
         borderRadius: 26,
         justifyContent: 'center',
         alignItems: 'center',

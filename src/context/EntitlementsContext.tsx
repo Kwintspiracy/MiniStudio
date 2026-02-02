@@ -7,11 +7,12 @@ export interface Entitlements {
   is_pro: boolean;
   subscription_status: string;
   is_unlimited: boolean;
+  tier_tokens: number;
   purchased_balance: number;
   monthly_usage: number;
   monthly_limit: number;
-  remaining_total?: number;
-  is_onboarded?: boolean;
+  remaining_total: number;
+  is_onboarded: boolean;
 }
 
 interface EntitlementsContextType {
@@ -24,9 +25,12 @@ const defaultEntitlements: Entitlements = {
   is_pro: false,
   subscription_status: 'free',
   is_unlimited: false,
+  tier_tokens: 0,
   purchased_balance: 0,
   monthly_usage: 0,
-  monthly_limit: 5,
+  monthly_limit: 10,
+  remaining_total: 0,
+  is_onboarded: false,
 };
 
 const EntitlementsContext = createContext<EntitlementsContextType | undefined>(undefined);
@@ -72,14 +76,15 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
 
       setEntitlements({
         is_pro: data.is_pro,
-        subscription_status: data.is_pro ? 'pro' : 'free',
+        subscription_status: data.subscription_status || (data.is_pro ? 'pro' : 'free'),
         is_unlimited: data.is_unlimited,
-        purchased_balance: data.purchased_balance,
-        monthly_usage: data.monthly_usage,
-        monthly_limit: data.monthly_limit,
-        remaining_total: data.remaining_total,
-        is_onboarded: data.is_onboarded
-      } as any);
+        tier_tokens: data.tier_tokens || 0,
+        purchased_balance: data.purchased_balance || 0,
+        monthly_usage: data.monthly_usage || 0,
+        monthly_limit: data.monthly_limit || 10,
+        remaining_total: data.remaining_total || 0,
+        is_onboarded: data.is_onboarded || false
+      });
       console.log('[Entitlements] Updated successfully');
 
     } catch (e) {

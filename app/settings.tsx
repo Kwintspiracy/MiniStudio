@@ -16,7 +16,7 @@ const treasureImage = require('../assets/treasure.png');
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function SettingsScreen() {
-    const { user, signOut } = useAuth();
+    const { user, signOut, isAnonymous, resetGuestSession } = useAuth();
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
@@ -105,7 +105,11 @@ export default function SettingsScreen() {
                 {/* Profile Section - Centered */}
                 <View style={styles.profileSection}>
                     <View style={styles.avatarContainer}>
-                        {user?.user_metadata?.avatar_url ? (
+                        {isAnonymous ? (
+                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                <Ionicons name="person" size={50} color={colors.text.secondary} />
+                            </View>
+                        ) : user?.user_metadata?.avatar_url ? (
                             <Image
                                 source={{ uri: user.user_metadata.avatar_url }}
                                 style={styles.avatar}
@@ -118,7 +122,9 @@ export default function SettingsScreen() {
                             </View>
                         )}
                     </View>
-                    <Text style={styles.userEmail}>{user?.email}</Text>
+                    <Text style={styles.userEmail}>
+                        {isAnonymous ? "Sign in to save your future history." : user?.email}
+                    </Text>
                 </View>
 
                 {/* Divider */}
@@ -160,14 +166,45 @@ export default function SettingsScreen() {
                     style={styles.menuOverlay} 
                     onPress={() => setIsMenuVisible(false)}
                 >
-                    <View style={[styles.menuContainer, { top: insets.top + 50 }]}>
-                        <TouchableOpacity 
-                            style={styles.menuItem}
-                            onPress={handleSignOutPress}
-                        >
-                            <Ionicons name="log-out-outline" size={20} color={colors.accent.red} />
-                            <Text style={styles.menuItemText}>Sign Out</Text>
-                        </TouchableOpacity>
+                     <View style={[styles.menuContainer, { top: insets.top + 50 }]}>
+                        {isAnonymous || !user ? (
+                            <>
+                                <TouchableOpacity 
+                                    style={styles.menuItem}
+                                    onPress={() => {
+                                        setIsMenuVisible(false);
+                                        // Delay navigation to ensure modal closes first
+                                        setTimeout(() => {
+                                            router.push('/signin');
+                                        }, 100);
+                                    }}
+                                >
+                                    <Ionicons name="log-in-outline" size={20} color={colors.accent.blue} />
+                                    <Text style={[styles.menuItemText, { color: colors.accent.blue }]}>Sign In</Text>
+                                </TouchableOpacity>
+                                
+                                {(isAnonymous || !user) && (
+                                    <TouchableOpacity 
+                                        style={styles.menuItem}
+                                        onPress={() => {
+                                            setIsMenuVisible(false);
+                                            resetGuestSession();
+                                        }}
+                                    >
+                                        <Ionicons name="refresh-outline" size={20} color={colors.accent.blue} />
+                                        <Text style={[styles.menuItemText, { color: colors.accent.blue }]}>Reset Guest Session</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </>
+                        ) : (
+                            <TouchableOpacity 
+                                style={styles.menuItem}
+                                onPress={handleSignOutPress}
+                            >
+                                <Ionicons name="log-out-outline" size={20} color={colors.accent.red} />
+                                <Text style={styles.menuItemText}>Sign Out</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </Pressable>
             </Modal>

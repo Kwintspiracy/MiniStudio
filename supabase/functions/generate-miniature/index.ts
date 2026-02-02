@@ -284,11 +284,13 @@ async function recordProviderFailure(supabaseClient: any, provider: string): Pro
 async function reserveCredits(
     supabaseClient: any, 
     userId: string, 
-    cost: number
+    cost: number,
+    deviceId?: string
 ): Promise<{ success: boolean; jobId?: string; error?: string; balance?: number }> {
     const { data, error } = await supabaseClient.rpc('reserve_generation', {
         p_user_id: userId,
         p_cost: cost,
+        p_device_id: deviceId || null,
     });
 
     if (error) {
@@ -380,7 +382,7 @@ Deno.serve(async (req) => {
         // ================================================================
         // 2. PARSE REQUEST
         // ================================================================
-        const { prompt, baseImage, model, action, temperature } = await req.json();
+        const { prompt, baseImage, model, action, temperature, device_id } = await req.json();
 
         log.section('POYO');
         log.info('POYO', `REQUEST START | User: ${user.id.substring(0, 8)}...`);
@@ -400,7 +402,7 @@ Deno.serve(async (req) => {
         const isPro = targetModel.includes('pro') || targetModel.includes('preview');
         const tokenCost = isPro ? 2 : 1;
 
-        const reservation = await reserveCredits(supabaseClient, user.id, tokenCost);
+        const reservation = await reserveCredits(supabaseClient, user.id, tokenCost, device_id);
         
         if (!reservation.success) {
             log.error('CREDITS', `Reservation failed: ${reservation.error}`);

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import Constants from 'expo-constants';
+import * as Application from 'expo-application';
 import type { ImageFile } from '../types';
 
 let abortController: AbortController | null = null;
@@ -72,6 +73,11 @@ export async function generatePaintedMiniature(
     const functionUrl = `${Constants.expoConfig?.extra?.supabaseUrl}/functions/v1/generate-miniature`;
 
     try {
+        // Get device ID for token tracking (iOS ID or Android ID)
+        const deviceId = await Application.getIosIdForVendorAsync() || 
+                         Application.getAndroidId() || 
+                         'unknown';
+
         const response = await fetch(functionUrl, {
             method: 'POST',
             headers: {
@@ -83,7 +89,8 @@ export async function generatePaintedMiniature(
                 baseImage: baseImagePayload,
                 model,
                 action: 'generate',
-                temperature
+                temperature,
+                device_id: deviceId
             }),
             signal: abortController.signal
         });

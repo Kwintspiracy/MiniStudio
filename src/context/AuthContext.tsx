@@ -8,6 +8,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import Purchases from 'react-native-purchases';
 import { AppModal } from '../components/AppModal';
+import { setRecoveryToken, getRecoveryToken, deleteRecoveryToken } from '../services/storageService';
 
 // Ensure WebBrowser works correctly on the web
 WebBrowser.maybeCompleteAuthSession();
@@ -22,6 +23,9 @@ interface AuthContextType {
     resendConfirmationEmail: (email: string) => Promise<void>;
     resetPasswordForEmail: (email: string) => Promise<void>;
     signOut: () => Promise<void>;
+    signInAnonymously: () => Promise<void>;
+    resetGuestSession: () => Promise<void>;
+    isAnonymous: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -34,6 +38,9 @@ const AuthContext = createContext<AuthContextType>({
     resendConfirmationEmail: async () => { },
     resetPasswordForEmail: async () => { },
     signOut: async () => { },
+    signInAnonymously: async () => { },
+    resetGuestSession: async () => { },
+    isAnonymous: false,
 });
 
 export function useAuth() {
@@ -85,14 +92,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 ]) as any;
 
                 if (error) throw error;
+                
+                let currentSession = session;
 
-                setSession(session);
-                setUser(session?.user ?? null);
+                // 2. If no session, try recovery from Keychain (iOS survival)
+                if (!currentSession && Platform.OS !== 'web') {
+                    const recoveryToken = await getRecoveryToken();
+                    if (recoveryToken) {
+                        if (__DEV__) console.log("[AUTH] Attempting recovery from Keychain...");
+                        const { data: recoveryData, error: recoveryError } = await supabase.auth.setSession({
+                            refresh_token: recoveryToken,
+                            access_token: '', // setSession handles missing access_token with refresh_token
+                        });
+                        
+                        if (!recoveryError && recoveryData.session) {
+                            if (__DEV__) console.log("[AUTH] Recovery successful!");
+                            currentSession = recoveryData.session;
+                        } else {
+                            if (__DEV__) console.log("[AUTH] Recovery failed, cleaning up:", recoveryError?.message);
+                            await deleteRecoveryToken();
+                        }
+                    }
+                }
+
+                // 3. If STILL no session, sign in anonymously (Guest Flow)
+                if (!currentSession) {
+                    if (__DEV__) console.log("[AUTH] No session found, signing in anonymously...");
+                    const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
+                    if (anonError) throw anonError;
+                    currentSession = anonData.session;
+                    
+                    // Save recovery token for future reinstalls
+                    if (currentSession?.refresh_token && Platform.OS !== 'web') {
+                        await setRecoveryToken(currentSession.refresh_token);
+                    }
+                }
+
+                setSession(currentSession);
+                setUser(currentSession?.user ?? null);
                 
                 // Link RevenueCat if user exists
-                if (session?.user?.id && Platform.OS !== 'web') {
+                if (currentSession?.user?.id && Platform.OS !== 'web') {
                     try {
-                        await Purchases.logIn(session.user.id);
+                        await Purchases.logIn(currentSession.user.id);
                     } catch (e) {
                          // Ignore RC errors in dev/expo-go
                          if (__DEV__) console.log("RC LogIn skipped (likely Expo Go)");
@@ -110,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     await supabase.auth.signOut({ scope: 'local' });
                     setSession(null);
                     setUser(null);
+                    if (Platform.OS !== 'web') await deleteRecoveryToken();
                 }
             } finally {
                 setLoading(false);
@@ -157,6 +200,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setSession(session);
             setUser(session?.user ?? null);
             setLoading(false);
+
+            // Update recovery token if anonymous
+            const isAnon = session?.user?.is_anonymous || session?.user?.app_metadata?.provider === 'anonymous' || (session?.user && !session?.user?.email);
+            
+            if (isAnon && session?.refresh_token && Platform.OS !== 'web') {
+                setRecoveryToken(session.refresh_token);
+            } else if (session && !isAnon && Platform.OS !== 'web') {
+                // If they signed in with a real account, we don't necessarily want to 
+                // use the real account's refresh token as a "guest recovery" key,
+                // but we might want to keep it if we want real accounts to survive uninstalls too.
+                // However, the user specifically asked about the 10 credits free tier.
+                // Let's keep it simple: only track anonymous sessions in the guest recovery key.
+                deleteRecoveryToken();
+            }
 
             // Handle RevenueCat Login/Logout on Auth Change
             if (Platform.OS !== 'web') {
@@ -455,6 +512,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Always clear local state
             setSession(null);
             setUser(null);
+            if (Platform.OS !== 'web') {
+                await deleteRecoveryToken();
+            }
+
+            // RE-SIGN IN ANONYMOUSLY if they sign out
+            // This ensures they revert to guest state immediately
+            if (__DEV__) console.log("[AUTH] Re-signing in anonymously after sign out...");
+            const { data: anonData } = await supabase.auth.signInAnonymously();
+            if (anonData.session) {
+                setSession(anonData.session);
+                setUser(anonData.user);
+                if (anonData.session.refresh_token && Platform.OS !== 'web') {
+                    await setRecoveryToken(anonData.session.refresh_token);
+                }
+            }
+
             setLoading(false);
             if (Platform.OS !== 'web') {
                 try {
@@ -470,6 +543,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const signInAnonymously = async () => {
+        setLoading(true);
+        try {
+            const { data, error } = await supabase.auth.signInAnonymously();
+            if (error) throw error;
+            setSession(data.session);
+            setUser(data.user);
+            if (data.session?.refresh_token && Platform.OS !== 'web') {
+                await setRecoveryToken(data.session.refresh_token);
+            }
+        } catch (error: any) {
+            showModal("Sign In Error", error.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const resetGuestSession = async () => {
+        setLoading(true);
+        try {
+            if (__DEV__) console.log("[AUTH] Resetting guest session...");
+            
+            // 1. Local Sign Out (faster, no network error risk)
+            await supabase.auth.signOut({ scope: 'local' });
+            
+            // 2. Clear local storage
+            if (Platform.OS !== 'web') {
+                await deleteRecoveryToken();
+            }
+
+            // 3. Clear local state
+            setSession(null);
+            setUser(null);
+
+            // Small delay to let providers unmount/settle
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // 4. Force a fresh anonymous sign in
+            const { data, error } = await supabase.auth.signInAnonymously();
+            if (error) throw error;
+            
+            if (data.session) {
+                setSession(data.session);
+                setUser(data.user);
+                if (data.session.refresh_token && Platform.OS !== 'web') {
+                    await setRecoveryToken(data.session.refresh_token);
+                }
+            }
+            
+            showModal("Session Reset", "You are now using a fresh guest account with new credits.", 'default');
+        } catch (error: any) {
+            console.error("[AUTH] Reset error:", error);
+            showModal("Reset Failed", error.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const isAnonymous = !!(user?.is_anonymous || user?.app_metadata?.provider === 'anonymous' || (user && !user.email));
+
     const value = {
         session,
         user,
@@ -480,6 +613,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         resendConfirmationEmail,
         resetPasswordForEmail,
         signOut,
+        signInAnonymously,
+        resetGuestSession,
+        isAnonymous,
     };
 
     return (

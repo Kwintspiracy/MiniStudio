@@ -6,6 +6,7 @@ const API_KEY_STORAGE_KEY = 'ministudio_api_key';
 const SESSION_ACTIVE_KEY = 'ministudio_session_active';
 export const GALLERY_INDEX_KEY = 'ministudio_gallery_index';
 export const HAS_SEEN_ONBOARDING_KEY = 'ministudio_has_seen_onboarding';
+export const SUPABASE_RECOVERY_KEY = 'ministudio_supabase_recovery';
 
 // For web platform, we'll use localStorage as fallback
 const isWeb = Platform.OS === 'web';
@@ -138,5 +139,37 @@ export async function deleteData(key: string): Promise<void> {
     } catch (e) {
       console.error('Failed to remove data from AsyncStorage:', e);
     }
+  }
+}
+/**
+ * Store recovery token securely (Keychain/SecureStore)
+ * This survives uninstalls on iOS.
+ */
+export async function setRecoveryToken(token: string): Promise<void> {
+  if (isWeb) {
+    localStorage.setItem(SUPABASE_RECOVERY_KEY, token);
+  } else {
+    await SecureStore.setItemAsync(SUPABASE_RECOVERY_KEY, token);
+  }
+}
+
+/**
+ * Retrieve recovery token
+ */
+export async function getRecoveryToken(): Promise<string | null> {
+  if (isWeb) {
+    return localStorage.getItem(SUPABASE_RECOVERY_KEY);
+  }
+  return await SecureStore.getItemAsync(SUPABASE_RECOVERY_KEY);
+}
+
+/**
+ * Delete recovery token
+ */
+export async function deleteRecoveryToken(): Promise<void> {
+  if (isWeb) {
+    localStorage.removeItem(SUPABASE_RECOVERY_KEY);
+  } else {
+    await SecureStore.deleteItemAsync(SUPABASE_RECOVERY_KEY);
   }
 }

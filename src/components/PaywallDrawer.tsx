@@ -248,7 +248,7 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
             refetch();
             console.log('[PaywallDrawer] 6. Refetch called, showing modal');
 
-            showModal("Success", selectedPlan === 'tokens' ? "Tokens added!" : "Welcome to Pro!", 'default', {
+            showModal("Tokens added!", selectedPlan === 'tokens' ? "You’re ready to generate." : "Welcome to Pro!", 'default', {
                 label: "OK",
                 onPress: () => {
                     console.log('[PaywallDrawer] 7. Success modal OK pressed');
@@ -342,7 +342,7 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
                     
                     {/* Title */}
                     <Text style={styles.title}>
-                        Keep planning for the{'\n'}perfect paints
+                        Keep building your perfect paint plan.
                     </Text>
 
                     {/* Plan Cards */}
@@ -407,12 +407,13 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: 24,
-        fontWeight: '800',
+        fontWeight: '700',
         color: colors.text.primary,
         fontFamily: fontFamily.primary,
         textAlign: 'center',
         marginBottom: 32,
         lineHeight: 32,
+        paddingHorizontal: 32,
     },
     plansContainer: {
         gap: 24,

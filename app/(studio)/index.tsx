@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Alert, Modal, StyleSheet, Platform, Dimensions, StatusBar, Share,
   KeyboardAvoidingView, Keyboard, Pressable
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { 
   useSharedValue, 
@@ -52,6 +53,7 @@ import { SourceContainer } from '@/components/studio/SourceContainer';
 import { OnboardingOverlay, TutorialStep } from '@/components/OnboardingOverlay';
 import { GenerationTooltip } from '@/components/GenerationTooltip';
 import { BreathingGradientButton } from '@/components/BreathingGradientButton';
+import { WelcomeOnboarding } from '@/components/WelcomeOnboarding';
 import { colors, spacing, borderRadius, fontFamily, textStyles } from '@/theme';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -212,7 +214,7 @@ const ModeBadge = ({ isAdvanced, onToggle }: { isAdvanced: boolean; onToggle: ()
 );
 
 export default function StudioScreen() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isAnonymous } = useAuth();
   const { selectedImage, setSelectedImage } = useImageContext();
   const insets = useSafeAreaInsets();
 
@@ -273,6 +275,8 @@ export default function StudioScreen() {
   const [isPhotoshootEnabled, setIsPhotoshootEnabled] = useState(false);
   const [isPaletteEnabled, setIsPaletteEnabled] = useState(false);
   const [selectedBrands, setSelectedBrands] = useState<string[]>(['All Brands']);
+  const [showPhotoshootTip, setShowPhotoshootTip] = useState(false);
+  const [showWelcomeOnboarding, setShowWelcomeOnboarding] = useState(false);
 
   const [designerPrompt, setDesignerPrompt] = useState('');
   const [painterPrompt, setPainterPrompt] = useState('');
@@ -441,6 +445,20 @@ export default function StudioScreen() {
     AsyncStorage.getItem('hidden_demo_assets').then(stored => {
       if (stored) {
         setHiddenDemoAssets(JSON.parse(stored));
+      }
+    });
+
+    // Load photoshoot tip dismissed state
+    AsyncStorage.getItem('photoshoot_tip_dismissed').then(stored => {
+      if (!stored) {
+        setShowPhotoshootTip(true);
+      }
+    });
+
+    // Check if welcome onboarding has been shown
+    AsyncStorage.getItem('has_seen_welcome_onboarding').then(stored => {
+      if (!stored) {
+        setShowWelcomeOnboarding(true);
       }
     });
 
@@ -636,17 +654,22 @@ export default function StudioScreen() {
     */
   }, [authLoading, tutorialStep]);
 
-  // Persist generation history (user-generated only, excluding demos) whenever it changes
+  // Persist generation history (ONLY for signed-in users - anonymous users lose history on quit!)
   useEffect(() => {
-    // Only persist items that are NOT demo items (timestamp !== 0)
+    if (isAnonymous) {
+      // Don't save history for anonymous users (incentive to sign up!)
+      AsyncStorage.removeItem('generation_history');
+      return;
+    }
+    
+    // Signed-in users: Save history persistently
     const userGeneratedItems = generationHistory.filter(item => item.timestamp !== 0);
     if (userGeneratedItems.length > 0) {
       AsyncStorage.setItem('generation_history', JSON.stringify(userGeneratedItems));
     } else {
-      // Clear storage if no user items remain
       AsyncStorage.removeItem('generation_history');
     }
-  }, [generationHistory]);
+  }, [generationHistory, isAnonymous]);
 
   const handlePickImage = useCallback(async () => {
     const images = await pickMultipleImages();
@@ -689,9 +712,35 @@ export default function StudioScreen() {
 
   const handleGenerate = useCallback(async () => {
     if (sourceImages.length === 0) {
-      showModal("Missing Reference", "Please add reference images first.", 'error');
+      // Open gallery instead of showing error
+      setIsResultsDrawerOpen(true);
       return;
     }
+
+    // Check for token exhaustion
+    if ((entitlements.remaining_total ?? 0) <= 0) {
+       if (entitlements.is_pro) {
+           // Pro user exhausted their tier tokens
+           showModal(
+               "Limit Reached",
+               "You've used all your 60 tokens for this month. You can always get a token Pack if you are in a hurry.",
+               'default',
+               { label: "Get Tokens", onPress: () => setIsPaywallVisible(true) },
+               { label: "Maybe Later", onPress: () => {} }
+           );
+       } else {
+           // Standard/Guest user exhausted all tokens
+           showModal(
+               "Tokens Exhausted",
+               "You've used all your tokens. Subscribe or get a Pack to keep creating!",
+               'default',
+               { label: "Get Tokens", onPress: () => setIsPaywallVisible(true) },
+               { label: "Maybe Later", onPress: () => {} }
+           );
+       }
+       return;
+    }
+
     setIsLoading(true);
     // setError(null); // No longer needed
     // Unified 1-token cost for all generations as per user request.
@@ -783,10 +832,10 @@ export default function StudioScreen() {
         setGenerationHistory(prev => [{ url: persistentUrl, isPro, isMaster: false, modelName: model, timestamp: Date.now() }, ...prev]);
         setIsResultsDrawerOpen(true);
         
-        // Complete onboarding only AFTER successful generation
+        // Modal will be shown when user manually closes drawer (see Modal onRequestClose handler)
+        
+        // Complete onboarding for tutorial
         if (tutorialStep === 'generate' || tutorialStep === 'finished') {
-             // We check finished too because the useEffect above might have already flipped the UI step
-             // But we want to ensure the backend flag is set now.
              supabase.rpc('complete_onboarding').then(({ error }) => {
                if (error) console.log('Failed to complete onboarding RPC (Success):', error);
              });
@@ -818,7 +867,7 @@ export default function StudioScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [sourceImages, activeMode, designerPrompt, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPhotoshootEnabled, isPaletteEnabled, selectedColors, selectedBrands, loadedPaints, sketchStyle, creativityLevel]);
+  }, [sourceImages, activeMode, designerPrompt, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPhotoshootEnabled, isPaletteEnabled, selectedColors, selectedBrands, loadedPaints, sketchStyle, creativityLevel, entitlements.remaining_total, isAnonymous]);
 
   // Handle dynamic aspect ratio for the preview image
   useEffect(() => {
@@ -840,7 +889,7 @@ export default function StudioScreen() {
         "Image generation usually takes around 30 seconds. Are you sure you want to stop now?",
         'default',
         { 
-            label: "Confirm Cancel", 
+            label: "Confirm", 
             onPress: () => {
                 cancelGeneration();
                 setIsLoading(false);
@@ -1084,16 +1133,18 @@ export default function StudioScreen() {
             {/* App title removed per design */}
           </View>
           <TouchableOpacity onPress={() => router.push('/settings')} style={styles.topNavRight} activeOpacity={0.7}>
-            {user?.user_metadata?.avatar_url ? (
-              <Image 
-                source={{ uri: user.user_metadata.avatar_url }} 
-                style={styles.userAvatar}
-              />
-            ) : (
-              <View style={styles.userAvatar}>
-                <BiSolidUserCircle32Icon size={40} />
-              </View>
-            )}
+            <View style={styles.userAvatar}>
+              {isAnonymous ? (
+                <Ionicons name="person" size={24} color={colors.text.secondary} />
+              ) : user?.user_metadata?.avatar_url ? (
+                <Image 
+                  source={{ uri: user.user_metadata.avatar_url }} 
+                  style={styles.userAvatarImage}
+                />
+              ) : (
+                <BiSolidUserCircle32Icon size={24} />
+              )}
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -1175,6 +1226,31 @@ export default function StudioScreen() {
                       <Text style={[styles.optionLabel, isPhotoshootEnabled && styles.optionLabelActive]}>Photoshoot - Studio Lighting</Text>
                       <ToggleButton value={isPhotoshootEnabled} onToggle={() => setIsPhotoshootEnabled(!isPhotoshootEnabled)} />
                     </TouchableOpacity>
+                    
+                    {/* Photoshoot Tip Box */}
+                    {showPhotoshootTip && (
+                      <View style={styles.tipBox}>
+                        <View style={styles.tipInfo}>
+                          <Svg width={18} height={18} viewBox="0 0 18 18" fill="none">
+                            <Circle cx="9" cy="9" r="7.5" stroke="#FFFFFF" strokeWidth="1.5" />
+                            <Path d="M9 8.5V12.5M9 5.5V6" stroke="#FFFFFF" strokeWidth="1.5" strokeLinecap="round" />
+                          </Svg>
+                          <Text style={styles.tipText}>
+                            Pro tip: Render your mobile miniature photos before painting for the best results.
+                          </Text>
+                        </View>
+                        <TouchableOpacity 
+                          style={styles.tipButton}
+                          onPress={() => {
+                            setShowPhotoshootTip(false);
+                            AsyncStorage.setItem('photoshoot_tip_dismissed', 'true');
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.tipButtonText}>Close</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                 </>
               ) : (
@@ -1297,7 +1373,15 @@ export default function StudioScreen() {
           >
             <View style={styles.floatingTextContainer}>
               <AnimatedTextInput
-                style={[styles.footerPromptInput, animatedInputStyle]}
+                style={[
+                  styles.footerPromptInput, 
+                  animatedInputStyle,
+                  // Override to normal (non-italic) style when user has typed text
+                  (activeMode === 'paint' ? painterPrompt : designerPrompt).length > 0 && {
+                    fontStyle: 'normal',
+                    color: colors.text.primary
+                  }
+                ]}
                 placeholder="Extra details help generate better results"
                 placeholderTextColor={colors.text.secondary}
                 multiline
@@ -1380,13 +1464,19 @@ export default function StudioScreen() {
                               onPress={handleGenerate}
                               activeOpacity={0.8}
                               disabled={!hasImageLoaded}
-                              accessibilityLabel={'Create image'}
+                              accessibilityLabel={(entitlements.remaining_total ?? 0) > 0 ? 'Create image' : 'Get more tokens'}
                               accessibilityRole="button"
-                              accessibilityHint={'Generates a new image based on your settings'}
+                              accessibilityHint={(entitlements.remaining_total ?? 0) > 0 ? 'Generates a new image based on your settings' : 'Opens the token shop'}
                             >
                               <View style={styles.createButtonContent}>
-                                  <MagicWandIcon color={colors.text.primary} />
-                                  <Text style={styles.createButtonText}>Create</Text>
+                                  {(entitlements.remaining_total ?? 0) > 0 ? (
+                                    <>
+                                        <MagicWandIcon color={colors.text.primary} />
+                                        <Text style={styles.createButtonText}>Create</Text>
+                                    </>
+                                  ) : (
+                                    <Text style={styles.createButtonText}>Get more tokens</Text>
+                                  )}
                               </View>
                             </TouchableOpacity>
                           )}
@@ -1397,7 +1487,26 @@ export default function StudioScreen() {
           </View>
         </View>
 
-        <Modal visible={isResultsDrawerOpen} animationType="slide" presentationStyle="formSheet" onRequestClose={() => setIsResultsDrawerOpen(false)}>
+        <Modal visible={isResultsDrawerOpen} animationType="slide" presentationStyle="formSheet" onRequestClose={() => {
+          setIsResultsDrawerOpen(false);
+          // Show "Save your creations" modal AFTER drawer closes (anonymous users only, first time)
+          if (isAnonymous && !entitlements.is_onboarded && generationHistory.length > 0) {
+            setTimeout(() => {
+              showModal(
+                "Save your creations",
+                "Create a free account in under a minute to save your images.",
+                'default',
+                { label: "Sign In", onPress: () => router.push('/signin') },
+                { label: "Not now", onPress: () => {
+                  // Mark as onboarded so modal doesn't show again
+                  supabase.rpc('complete_onboarding').then(({ error }) => {
+                    if (error) console.log('Failed to complete onboarding:', error);
+                  });
+                }}
+              );
+            }, 300);
+          }
+        }}>
           <SafeAreaView style={styles.modalContainer} edges={['top']}>
             <View style={styles.grabberContainer}><View style={styles.grabber} /></View>
             <View style={styles.modalHeader}>
@@ -1550,20 +1659,8 @@ export default function StudioScreen() {
             title={modalConfig.title}
             message={modalConfig.message}
             type={modalConfig.type}
-            primaryAction={modalConfig.primaryAction ? {
-                ...modalConfig.primaryAction,
-                onPress: () => {
-                    modalConfig.primaryAction?.onPress();
-                    hideModal();
-                }
-            } : { label: "OK", onPress: hideModal }}
-            secondaryAction={modalConfig.secondaryAction ? {
-                ...modalConfig.secondaryAction,
-                onPress: () => {
-                    modalConfig.secondaryAction?.onPress();
-                    hideModal();
-                }
-            } : undefined}
+            primaryAction={modalConfig.primaryAction || { label: "OK", onPress: hideModal }}
+            secondaryAction={modalConfig.secondaryAction}
         />
         <Toast 
           visible={toastConfig.visible}
@@ -1573,6 +1670,15 @@ export default function StudioScreen() {
         <PaywallDrawer 
             visible={isPaywallVisible} 
             onClose={() => setIsPaywallVisible(false)} 
+        />
+        
+        {/* Welcome Onboarding */}
+        <WelcomeOnboarding
+          visible={showWelcomeOnboarding}
+          onComplete={() => {
+            setShowWelcomeOnboarding(false);
+            AsyncStorage.setItem('has_seen_welcome_onboarding', 'true');
+          }}
         />
       </View>
     </View>
@@ -1605,7 +1711,8 @@ const styles = StyleSheet.create({
   topNavLeft: { height: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 16 },
   topNavRight: { height: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 16 },
   topNavTitle: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  userAvatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 3, borderColor: colors.button.primary, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  userAvatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 3, borderColor: colors.button.primary, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background.tertiary },
+  userAvatarImage: { width: '100%', height: '100%' },
   topNavSide: { width: 91, alignItems: 'center', justifyContent: 'center' },
   userIconContainer: { alignItems: 'flex-end', paddingRight: 16 },
   proBadge: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, borderColor: colors.button.primary },
@@ -1688,7 +1795,7 @@ const styles = StyleSheet.create({
   floatingInputLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontSize: 12, fontWeight: '600', color: colors.text.secondary, marginBottom: 8, letterSpacing: 0.5 },
   footerContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.background.secondary, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 },
   footerInner: { gap: 16, justifyContent: 'space-between', alignItems: 'center' },
-  footerPromptInput: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto', fontWeight: '400', fontSize: 14, lineHeight: LINE_HEIGHT, color: colors.text.secondary, alignSelf: 'stretch', paddingTop: INPUT_VERTICAL_PADDING, paddingBottom: INPUT_VERTICAL_PADDING, paddingHorizontal: 16, textAlignVertical: 'top', backgroundColor: colors.background.primary, borderRadius: 16 },
+  footerPromptInput: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto', fontWeight: '400', fontStyle: 'italic', fontSize: 14, lineHeight: LINE_HEIGHT, color: colors.text.secondary, alignSelf: 'stretch', paddingTop: INPUT_VERTICAL_PADDING, paddingBottom: INPUT_VERTICAL_PADDING, paddingHorizontal: 16, textAlignVertical: 'top', backgroundColor: colors.background.primary, borderRadius: 16 },
   bottomButtonsRow: { flexDirection: 'row', alignSelf: 'stretch', gap: 8 },
   galleryButton: { height: 56, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 6, paddingRight: 16, backgroundColor: colors.background.primary, borderRadius: 32, justifyContent: 'center' },
   galleryButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '500', fontSize: 16, color: colors.text.primary, letterSpacing: -0.41 },
@@ -1736,4 +1843,43 @@ const styles = StyleSheet.create({
   modeDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.3)' },
   // FTUE Bottom Sheet
   ftueSheetContent: { flex: 1, backgroundColor: colors.background.secondary },
+  // Tip Box Styles
+  tipBox: { 
+    borderWidth: 2, 
+    borderColor: '#464B5D', 
+    borderRadius: 8, 
+    padding: 16, 
+    gap: 16, 
+    alignItems: 'center',
+    marginTop: 11
+  },
+  tipInfo: { 
+    flexDirection: 'row', 
+    alignSelf: 'stretch', 
+    gap: 8, 
+    alignItems: 'flex-start' 
+  },
+  tipText: { 
+    flex: 1,
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', 
+    fontWeight: '400', 
+    fontSize: 13, 
+    lineHeight: 16, 
+    color: '#F4F4F4' 
+  },
+  tipButton: { 
+    alignSelf: 'stretch', 
+    backgroundColor: '#464B5D', 
+    borderRadius: 24, 
+    paddingVertical: 8, 
+    paddingHorizontal: 12, 
+    alignItems: 'center', 
+    justifyContent: 'center' 
+  },
+  tipButtonText: { 
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', 
+    fontWeight: '500', 
+    fontSize: 16, 
+    color: '#F4F4F4' 
+  },
 });

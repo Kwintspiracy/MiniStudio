@@ -24,9 +24,9 @@ interface ModeCardSelectorProps {
 
 // Mode Card Data
 const MODE_CARDS: { id: StudioMode; title: string; subtitle: string; image: any }[] = [
-  { id: 'paint', title: 'Paint', subtitle: 'Result', image: ImagePaint },
-  { id: 'sculpt', title: 'Sculpt', subtitle: 'Concept', image: ImageSculpt },
-  { id: 'sketch', title: 'Sketch', subtitle: 'Design', image: ImageSketch },
+  { id: 'paint', title: 'Paint', subtitle: 'Explore', image: ImagePaint },
+  { id: 'sculpt', title: 'Render', subtitle: 'Enhance', image: ImageSculpt },
+  { id: 'sketch', title: 'Sketch', subtitle: 'Concepts', image: ImageSketch },
 ];
 
 export const ModeCardSelector = ({ activeMode, onModeChange }: ModeCardSelectorProps) => (

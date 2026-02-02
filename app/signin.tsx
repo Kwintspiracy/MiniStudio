@@ -42,7 +42,7 @@ const AppleIcon = ({ size = 16, color = colors.palette.white }: { size?: number;
 );
 
 export default function SignInScreen() {
-  const { session, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, resendConfirmationEmail, resetPasswordForEmail } = useAuth();
+  const { session, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, resendConfirmationEmail, resetPasswordForEmail, isAnonymous } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -74,13 +74,13 @@ export default function SignInScreen() {
       setModalConfig(prev => ({ ...prev, visible: false }));
   };
 
-  // Monitor Session and navigate appropriately
+  // Monitor Session and navigate appropriately - but ONLY for authenticated users, not anonymous
   useEffect(() => {
-    if (!loading && session && !hasNavigated.current) {
+    if (!loading && session && !isAnonymous && !hasNavigated.current) {
       hasNavigated.current = true;
       router.replace('/(studio)');
     }
-  }, [session, loading]);
+  }, [session, loading, isAnonymous]);
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -171,6 +171,16 @@ export default function SignInScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      
+      {/* Back Button */}
+      <TouchableOpacity 
+        onPress={() => router.back()} 
+        style={styles.backButton}
+        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+      >
+        <Text style={styles.backButtonText}>‹ Back</Text>
+      </TouchableOpacity>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoid}
@@ -357,6 +367,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.primary,
+  },
+  backButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 20,
+    left: 16,
+    zIndex: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  backButtonText: {
+    color: colors.accent.blue,
+    fontSize: 17,
+    fontFamily: fontFamily.primary,
   },
   loadingContainer: {
     flex: 1,
