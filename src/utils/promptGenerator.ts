@@ -23,6 +23,8 @@ export interface PromptParams {
     isPhotoshootEnabled: boolean;
     effectPrompts: Record<string, PromptEffect>;
     painterPrompt: string;
+    skipColorFiltering?: boolean;
+    criticalRules?: string; // New field
 }
 
 export const generatePaintPrompt = (params: PromptParams): string => {
@@ -37,10 +39,11 @@ export const generatePaintPrompt = (params: PromptParams): string => {
         isOSLEnabled,
         isPhotoshootEnabled,
         effectPrompts,
-        painterPrompt
+        painterPrompt,
+        criticalRules
     } = params;
 
-    // 1. STYLE SECTION
+    // 1. GOAL SECTION (Style Prompt)
     let finalStylePrompt = isPro ? (selectedStyle.promptPro || selectedStyle.prompt) : selectedStyle.prompt;
 
     // 2. COLORS SECTION (Calculated first to inform Effects)
@@ -103,7 +106,7 @@ export const generatePaintPrompt = (params: PromptParams): string => {
              }).map((p: any) => ({ name: p.name, hex: p.hex, finish: p.finish }));
          }
 
-         if (paintsToFilter.length > 50) {
+         if (!params.skipColorFiltering && paintsToFilter.length > 50) {
              // Smart Downsampling
              const filteredResult = filterPaintsByDiversity(paintsToFilter) as any;
              const format = (p: PaletteColor[]) => p.map(c => `${c.name}: ${c.hex}`).join(', ');
@@ -113,7 +116,7 @@ export const generatePaintPrompt = (params: PromptParams): string => {
              if (filteredResult.neutrals?.length) standardColorsList.push(`[Neutrals]\n${format(filteredResult.neutrals)}`);
              if (filteredResult.warmNeutrals?.length) standardColorsList.push(`[Warm Neutrals]\n${format(filteredResult.warmNeutrals)}`);
              if (filteredResult.coolNeutrals?.length) standardColorsList.push(`[Cool Neutrals]\n${format(filteredResult.coolNeutrals)}`);
-             if (filteredResult.chromatics?.length) standardColorsList.push(`[Colors]\n${format(filteredResult.chromatics)}`);
+             if (filteredResult.chromatics?.length) standardColorsList.push(`[Global Palette]\n${format(filteredResult.chromatics)}`);
              
              metallicColorsList = [];
              if (isNMMEnabled) {
@@ -143,22 +146,34 @@ export const generatePaintPrompt = (params: PromptParams): string => {
     // 3. EFFECTS SECTION
     const effectsParts: string[] = [];
     
-    const nmmEffect = effectPrompts['effect.nmm'];
     if (isNMMEnabled) {
+       const nmmEffect = effectPrompts['effect.nmm'];
        if (metallicColorsList.length > 0) {
           const mixedEffect = effectPrompts['effect.nmm.mixed'];
+          console.log('[Prompt Generator] Using NMM Mixed Effect:', mixedEffect ? 'FOUND' : 'NOT FOUND');
           if (mixedEffect) {
-              effectsParts.push(isPro ? mixedEffect.pro : mixedEffect.default);
+              const effectText = isPro ? mixedEffect.pro : mixedEffect.default;
+              console.log('[Prompt Generator] NMM Mixed Text:', effectText.substring(0, 100));
+              effectsParts.push(effectText);
           }
        } else if (nmmEffect) {
-          effectsParts.push(isPro ? nmmEffect.pro : nmmEffect.default);
+          console.log('[Prompt Generator] Using NMM Effect:', nmmEffect ? 'FOUND' : 'NOT FOUND');
+          const effectText = isPro ? nmmEffect.pro : nmmEffect.default;
+          console.log('[Prompt Generator] NMM Text:', effectText.substring(0, 100));
+          effectsParts.push(effectText);
        }
     } else {
-      if (nmmEffect && (isPro ? nmmEffect.negative_pro : nmmEffect.negative_default)) {
-          effectsParts.push(isPro ? nmmEffect.negative_pro! : nmmEffect.negative_default!);
-      } else {
-          effectsParts.push(METALLIC_PAINT_INSTRUCTIONS);
-      }
+       // TMM MODE
+       const tmmEffect = effectPrompts['effect.tmm'];
+       console.log('[Prompt Generator] Using TMM Effect:', tmmEffect ? 'FOUND' : 'NOT FOUND');
+       if (tmmEffect) {
+           const effectText = isPro ? tmmEffect.pro : tmmEffect.default;
+           console.log('[Prompt Generator] TMM Text (from admin):', effectText.substring(0, 100));
+           effectsParts.push(effectText);
+       } else {
+           console.log('[Prompt Generator] TMM Text (FALLBACK constant):', METALLIC_PAINT_INSTRUCTIONS.substring(0, 100));
+           effectsParts.push(METALLIC_PAINT_INSTRUCTIONS);
+       }
     }
 
     const oslEffect = effectPrompts['effect.osl'];
@@ -185,38 +200,48 @@ export const generatePaintPrompt = (params: PromptParams): string => {
 
     const promptParts: string[] = [];
     
-    promptParts.push("[Style Prompt Details]");
+    // [Goal]
+    promptParts.push("[GOAL]");
     promptParts.push(finalStylePrompt);
+
+    const sanitizedPainterPrompt = sanitizePrompt(painterPrompt);
+    if (sanitizedPainterPrompt) {
+        promptParts.push(sanitizedPainterPrompt);
+    }
     
+    // [Colors]
     if (standardColorsList.length > 0 || metallicColorsList.length > 0 || selectedBrands.length > 0) {
-        promptParts.push("[Colors]");
+        promptParts.push("[STRICT PALETTE]");
         
         if (standardColorsList.length > 0 || metallicColorsList.length > 0) {
-            promptParts.push("STRICT COLOR PALETTE:");
+            // Standard colors (already formatted with category headers like [Flesh Tones], [Neutrals], etc.)
             if (standardColorsList.length > 0) {
-                promptParts.push("Standard Colors:");
-                promptParts.push(standardColorsList.join(', '));
+                promptParts.push(standardColorsList.join('\n'));
             }
+            // [Metallics] - inline instruction
             if (metallicColorsList.length > 0) {
-                 if (isNMMEnabled) {
-                    promptParts.push("Metallic Paints (Render with TMM pigment texture based on these hues):");
-                 }
-                 promptParts.push(metallicColorsList.join(', '));
+                 const metallicHeader = isNMMEnabled 
+                    ? "[Metallics] (Render with NMM painting technique):" 
+                    : "[Metallics] (Render with TMM pigment texture based on these hues):";
+                 promptParts.push(`${metallicHeader}\n${metallicColorsList.join(', ')}`);
             }
         } else if (selectedBrands.length > 0) {
             promptParts.push(`using paints from these brands: ${selectedBrands.join(', ')}`);
         }
     }
 
+    // [Effects]
     if (effectsParts.length > 0) {
-        promptParts.push("[Effects]");
+        promptParts.push("[EFFECTS]");
         promptParts.push(effectsParts.join('\n'));
     }
 
-    const sanitizedPainterPrompt = sanitizePrompt(painterPrompt);
-    if (sanitizedPainterPrompt) {
-        promptParts.splice(2, 0, sanitizedPainterPrompt); 
+    // [Rules]
+    if (criticalRules) {
+        promptParts.push("[STRICT RULES]");
+        promptParts.push(criticalRules);
     }
 
     return promptParts.join('\n\n');
 };
+

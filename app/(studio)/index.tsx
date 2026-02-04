@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   View, Text, TouchableOpacity, ScrollView, Image, TextInput, FlatList,
   ActivityIndicator, Alert, Modal, StyleSheet, Platform, Dimensions, StatusBar, Share,
-  KeyboardAvoidingView, Keyboard, Pressable
+  KeyboardAvoidingView, Keyboard, Pressable, InteractionManager
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -240,7 +240,16 @@ export default function StudioScreen() {
     }, [])
   );
 
-  const { styles: paintStylesList, templates: designerTemplates, effects: effectPrompts, shareMessage, exampleAssets, loading: promptsLoading } = usePrompts();
+  const { 
+    styles: paintStylesList, 
+    templates: designerTemplates, 
+    effects: effectPrompts, 
+    rules: stateRules,
+    shareMessage, 
+    exampleAssets, 
+    loading: promptsLoading,
+    refetch: refetchPrompts
+  } = usePrompts();
 
   const [activeMode, setActiveMode] = useState<StudioMode>('paint');
   const [selectedStyleId, setSelectedStyleId] = useState<string | null>(null);
@@ -301,11 +310,14 @@ export default function StudioScreen() {
   }, [entitlements.is_pro]);
 
   // Refetch entitlements when screen comes into focus (e.g. returning from Paywall)
-  useFocusEffect(
-    useCallback(() => {
-        refetch();
-    }, [refetch])
-  );
+  // Note: Prompts are fetched only on mount to avoid performance issues
+  // DISABLED: This was causing freezes when closing modals
+  // useFocusEffect(
+  //   useCallback(() => {
+  //       console.log('[DEBUG] useFocusEffect fired - refetching entitlements');
+  //       refetch();
+  //   }, [refetch])
+  // );
   
   const handleProToggle = () => {
       // Allow toggling freely (or add logic to block if !entitlements.is_pro later)
@@ -392,6 +404,7 @@ export default function StudioScreen() {
 
   const scrollViewRef = useRef<ScrollView>(null);
   const cameFromGalleryRef = useRef(false); // Track if we navigated to camera from gallery
+  const hasShownGalleryFullModal = useRef(false); // Track if gallery_full modal was shown this session
 
   // Toast State
   const [toastConfig, setToastConfig] = useState<{ visible: boolean; message: string }>({ 
@@ -654,22 +667,43 @@ export default function StudioScreen() {
     */
   }, [authLoading, tutorialStep]);
 
-  // Persist generation history (ONLY for signed-in users - anonymous users lose history on quit!)
+  // Persist generation history with 10-image limit for anonymous users
   useEffect(() => {
-    if (isAnonymous) {
-      // Don't save history for anonymous users (incentive to sign up!)
-      AsyncStorage.removeItem('generation_history');
-      return;
-    }
-    
-    // Signed-in users: Save history persistently
     const userGeneratedItems = generationHistory.filter(item => item.timestamp !== 0);
-    if (userGeneratedItems.length > 0) {
-      AsyncStorage.setItem('generation_history', JSON.stringify(userGeneratedItems));
+    
+    // Apply 10-image limit for anonymous users only
+    const imagesToSave = isAnonymous 
+      ? userGeneratedItems.slice(0, 10)  // Last 10 for anonymous
+      : userGeneratedItems;               // Unlimited for signed-in
+    
+    // Save to AsyncStorage in background
+    if (imagesToSave.length > 0) {
+      AsyncStorage.setItem('generation_history', JSON.stringify(imagesToSave));
     } else {
       AsyncStorage.removeItem('generation_history');
     }
   }, [generationHistory, isAnonymous]);
+
+  // Show gallery full modal ONLY on app launch (once per session)
+  useEffect(() => {
+    if (authLoading) return; // Wait for auth to be ready
+    
+    const userGeneratedItems = generationHistory.filter(item => item.timestamp !== 0);
+    
+    // Show modal on app launch if user is anonymous and has reached 10-image limit
+    if (isAnonymous && userGeneratedItems.length >= 10 && !hasShownGalleryFullModal.current) {
+      hasShownGalleryFullModal.current = true;
+      console.log('[DEBUG] App launch: Gallery limit reached, showing modal');
+      
+      showModal(
+        "Gallery full",
+        "You've hit the 10-image guest limit. Sign in to save unlimited images.",
+        'default',
+        { label: "Sign In", onPress: () => router.push('/signin') },
+        { label: "Maybe Later", onPress: () => {} }
+      );
+    }
+  }, [authLoading, generationHistory.length, isAnonymous]); // Only run on mount or when these values change
 
   const handlePickImage = useCallback(async () => {
     const images = await pickMultipleImages();
@@ -722,8 +756,8 @@ export default function StudioScreen() {
        if (entitlements.is_pro) {
            // Pro user exhausted their tier tokens
            showModal(
-               "Limit Reached",
-               "You've used all your 60 tokens for this month. You can always get a token Pack if you are in a hurry.",
+               "Token limit reached",
+               "You’ve used all 60 tokens for this month. Get a token pack to keep going.",
                'default',
                { label: "Get Tokens", onPress: () => setIsPaywallVisible(true) },
                { label: "Maybe Later", onPress: () => {} }
@@ -768,7 +802,7 @@ export default function StudioScreen() {
 
       let images: string[] = [];
       if (activeMode === 'paint' && preparedSources.length >= 1) {
-        const finalPrompt = generatePaintPrompt({
+        const promptParams = {
           isPro,
           selectedStyle,
           isPaletteEnabled,
@@ -779,12 +813,26 @@ export default function StudioScreen() {
           isOSLEnabled,
           isPhotoshootEnabled,
           effectPrompts,
-          painterPrompt
-        });
+          painterPrompt,
+          criticalRules: isPro ? stateRules['rules.paint']?.pro : stateRules['rules.paint']?.default
+        };
 
-        console.log(`\n--- GENERATION PROMPT (${new Date().toLocaleTimeString()}) ---\n${finalPrompt}\n----------------------------------\n`);
+        const metadata = {
+          mode: 'paint',
+          style_id: selectedStyle?.id,
+          style_name: selectedStyle?.name,
+          effects: [isNMMEnabled && 'NMM', isOSLEnabled && 'OSL', isPhotoshootEnabled && 'Photoshoot'].filter(Boolean),
+          colors_count: selectedColors.length,
+          is_pro: isPro,
+          model: model
+        };
+
+        // Generate single prompt with color filtering enabled for PoYo
+        const finalPrompt = generatePaintPrompt({ ...promptParams, skipColorFiltering: false });
+
+        console.log(`\n--- GENERATION PROMPT (PoYo Only) ---\n${finalPrompt}\n----------------------------------\n`);
         
-        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, model);
+        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, model, undefined, undefined, metadata);
       } else if (activeMode === 'sketch' || activeMode === 'sculpt') {
         const characterDesc = sanitizePrompt(designerPrompt).trim() || 'character';
         
@@ -802,34 +850,87 @@ export default function StudioScreen() {
 
         // Fetch the creativity template from remote config (or default)
         const creativityConfig = designerTemplates['creativity_level'];
-        // Fallback string if config is missing (though constants ensure it exists locally)
         const creativityTemplateString = creativityConfig 
             ? (isPro ? creativityConfig.pro : creativityConfig.default) 
             : "AI CREATIVITY INTENSITY: {percentage}% (0%=Strict Adherence, 100%=Max Artistic License). Adjust the level of detail, material variation, and stylized interpretation to match this exact percentage.";
         
         const resolvedCreativity = creativityTemplateString.replace(/{percentage}/g, (creativityLevel * 100).toFixed(0));
 
-        const prompt = template
+        const goalPrompt = template
           .replace(/{input}/g, characterDesc)
           .replace(/{style}/g, sketchStyle)
           .replace(/{creativity}/g, resolvedCreativity);
 
-        console.log(`\n--- ${activeMode.toUpperCase()} PROMPT (Temp: ${creativityLevel}) ---\n${prompt}\n----------------------------------\n`);
-        images = await generatePaintedMiniature(preparedSources, prompt, 1, model, creativityLevel);
+        // Assembly of standardized prompt for Sketch/Sculpt
+        const promptParts: string[] = [];
+        
+        promptParts.push("[Goal]");
+        promptParts.push(goalPrompt);
+
+        // [Effects] section for Sketch/Sculpt (Photoshoot if enabled)
+        if (isPhotoshootEnabled) {
+            const photoEffect = effectPrompts['effect.photoshoot'];
+            if (photoEffect) {
+                promptParts.push("[Effects]");
+                promptParts.push(isPro ? photoEffect.pro : photoEffect.default);
+            }
+        }
+
+        // [Rules]
+        const ruleKey = activeMode === 'sketch' ? 'rules.sketch' : 'rules.render';
+        const ruleContent = isPro ? stateRules[ruleKey]?.pro : stateRules[ruleKey]?.default;
+        
+        if (ruleContent) {
+            promptParts.push("[Rules]");
+            promptParts.push(ruleContent);
+        }
+
+        const finalPrompt = promptParts.join('\n\n');
+
+        const metadata = {
+          mode: activeMode,
+          is_pro: isPro,
+          model: model,
+          sketch_style: sketchStyle,
+          creativity_level: (creativityLevel * 100).toFixed(0) + '%',
+          effects: [isPhotoshootEnabled && 'Photoshoot'].filter(Boolean)
+        };
+
+        console.log(`\n--- ${activeMode.toUpperCase()} PROMPT (Temp: ${creativityLevel}) ---\n${finalPrompt}\n----------------------------------\n`);
+        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, model, creativityLevel, undefined, metadata);
       }
       if (images && images.length > 0) {
         const resultUrl = images[0];
+        console.log('[DEBUG] Generation success, result URL type:', resultUrl.startsWith('data:') ? 'base64' : (resultUrl.startsWith('http') ? 'remote' : 'file'));
         
         // Save the result base64 to a local file permanently
         let persistentUrl = resultUrl;
         try {
+          console.log('[DEBUG] Attempting to save to file...');
           persistentUrl = await saveBase64ToFile(resultUrl, 'gen_');
+          console.log('[DEBUG] Saved to file:', persistentUrl.substring(0, 50));
         } catch (e) {
           console.error('Failed to save generated image to file:', e);
         }
 
+        console.log('[DEBUG] Setting preview and adding to history immediately...');
         setActivePreviewImage(persistentUrl);
-        setGenerationHistory(prev => [{ url: persistentUrl, isPro, isMaster: false, modelName: model, timestamp: Date.now() }, ...prev]);
+        
+        // Add to history with immediate 10-image limit for anonymous users
+        setGenerationHistory(prev => {
+          const newItem = { url: persistentUrl, isPro, isMaster: false, modelName: model, timestamp: Date.now() };
+          const allItems = [newItem, ...prev];
+          
+          // For anonymous users: keep only the 10 most recent items (including demos)
+          // Oldest items (whether demo or user-generated) get pushed out
+          if (isAnonymous) {
+            return allItems.slice(0, 10);
+          }
+          
+          return allItems;
+        });
+        
+        console.log('[DEBUG] Opening results drawer...');
         setIsResultsDrawerOpen(true);
         
         // Modal will be shown when user manually closes drawer (see Modal onRequestClose handler)
@@ -1488,24 +1589,15 @@ export default function StudioScreen() {
         </View>
 
         <Modal visible={isResultsDrawerOpen} animationType="slide" presentationStyle="formSheet" onRequestClose={() => {
+          console.log('[DEBUG] Gallery Modal onRequestClose triggered');
+          console.log('[DEBUG] Total history items:', generationHistory.length);
+          console.log('[DEBUG] hasShownGalleryFullModal:', hasShownGalleryFullModal.current);
           setIsResultsDrawerOpen(false);
-          // Show "Save your creations" modal AFTER drawer closes (anonymous users only, first time)
-          if (isAnonymous && !entitlements.is_onboarded && generationHistory.length > 0) {
-            setTimeout(() => {
-              showModal(
-                "Save your creations",
-                "Create a free account in under a minute to save your images.",
-                'default',
-                { label: "Sign In", onPress: () => router.push('/signin') },
-                { label: "Not now", onPress: () => {
-                  // Mark as onboarded so modal doesn't show again
-                  supabase.rpc('complete_onboarding').then(({ error }) => {
-                    if (error) console.log('Failed to complete onboarding:', error);
-                  });
-                }}
-              );
-            }, 300);
-          }
+          console.log('[DEBUG] Gallery Modal isResultsDrawerOpen set to false');
+          
+          // CRITICAL FIX: Never show modal after closing drawer - causes freeze with many images
+          // Instead, modal will only show from the useEffect when limit is first reached
+          console.log('[DEBUG] Skipping all modal logic in onRequestClose to prevent freeze');
         }}>
           <SafeAreaView style={styles.modalContainer} edges={['top']}>
             <View style={styles.grabberContainer}><View style={styles.grabber} /></View>

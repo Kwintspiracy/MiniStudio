@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     dismissButton: {
         marginLeft: 12,
         padding: 4,
-        backgroundColor: 'rgba(255,255,255,0.2)',
+        backgroundColor: 'rgba(255, 255, 255, 0.11)',
         borderRadius: 12,
     },
     arrow: {

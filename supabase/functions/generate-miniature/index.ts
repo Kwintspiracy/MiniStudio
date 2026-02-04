@@ -177,6 +177,7 @@ async function submitPoyoWithWebhook(
     }
 
     // Submit task WITH webhook callback URL
+    log.info('POYO', `SUBMIT: Prompt length: ${prompt.length} chars | Unfiltered: ${!prompt.includes('[Flesh Tones]')}`);
     const taskId = await submitPoyoTask(apiKey, prompt, imageUrl, CONFIG.POYO_WEBHOOK_URL);
 
     // Store task_id in job for webhook to find
@@ -285,12 +286,14 @@ async function reserveCredits(
     supabaseClient: any, 
     userId: string, 
     cost: number,
-    deviceId?: string
+    deviceId?: string,
+    metadata?: any
 ): Promise<{ success: boolean; jobId?: string; error?: string; balance?: number }> {
     const { data, error } = await supabaseClient.rpc('reserve_generation', {
         p_user_id: userId,
         p_cost: cost,
         p_device_id: deviceId || null,
+        p_metadata: metadata || {}
     });
 
     if (error) {
@@ -382,7 +385,7 @@ Deno.serve(async (req) => {
         // ================================================================
         // 2. PARSE REQUEST
         // ================================================================
-        const { prompt, baseImage, model, action, temperature, device_id } = await req.json();
+        const { prompt, promptFiltered, baseImage, model, action, temperature, device_id, metadata } = await req.json();
 
         log.section('POYO');
         log.info('POYO', `REQUEST START | User: ${user.id.substring(0, 8)}...`);
@@ -402,19 +405,30 @@ Deno.serve(async (req) => {
         const isPro = targetModel.includes('pro') || targetModel.includes('preview');
         const tokenCost = isPro ? 2 : 1;
 
-        const reservation = await reserveCredits(supabaseClient, user.id, tokenCost, device_id);
+        const reservation = await reserveCredits(supabaseClient, user.id, tokenCost, device_id, metadata);
         
         if (!reservation.success) {
-            log.error('CREDITS', `Reservation failed: ${reservation.error}`);
+            log.error('CREDITS', `Reservation failed: ${reservation.error}, Balance: ${reservation.balance}`);
             
             let errorMessage = "Limit Reached.";
+            let errorDetails: any = {
+                error: errorMessage,
+                reservation_error: reservation.error,
+                balance: reservation.balance
+            };
+            
             if (reservation.error === 'insufficient_balance') {
                 errorMessage = `Insufficient tokens. Balance: ${reservation.balance || 0}, Required: ${tokenCost}`;
+                errorDetails.error = errorMessage;
             } else if (reservation.error === 'user_not_found') {
                 errorMessage = "User account not found.";
+                errorDetails.error = errorMessage;
+            } else if (reservation.error === 'device_already_used') {
+                errorMessage = "This device has already received free tokens. Please sign in to continue.";
+                errorDetails.error = errorMessage;
             }
             
-            return new Response(JSON.stringify({ error: errorMessage }), { 
+            return new Response(JSON.stringify(errorDetails), { 
                 status: 403, headers: corsHeaders 
             });
         }
@@ -497,7 +511,9 @@ Deno.serve(async (req) => {
         log.info('GOOGLE', 'MODE: Sync (direct response)');
         
         try {
-            const generatedImage = await generateWithGoogle(prompt, imagePayload, targetModel, temperature);
+            const finalGooglePrompt = promptFiltered || prompt;
+            log.info('GOOGLE', `SUBMIT: Prompt length: ${finalGooglePrompt.length} chars | Filtered: ${!!promptFiltered}`);
+            const generatedImage = await generateWithGoogle(finalGooglePrompt, imagePayload, targetModel, temperature);
             
             // Check for cancellation
             if (isAborted || req.signal.aborted) {

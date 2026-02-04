@@ -18,7 +18,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "PHPhotoLibraryPreventAutomaticLimitedAccessAlert": true
       },
-      "buildNumber": "18"
+      "buildNumber": "21"
     },
     "android": {
       "adaptiveIcon": {
@@ -62,7 +62,8 @@
         }
       ],
       "expo-secure-store",
-      "expo-font"
+      "expo-font",
+      "expo-mail-composer"
     ],
     "experiments": {
       "typedRoutes": true

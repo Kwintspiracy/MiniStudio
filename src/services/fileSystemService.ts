@@ -11,8 +11,11 @@ export const saveBase64ToFile = async (base64Data: string, prefix: string = 'min
         const fileUri = `${FileSystem.documentDirectory}${filename}`;
         
         // Strip data URI prefix if present
-        const pureBase64 = base64Data.includes('base64,') 
-            ? base64Data.split('base64,')[1] 
+        // Use substring instead of split to save memory
+        const prefixMatch = 'base64,';
+        const splitIndex = base64Data.indexOf(prefixMatch);
+        const pureBase64 = splitIndex !== -1 
+            ? base64Data.substring(splitIndex + prefixMatch.length) 
             : base64Data;
         
         await FileSystem.writeAsStringAsync(fileUri, pureBase64, {

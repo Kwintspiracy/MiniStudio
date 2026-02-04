@@ -93,6 +93,16 @@ export const PromptTester = ({
                 isOSLEnabled: false,
                 isPhotoshootEnabled: false
             }
+        },
+        {
+            id: 6,
+            name: "BASE Mode | Critical Rules Test",
+            params: {
+                isPro: false,
+                selectedBrands: ['Citadel'],
+                isPaletteEnabled: true,
+                criticalRules: "1. No bright colors\n2. Must look grimdark"
+            }
         }
     ];
 
@@ -176,25 +186,38 @@ export const PromptTester = ({
     );
 };
 
+const GH_COLORS = {
+    canvas: '#0D1117',
+    sidebar: '#010409',
+    border: '#30363D',
+    textPrimary: '#C9D1D9',
+    textSecondary: '#8B949E',
+    accent: '#58A6FF',
+    success: '#238636',
+    danger: '#F85149',
+    card: '#0D1117',
+    itemHover: '#161B22',
+};
+
 const styles = StyleSheet.create({
-    container: { flex: 1 },
+    container: { flex: 1, backgroundColor: GH_COLORS.canvas },
     header: { marginBottom: 24 },
-    title: { fontSize: 24, fontWeight: 'bold', color: colors.admin.text },
-    subtitle: { fontSize: 14, color: colors.admin.textSecondary, marginTop: 4 },
-    content: { flex: 1, flexDirection: 'row', gap: 20 },
-    scenarioList: { width: 300, borderRightWidth: 1, borderRightColor: colors.admin.border, paddingRight: 20 },
-    scenarioItem: { padding: 12, borderRadius: 6, marginBottom: 8, backgroundColor: colors.admin.card, borderWidth: 1, borderColor: colors.admin.border },
-    scenarioItemActive: { backgroundColor: colors.admin.active, borderColor: colors.admin.active },
-    scenarioName: { fontSize: 13, color: colors.admin.text, fontWeight: '500' },
-    scenarioNameActive: { color: colors.palette.white },
-    outputArea: { flex: 1, backgroundColor: colors.admin.card, borderRadius: 8, borderWidth: 1, borderColor: colors.admin.border, overflow: 'hidden' },
+    title: { fontSize: 20, fontWeight: '600', color: GH_COLORS.textPrimary },
+    subtitle: { fontSize: 13, color: GH_COLORS.textSecondary, marginTop: 4 },
+    content: { flex: 1, flexDirection: 'row', gap: 0, borderWidth: 1, borderColor: GH_COLORS.border, borderRadius: 6, overflow: 'hidden' },
+    scenarioList: { width: 300, backgroundColor: '#161b22', borderRightWidth: 1, borderRightColor: GH_COLORS.border },
+    scenarioItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: GH_COLORS.border },
+    scenarioItemActive: { backgroundColor: GH_COLORS.canvas, borderLeftWidth: 4, borderLeftColor: GH_COLORS.accent },
+    scenarioName: { fontSize: 13, color: GH_COLORS.textPrimary, fontWeight: '500' },
+    scenarioNameActive: { color: GH_COLORS.accent, fontWeight: '600' },
+    outputArea: { flex: 1, backgroundColor: GH_COLORS.canvas },
     outputContainer: { flex: 1 },
-    outputHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.admin.border, backgroundColor: colors.admin.background },
-    outputTitle: { fontSize: 14, fontWeight: 'bold', color: colors.admin.text, flex: 1 },
-    copyButton: { backgroundColor: colors.admin.active, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 4 },
-    copyButtonText: { color: colors.palette.white, fontSize: 12, fontWeight: 'bold' },
+    outputHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: GH_COLORS.border, backgroundColor: '#161b22' },
+    outputTitle: { fontSize: 13, fontWeight: '600', color: GH_COLORS.textPrimary, flex: 1 },
+    copyButton: { backgroundColor: '#21262d', borderWidth: 1, borderColor: GH_COLORS.border, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
+    copyButtonText: { color: GH_COLORS.accent, fontSize: 12, fontWeight: '600' },
     outputScroll: { flex: 1, padding: 16 },
-    outputText: { fontFamily: 'monospace', fontSize: 12, color: colors.admin.textCode, lineHeight: 18 },
-    placeholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    placeholderText: { color: colors.admin.textSecondary, fontSize: 16 }
+    outputText: { fontFamily: 'monospace', fontSize: 13, color: GH_COLORS.textPrimary, lineHeight: 20 },
+    placeholder: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
+    placeholderText: { color: GH_COLORS.textSecondary, fontSize: 14, textAlign: 'center' }
 });

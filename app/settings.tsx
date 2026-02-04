@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppModal } from '../src/components/AppModal';
 import { useEntitlements } from '../src/hooks/useEntitlements';
 import { PaywallDrawer } from '../src/components/PaywallDrawer';
+import { FeedbackDrawer } from '../src/components/FeedbackDrawer';
 
 // Import treasure image
 const treasureImage = require('../assets/treasure.png');
@@ -22,6 +23,7 @@ export default function SettingsScreen() {
     const [isSignOutModalVisible, setIsSignOutModalVisible] = useState(false);
     const [isMenuVisible, setIsMenuVisible] = useState(false);
     const [isPaywallVisible, setIsPaywallVisible] = useState(false);
+    const [isFeedbackDrawerOpen, setIsFeedbackDrawerOpen] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const { entitlements, refetch: refetchEntitlements } = useEntitlements();
 
@@ -153,6 +155,14 @@ export default function SettingsScreen() {
                 >
                     <Text style={styles.getTokensText}>Get more Tokens</Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity 
+                    style={[styles.getTokensButton, { marginTop: 12, backgroundColor: colors.button.secondary, borderWidth: 1, borderColor: colors.border.subtle }]}
+                    onPress={() => setIsFeedbackDrawerOpen(true)}
+                    activeOpacity={0.8}
+                >
+                    <Text style={[styles.getTokensText, { color: colors.text.primary }]}>Send Feedback</Text>
+                </TouchableOpacity>
             </View>
 
             {/* Menu Dropdown */}
@@ -231,6 +241,11 @@ export default function SettingsScreen() {
             <PaywallDrawer 
                 visible={isPaywallVisible} 
                 onClose={() => setIsPaywallVisible(false)} 
+            />
+
+            <FeedbackDrawer 
+                visible={isFeedbackDrawerOpen} 
+                onClose={() => setIsFeedbackDrawerOpen(false)} 
             />
         </GradientBackground>
     );

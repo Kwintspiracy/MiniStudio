@@ -1,20 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { fetchActivePrompts } from '../services/promptService';
-import { PAINTING_STYLES, DEFAULT_DESIGNER_TEMPLATES, NMM_MIXED_PROMPT } from '../constants';
+import { PAINTING_STYLES, DEFAULT_DESIGNER_TEMPLATES, NMM_MIXED_PROMPT, METALLIC_PAINT_INSTRUCTIONS } from '../constants';
 import { StyleOption, DesignerType } from '../types';
 
 interface PromptsState {
     styles: (StyleOption & { promptPro?: string })[];
     templates: Record<string, { default: string; pro: string }>;
     effects: Record<string, { default: string; pro: string; negative_default?: string; negative_pro?: string }>;
+    rules: Record<string, { default: string; pro: string }>; // New field
     shareMessage: string;
     exampleAssets: string[]; // URLs
     loading: boolean;
+    refetch: () => Promise<void>;
 }
 
 export function usePrompts() {
     // Initial state
-    const [state, setState] = useState<PromptsState>({
+    const [state, setState] = useState<Omit<PromptsState, 'refetch'>>({
         styles: PAINTING_STYLES,
         templates: Object.keys(DEFAULT_DESIGNER_TEMPLATES).reduce((acc, key) => {
             acc[key] = {
@@ -35,22 +37,26 @@ export function usePrompts() {
             'effect.photoshoot': {
                 default: 'Rendered as a professional studio product shot with soft diffused lighting on a seamless black background.',
                 pro: 'Rendered as a professional studio product shot with soft diffused lighting on a seamless black background.'
+            },
+            'effect.tmm': {
+                default: METALLIC_PAINT_INSTRUCTIONS,
+                pro: METALLIC_PAINT_INSTRUCTIONS
             }
+        },
+        rules: {
+            'rules.paint': { default: '', pro: '' },
+            'rules.render': { default: '', pro: '' },
+            'rules.sketch': { default: '', pro: '' },
         },
         shareMessage: 'Check out this generated miniature from MiniStudio!',
         exampleAssets: [],
         loading: true
     });
 
-    useEffect(() => {
-        let isMounted = true;
+    const loadRemoteConfig = useCallback(async () => {
+        const remotePrompts = await fetchActivePrompts();
 
-        async function loadRemoteConfig() {
-            const remotePrompts = await fetchActivePrompts();
-
-            if (!isMounted) return;
-
-            // Update Styles
+        // Update Styles
             const updatedStyles = PAINTING_STYLES.map(style => {
                 const key = `style.${style.id}`;
                 return {
@@ -78,7 +84,6 @@ export function usePrompts() {
             });
 
             // Update Effects
-            const updatedEffects = { ...state.effects };
             const newEffects: Record<string, { default: string; pro: string; negative_default?: string; negative_pro?: string }> = {};
 
             newEffects['effect.nmm'] = remotePrompts['effect.nmm'] ? {
@@ -90,6 +95,13 @@ export function usePrompts() {
                 default: 'using the Non-Metallic Metal (NMM) technique for all metallic parts',
                 pro: 'using the Non-Metallic Metal (NMM) technique for all metallic parts'
             };
+            
+            // Debug: Log what was actually fetched for NMM
+            if (remotePrompts['effect.nmm']) {
+                console.log('[usePrompts] NMM Effect loaded from database:');
+                console.log('[usePrompts] FULL Basic text:', remotePrompts['effect.nmm'].default);
+                console.log('[usePrompts] FULL Pro text:', remotePrompts['effect.nmm'].pro || 'N/A');
+            }
 
             newEffects['effect.osl'] = remotePrompts['effect.osl'] ? {
                 default: remotePrompts['effect.osl'].default,
@@ -121,6 +133,23 @@ export function usePrompts() {
                 pro: NMM_MIXED_PROMPT
             };
 
+            newEffects['effect.tmm'] = remotePrompts['effect.tmm'] ? {
+                default: remotePrompts['effect.tmm'].default,
+                pro: remotePrompts['effect.tmm'].pro,
+                negative_default: remotePrompts['effect.tmm'].negative_default,
+                negative_pro: remotePrompts['effect.tmm'].negative_pro
+            } : {
+                default: METALLIC_PAINT_INSTRUCTIONS,
+                pro: METALLIC_PAINT_INSTRUCTIONS
+            };
+
+            // Update Rules
+            const updatedRules: Record<string, { default: string; pro: string }> = {
+                'rules.paint': remotePrompts['rules.paint'] || { default: '', pro: '' },
+                'rules.render': remotePrompts['rules.render'] || { default: '', pro: '' },
+                'rules.sketch': remotePrompts['rules.sketch'] || { default: '', pro: '' },
+            };
+
             // Share Message
             const shareMessage = remotePrompts['share.message']?.default || 'Check out this generated miniature from MiniStudio!';
 
@@ -142,16 +171,17 @@ export function usePrompts() {
                 styles: updatedStyles,
                 templates: updatedTemplates,
                 effects: newEffects,
+                rules: updatedRules,
                 shareMessage,
                 exampleAssets,
                 loading: false
             });
-        }
-
-        loadRemoteConfig();
-
-        return () => { isMounted = false; };
     }, []);
 
-    return state;
+    useEffect(() => {
+        loadRemoteConfig();
+    }, [loadRemoteConfig]);
+
+    return { ...state, refetch: loadRemoteConfig };
 }
+
