@@ -8,36 +8,46 @@ export const GALLERY_INDEX_KEY = 'ministudio_gallery_index';
 export const HAS_SEEN_ONBOARDING_KEY = 'ministudio_has_seen_onboarding';
 export const SUPABASE_RECOVERY_KEY = 'ministudio_supabase_recovery';
 
-// For web platform, we'll use localStorage as fallback
+// For web platform, we'll use sessionStorage as fallback
+// sessionStorage is scoped to the browser tab and is cleared when the tab closes,
+// which limits XSS exposure compared to the persistent localStorage.
+// Non-sensitive app data (gallery index, onboarding state) continues to use
+// localStorage so it persists across sessions as expected.
 const isWeb = Platform.OS === 'web';
 
 /**
- * Store API key securely
+ * Store API key securely.
+ * Web: uses sessionStorage (cleared on tab close) to reduce XSS persistence risk.
+ * Native: uses SecureStore (OS keychain).
  */
 export async function setApiKey(apiKey: string): Promise<void> {
   if (isWeb) {
-    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+    sessionStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
   } else {
     await SecureStore.setItemAsync(API_KEY_STORAGE_KEY, apiKey);
   }
 }
 
 /**
- * Retrieve stored API key
+ * Retrieve stored API key.
+ * Web: reads from sessionStorage.
+ * Native: reads from SecureStore.
  */
 export async function getApiKey(): Promise<string | null> {
   if (isWeb) {
-    return localStorage.getItem(API_KEY_STORAGE_KEY);
+    return sessionStorage.getItem(API_KEY_STORAGE_KEY);
   }
   return await SecureStore.getItemAsync(API_KEY_STORAGE_KEY);
 }
 
 /**
- * Delete stored API key
+ * Delete stored API key.
+ * Web: removes from sessionStorage.
+ * Native: removes from SecureStore.
  */
 export async function deleteApiKey(): Promise<void> {
   if (isWeb) {
-    localStorage.removeItem(API_KEY_STORAGE_KEY);
+    sessionStorage.removeItem(API_KEY_STORAGE_KEY);
   } else {
     await SecureStore.deleteItemAsync(API_KEY_STORAGE_KEY);
   }
@@ -142,33 +152,40 @@ export async function deleteData(key: string): Promise<void> {
   }
 }
 /**
- * Store recovery token securely (Keychain/SecureStore)
- * This survives uninstalls on iOS.
+ * Store recovery token securely.
+ * Native: uses SecureStore (Keychain/Keystore) — survives uninstalls on iOS.
+ * Web: uses sessionStorage instead of localStorage to reduce XSS persistence risk.
+ *      The token is cleared when the tab closes, which is an acceptable trade-off
+ *      given the absence of OS-level secure storage on web.
  */
 export async function setRecoveryToken(token: string): Promise<void> {
   if (isWeb) {
-    localStorage.setItem(SUPABASE_RECOVERY_KEY, token);
+    sessionStorage.setItem(SUPABASE_RECOVERY_KEY, token);
   } else {
     await SecureStore.setItemAsync(SUPABASE_RECOVERY_KEY, token);
   }
 }
 
 /**
- * Retrieve recovery token
+ * Retrieve recovery token.
+ * Web: reads from sessionStorage.
+ * Native: reads from SecureStore.
  */
 export async function getRecoveryToken(): Promise<string | null> {
   if (isWeb) {
-    return localStorage.getItem(SUPABASE_RECOVERY_KEY);
+    return sessionStorage.getItem(SUPABASE_RECOVERY_KEY);
   }
   return await SecureStore.getItemAsync(SUPABASE_RECOVERY_KEY);
 }
 
 /**
- * Delete recovery token
+ * Delete recovery token.
+ * Web: removes from sessionStorage.
+ * Native: removes from SecureStore.
  */
 export async function deleteRecoveryToken(): Promise<void> {
   if (isWeb) {
-    localStorage.removeItem(SUPABASE_RECOVERY_KEY);
+    sessionStorage.removeItem(SUPABASE_RECOVERY_KEY);
   } else {
     await SecureStore.deleteItemAsync(SUPABASE_RECOVERY_KEY);
   }

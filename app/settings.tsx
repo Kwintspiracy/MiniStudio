@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ScrollView, RefreshControl, Modal, Pressable, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ScrollView, RefreshControl, Modal, Pressable } from 'react-native';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { GradientBackground } from '../src/components/GradientBackground';
@@ -13,8 +13,6 @@ import { FeedbackDrawer } from '../src/components/FeedbackDrawer';
 
 // Import treasure image
 const treasureImage = require('../assets/treasure.png');
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function SettingsScreen() {
     const { user, signOut, isAnonymous, resetGuestSession } = useAuth();
@@ -106,28 +104,30 @@ export default function SettingsScreen() {
             >
                 {/* Profile Section - Centered */}
                 <View style={styles.profileSection}>
-                    {!isAnonymous && (
-                        <View style={styles.avatarContainer}>
-                            {user?.user_metadata?.avatar_url ? (
-                                <Image
-                                    source={{ uri: user.user_metadata.avatar_url }}
-                                    style={styles.avatar}
-                                />
-                            ) : (
-                                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                                    <Text style={styles.avatarText}>
-                                        {user?.email?.charAt(0).toUpperCase() ?? 'U'}
-                                    </Text>
-                                </View>
-                            )}
-                        </View>
+                    <View style={styles.avatarContainer}>
+                        {!isAnonymous && user?.user_metadata?.avatar_url ? (
+                            <Image
+                                source={{ uri: user.user_metadata.avatar_url }}
+                                style={styles.avatar}
+                            />
+                        ) : !isAnonymous && user?.email ? (
+                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                <Text style={styles.avatarText}>
+                                    {user.email.charAt(0).toUpperCase()}
+                                </Text>
+                            </View>
+                        ) : (
+                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                <Ionicons name="person" size={48} color={colors.text.secondary} />
+                            </View>
+                        )}
+                    </View>
+                    {!isAnonymous && user?.email && (
+                        <Text style={styles.userEmail}>{user.email}</Text>
                     )}
-                    <Text style={styles.userEmail}>
-                        {isAnonymous ? "Sign in to save your creations" : user?.email}
-                    </Text>
 
                     {isAnonymous && (
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.inlineSignInButton}
                             onPress={() => router.push('/signin')}
                             activeOpacity={0.8}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { colors, fontFamily } from '../theme';
@@ -99,9 +99,14 @@ export const UsageTracker = forwardRef<UsageTrackerRef>((_, ref) => {
 
     return (
         <View style={styles.container}>
+            {entitlements.isStale && (
+                <TouchableOpacity style={styles.staleBanner} onPress={fetchStats}>
+                    <Text style={styles.staleBannerText}>Could not refresh balance. Tap to retry.</Text>
+                </TouchableOpacity>
+            )}
             <View style={styles.headerRow}>
                 <Text style={styles.title}>Your Balance</Text>
-                {entitlements.subscription_status === 'active' && 
+                {entitlements.subscription_status === 'active' &&
                     <View style={[styles.badge, { backgroundColor: colors.accent.purple }]}>
                          <Text style={[styles.badgeText, { color: 'white' }]}>PRO</Text>
                     </View>
@@ -126,6 +131,20 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         padding: 16,
         marginBottom: 16,
+    },
+    staleBanner: {
+        backgroundColor: colors.accent.yellow,
+        borderRadius: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        marginBottom: 10,
+    },
+    staleBannerText: {
+        fontSize: 12,
+        color: colors.palette.black,
+        fontFamily: fontFamily.primary,
+        fontWeight: '600',
+        textAlign: 'center',
     },
     headerRow: {
         flexDirection: 'row',

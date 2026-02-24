@@ -10,7 +10,7 @@ import {
     ActivityIndicator,
     Modal,
     Pressable,
-    Dimensions
+    useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fontFamily, spacing, borderRadius, dimensions } from '../theme';
@@ -18,14 +18,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 interface FeedbackDrawerProps {
     visible: boolean;
     onClose: () => void;
 }
 
 export const FeedbackDrawer: React.FC<FeedbackDrawerProps> = ({ visible, onClose }) => {
+    const { height: SCREEN_HEIGHT } = useWindowDimensions();
     const insets = useSafeAreaInsets();
     const { user } = useAuth();
     const [feedback, setFeedback] = useState('');
@@ -77,14 +76,19 @@ export const FeedbackDrawer: React.FC<FeedbackDrawerProps> = ({ visible, onClose
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                     keyboardVerticalOffset={40}
-                    style={[styles.drawer, { paddingBottom: Math.max(insets.bottom + 8, 16) + 40 }]}
+                    style={[styles.drawer, { paddingBottom: Math.max(insets.bottom + 8, 16) + 40, maxHeight: SCREEN_HEIGHT * 0.85 }]}
                 >
                     {/* Handle bar */}
                     <View style={styles.handleBar} />
                     
                     <View style={styles.header}>
                         <Text style={styles.title}>Send Feedback</Text>
-                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                        <TouchableOpacity
+                            onPress={onClose}
+                            style={styles.closeButton}
+                            accessibilityLabel="Close feedback drawer"
+                            accessibilityRole="button"
+                        >
                             <Ionicons name="close" size={24} color={colors.text.primary} />
                         </TouchableOpacity>
                     </View>
@@ -156,7 +160,6 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
         paddingTop: 12,
-        maxHeight: SCREEN_HEIGHT * 0.85,
     },
     handleBar: {
         width: dimensions.modal.grabberWidth,
@@ -185,7 +188,10 @@ const styles = StyleSheet.create({
     closeButton: {
         position: 'absolute',
         right: 24,
-        padding: 4,
+        width: 44,
+        height: 44,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     content: {
         paddingHorizontal: 24,

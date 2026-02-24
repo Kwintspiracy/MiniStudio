@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -7,7 +7,7 @@ import {
     Modal,
     Pressable,
     ActivityIndicator,
-    Dimensions,
+    useWindowDimensions,
 } from 'react-native';
 import { colors, fontFamily } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,8 +15,23 @@ import Purchases, { PurchasesPackage } from 'react-native-purchases';
 import Constants from 'expo-constants';
 import { AppModal } from './AppModal';
 import { useEntitlements } from '../hooks/useEntitlements';
+import { useAuth } from '../context/AuthContext';
+import { router } from 'expo-router';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+/** Minimal shape required to construct a mock PurchasesPackage for UI development. */
+interface MockPurchasesPackage {
+    identifier: string;
+    packageType: string;
+    product: {
+        identifier: string;
+        description: string;
+        title: string;
+        price?: number;
+        priceString: string;
+        currencyCode?: string;
+        productType: string;
+    };
+}
 
 interface PaywallDrawerProps {
     visible: boolean;
@@ -36,8 +51,11 @@ interface PlanOption {
 }
 
 export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
+    const { height: SCREEN_HEIGHT } = useWindowDimensions();
     const insets = useSafeAreaInsets();
     const { refetch } = useEntitlements();
+    const { isAnonymous } = useAuth();
+    const isMounted = useRef(true);
     const [selectedPlan, setSelectedPlan] = useState<PlanType>('annual');
     const [packages, setPackages] = useState<PurchasesPackage[]>([]);
     const [loading, setLoading] = useState(true);
@@ -92,85 +110,83 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
     ];
 
     useEffect(() => {
+        isMounted.current = true;
+        return () => {
+            isMounted.current = false;
+        };
+    }, []);
+
+    useEffect(() => {
         if (visible) {
             loadOfferings();
         }
     }, [visible]);
 
+    const mockPackages: PurchasesPackage[] = ([
+        {
+            identifier: 'Monthly',
+            packageType: 'MONTHLY',
+            product: {
+                identifier: 'pro_monthly',
+                description: '60 Monthly Tokens',
+                title: 'Monthly',
+                price: 5.99,
+                priceString: '$5.99',
+                currencyCode: 'USD',
+                productType: 'AUTO_RENEWABLE_SUBSCRIPTION',
+            },
+        },
+        {
+            identifier: 'Annual',
+            packageType: 'ANNUAL',
+            product: {
+                identifier: 'pro_annual',
+                description: '60 Monthly Tokens',
+                title: 'Annual',
+                price: 53.88,
+                priceString: '$53.88',
+                currencyCode: 'USD',
+                productType: 'AUTO_RENEWABLE_SUBSCRIPTION',
+            },
+        },
+        {
+            identifier: 'Tokens_200',
+            packageType: 'CUSTOM',
+            product: {
+                identifier: 'tokens_200',
+                description: '200 Tokens',
+                title: 'Pack of Tokens',
+                price: 17.99,
+                priceString: '$17.99',
+                currencyCode: 'USD',
+                productType: 'CONSUMABLE',
+            },
+        },
+    ] as MockPurchasesPackage[]) as unknown as PurchasesPackage[];
+
     const loadOfferings = async () => {
+        if (!isMounted.current) return;
         setLoading(true);
         try {
             const offerings = await Purchases.getOfferings();
+            if (!isMounted.current) return;
             if (offerings.current && offerings.current.availablePackages.length !== 0) {
                 console.log('[PaywallDrawer] Loaded packages from RevenueCat:', offerings.current.availablePackages.map(p => ({ id: p.identifier, type: p.packageType })));
                 setPackages(offerings.current.availablePackages);
             } else {
                 // Mock data fallback
                 console.log("Using Mock Offerings for UI Dev");
-                setPackages([
-                    {
-                        identifier: 'Monthly',
-                        packageType: 'MONTHLY',
-                        product: {
-                            identifier: 'pro_monthly',
-                            description: '60 Monthly Tokens',
-                            title: 'Monthly',
-                            price: 5.99,
-                            priceString: '$5.99',
-                            currencyCode: 'USD',
-                            productType: 'AUTO_RENEWABLE_SUBSCRIPTION',
-                        }
-                    },
-                    {
-                        identifier: 'Annual',
-                        packageType: 'ANNUAL',
-                        product: {
-                            identifier: 'pro_annual',
-                            description: '60 Monthly Tokens',
-                            title: 'Annual',
-                            price: 53.88,
-                            priceString: '$53.88',
-                            currencyCode: 'USD',
-                            productType: 'AUTO_RENEWABLE_SUBSCRIPTION',
-                        }
-                    },
-                    {
-                        identifier: 'Tokens_200',
-                        packageType: 'CUSTOM',
-                        product: {
-                            identifier: 'tokens_200',
-                            description: '200 Tokens',
-                            title: 'Pack of Tokens',
-                            price: 17.99,
-                            priceString: '$17.99',
-                            currencyCode: 'USD',
-                            productType: 'CONSUMABLE',
-                        }
-                    }
-                ] as any);
+                setPackages(mockPackages);
             }
         } catch (e) {
             console.warn("Error fetching offerings:", e);
+            if (!isMounted.current) return;
             // Fallback mock data
-            setPackages([
-                {
-                    identifier: 'Monthly',
-                    packageType: 'MONTHLY',
-                    product: { identifier: 'pro_monthly', description: '60 Monthly Tokens', title: 'Monthly', priceString: '$5.99', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
-                },
-                {
-                    identifier: 'Annual',
-                    packageType: 'ANNUAL',
-                    product: { identifier: 'pro_annual', description: '60 Monthly Tokens', title: 'Annual', priceString: '$53.88', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
-                },
-                {
-                    identifier: 'Tokens_200',
-                    packageType: 'CUSTOM',
-                    product: { identifier: 'tokens_200', description: '200 Tokens', title: 'Pack of Tokens', priceString: '$17.99', productType: 'CONSUMABLE' }
-                }
-            ] as any);
+            setPackages(mockPackages);
         } finally {
-            setLoading(false);
+            if (isMounted.current) {
+                setLoading(false);
+            }
         }
     };
 
@@ -295,7 +311,7 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
 
     const renderPlanCard = (plan: PlanOption) => {
         const isSelected = selectedPlan === plan.id;
-        
+
         return (
             <TouchableOpacity
                 key={plan.id}
@@ -305,6 +321,9 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
                 ]}
                 onPress={() => setSelectedPlan(plan.id)}
                 activeOpacity={0.8}
+                accessibilityLabel={`${plan.title}, ${plan.subtitle}, ${plan.price}${plan.badge ? `, ${plan.badge}` : ''}`}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: isSelected }}
             >
                 {plan.badge && (
                     <View style={styles.badge}>
@@ -332,9 +351,14 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
             animationType="slide"
             onRequestClose={onClose}
         >
-            <Pressable style={styles.overlay} onPress={onClose}>
-                <Pressable 
-                    style={[styles.drawer, { paddingBottom: insets.bottom + 16 }]}
+            <Pressable
+                style={styles.overlay}
+                onPress={onClose}
+                accessibilityLabel="Close paywall"
+                accessibilityRole="button"
+            >
+                <Pressable
+                    style={[styles.drawer, { paddingBottom: insets.bottom + 16, maxHeight: SCREEN_HEIGHT * 0.85 }]}
                     onPress={(e) => e.stopPropagation()}
                 >
                     {/* Handle bar */}
@@ -345,30 +369,48 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
                         Keep building your perfect paint plan.
                     </Text>
 
-                    {/* Plan Cards */}
-                    {loading ? (
-                        <ActivityIndicator size="large" color={colors.button.primary} style={{ marginVertical: 40 }} />
-                    ) : (
-                        <View style={styles.plansContainer}>
-                            {plans.map(renderPlanCard)}
+                    {/* Plan Cards or Sign-in prompt */}
+                    {isAnonymous ? (
+                        <View style={styles.footerContainer}>
+                            <TouchableOpacity
+                                style={styles.purchaseButton}
+                                onPress={() => { onClose(); router.push('/signin'); }}
+                                activeOpacity={0.8}
+                                accessibilityLabel="Sign In to Purchase"
+                                accessibilityRole="button"
+                            >
+                                <Text style={styles.purchaseButtonText}>Sign In to Purchase</Text>
+                            </TouchableOpacity>
                         </View>
-                    )}
-
-                    {/* Footer - Standardized to match mainView */}
-                    <View style={styles.footerContainer}>
-                        <TouchableOpacity
-                            style={styles.purchaseButton}
-                            onPress={handlePurchase}
-                            disabled={purchasing || loading}
-                            activeOpacity={0.8}
-                        >
-                            {purchasing ? (
-                                <ActivityIndicator size="small" color={colors.palette.white} />
+                    ) : (
+                        <>
+                            {loading ? (
+                                <ActivityIndicator size="large" color={colors.button.primary} style={{ marginVertical: 40 }} />
                             ) : (
-                                <Text style={styles.purchaseButtonText}>{getPurchaseButtonText()}</Text>
+                                <View style={styles.plansContainer}>
+                                    {plans.map(renderPlanCard)}
+                                </View>
                             )}
-                        </TouchableOpacity>
-                    </View>
+
+                            {/* Footer - Standardized to match mainView */}
+                            <View style={styles.footerContainer}>
+                                <TouchableOpacity
+                                    style={styles.purchaseButton}
+                                    onPress={handlePurchase}
+                                    disabled={purchasing || loading}
+                                    activeOpacity={0.8}
+                                    accessibilityLabel={getPurchaseButtonText()}
+                                    accessibilityRole="button"
+                                >
+                                    {purchasing ? (
+                                        <ActivityIndicator size="small" color={colors.palette.white} />
+                                    ) : (
+                                        <Text style={styles.purchaseButtonText}>{getPurchaseButtonText()}</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        </>
+                    )}
                 </Pressable>
             </Pressable>
 
@@ -395,7 +437,6 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
         paddingTop: 12,
-        maxHeight: SCREEN_HEIGHT * 0.85,
     },
     handleBar: {
         width: 36,
@@ -483,6 +524,18 @@ const styles = StyleSheet.create({
         color: colors.text.primary,
         fontFamily: fontFamily.primary,
     },
+    signInPromptContainer: {
+        paddingHorizontal: 24,
+        paddingVertical: 24,
+        alignItems: 'center',
+    },
+    signInPromptText: {
+        fontSize: 15,
+        color: colors.text.secondary,
+        fontFamily: fontFamily.primary,
+        textAlign: 'center',
+        marginBottom: 24,
+    },
     // Footer - Standardized to match mainView
     footerContainer: {
         paddingHorizontal: 24,
@@ -492,6 +545,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.button.primary,
         borderRadius: 26,
         height: 52,
+        paddingHorizontal: 24,
         justifyContent: 'center',
         alignItems: 'center',
     },

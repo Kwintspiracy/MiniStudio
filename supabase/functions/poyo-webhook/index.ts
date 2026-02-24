@@ -3,10 +3,16 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
+
+// SEC-002: Environment-based CORS origins (no wildcard in production)
+const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filter(Boolean);
 const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS[0] : '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+// SEC-001: PoYo Webhook Authorization Secret
+const POYO_WEBHOOK_SECRET = Deno.env.get('POYO_WEBHOOK_SECRET');
 
 const log = {
     info: (...args: any[]) => console.log('[WEBHOOK]', ...args),
@@ -25,6 +31,21 @@ Deno.serve(async (req) => {
 
     log.info('═══════════════════════════════════════════════════════');
     log.info('Received PoYo callback');
+
+    // SEC-001: Verify PoYo Webhook Authorization Header
+    const authHeader = req.headers.get('Authorization');
+    if (POYO_WEBHOOK_SECRET) {
+        if (!authHeader || authHeader !== `Bearer ${POYO_WEBHOOK_SECRET}`) {
+            log.error('Unauthorized: Invalid or missing Authorization header');
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                status: 401,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+        }
+        log.info('Authorization verified');
+    } else {
+        log.info('WARNING: POYO_WEBHOOK_SECRET not configured. Webhook is not secured!');
+    }
 
     try {
         // Parse callback payload

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, StyleSheet, Image, Pressable, Alert, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamily, borderRadius, spacing } from '../../src/theme';
+import { useAuth } from '../../src/context/AuthContext';
 import { adminFetchAllPrompts, adminCreatePromptVersion, adminActivatePromptVersion, adminUpdatePrompt, PromptConfig, uploadAsset, adminUpdateAssetsList, adminRepairIntegrity } from '../../src/services/promptService';
 import * as ImagePicker from 'expo-image-picker';
 import { AppModal } from '../../src/components/AppModal';
@@ -26,6 +27,9 @@ import * as Sharing from 'expo-sharing';
 type ViewMode = 'Dashboard' | 'Prompts' | 'Modals' | 'Tools';
 
 export default function AdminDashboard() {
+    const { user } = useAuth();
+    const isAdmin = user?.app_metadata?.role === 'admin';
+
     const [prompts, setPrompts] = useState<PromptConfig[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentView, setCurrentView] = useState<ViewMode>('Dashboard');
@@ -645,6 +649,15 @@ export default function AdminDashboard() {
 
     const selectedVersions = selectedKey ? (groupedPrompts[selectedKey] || []) : [];
 
+    if (!isAdmin) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#161B22' }}>
+                <Text style={{ color: '#ff4444', fontSize: 18, fontWeight: '700' }}>Access Denied</Text>
+                <Text style={{ color: '#8b949e', fontSize: 14, marginTop: 8 }}>Admin privileges required.</Text>
+            </View>
+        );
+    }
+
     return (
         <View style={styles.outerContainer}>
             {/* GitHub Global Header */}
@@ -775,13 +788,18 @@ export default function AdminDashboard() {
                                     const config = groupedPrompts[`style.${s.id}`]?.find(p => p.is_active);
                                     return { ...s, prompt: config?.template || s.prompt, promptPro: config?.template_pro || s.prompt };
                                 })}
-                                effectsList={{
-                                    'effect.nmm': groupedPrompts['effect.nmm']?.find(p => p.is_active) || { default: '', pro: '' },
-                                    'effect.tmm': groupedPrompts['effect.tmm']?.find(p => p.is_active) || { default: METALLIC_PAINT_INSTRUCTIONS, pro: METALLIC_PAINT_INSTRUCTIONS },
-                                    'effect.osl': groupedPrompts['effect.osl']?.find(p => p.is_active) || { default: '', pro: '' },
-                                    'effect.photoshoot': groupedPrompts['effect.photoshoot']?.find(p => p.is_active) || { default: '', pro: '' },
-                                    'effect.nmm.mixed': groupedPrompts['effect.nmm.mixed']?.find(p => p.is_active) || { default: NMM_MIXED_PROMPT, pro: NMM_MIXED_PROMPT }
-                                }}
+                                effectsList={(() => {
+                                    const toEffect = (config: import('../../src/services/promptService').PromptConfig | undefined, fallbackDefault: string, fallbackPro: string) => config
+                                        ? { default: config.template, pro: config.template_pro, negative_default: config.negative_template, negative_pro: config.negative_template_pro }
+                                        : { default: fallbackDefault, pro: fallbackPro };
+                                    return {
+                                        'effect.nmm': toEffect(groupedPrompts['effect.nmm']?.find(p => p.is_active), '', ''),
+                                        'effect.tmm': toEffect(groupedPrompts['effect.tmm']?.find(p => p.is_active), METALLIC_PAINT_INSTRUCTIONS, METALLIC_PAINT_INSTRUCTIONS),
+                                        'effect.osl': toEffect(groupedPrompts['effect.osl']?.find(p => p.is_active), '', ''),
+                                        'effect.photoshoot': toEffect(groupedPrompts['effect.photoshoot']?.find(p => p.is_active), '', ''),
+                                        'effect.nmm.mixed': toEffect(groupedPrompts['effect.nmm.mixed']?.find(p => p.is_active), NMM_MIXED_PROMPT, NMM_MIXED_PROMPT),
+                                    };
+                                })()}
                             />
                         </View>
                     ) : (selectedKey || isCreatingKey) ? (

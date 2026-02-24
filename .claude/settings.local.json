@@ -4,7 +4,10 @@
       "Bash(head:*)",
       "Bash(find:*)",
       "Bash(tail:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(cd \"D:/APPS/MiniStudio\" && npx tsc --noEmit 2>&1)",
+      "Bash(cd /d/APPS/MiniStudio && npx tsc --noEmit 2>&1)",
+      "Bash(echo EXIT_CODE: $?:*)"
     ]
   }
 }

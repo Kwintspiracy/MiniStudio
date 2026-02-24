@@ -184,9 +184,11 @@ export default function CameraScreen() {
             <SafeAreaView style={styles.uiOverlay} pointerEvents="box-none">
                 {/* Close Button - 24/24 Inset */}
                 <View style={styles.closeButtonContainer}>
-                    <TouchableOpacity 
-                        onPress={() => router.back()} 
+                    <TouchableOpacity
+                        onPress={() => router.back()}
                         style={styles.iconButton}
+                        accessibilityLabel="Close camera"
+                        accessibilityRole="button"
                     >
                         <XMarkIcon color={colors.palette.white} size={24} />
                     </TouchableOpacity>
@@ -202,11 +204,18 @@ export default function CameraScreen() {
                             style={styles.captureButtonOuter}
                             onPress={takePicture}
                             disabled={isCapturing}
+                            accessibilityLabel="Take photo"
+                            accessibilityRole="button"
                         >
                             <View style={[styles.captureButtonInner, isCapturing && styles.capturing]} />
                         </TouchableOpacity>
 
-                        <TouchableOpacity onPress={toggleFlash} style={styles.sideButton}>
+                        <TouchableOpacity
+                            onPress={toggleFlash}
+                            style={styles.sideButton}
+                            accessibilityLabel={`Flash ${flash}`}
+                            accessibilityRole="button"
+                        >
                             {renderFlashIcon()}
                         </TouchableOpacity>
                     </View>

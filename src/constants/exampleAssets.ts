@@ -1,3 +1,4 @@
+// TODO: Remove unused module — identified in audit #17
 // Register your example images here
 // 1. Place image files in assets/examples/
 // 2. Import them using require()

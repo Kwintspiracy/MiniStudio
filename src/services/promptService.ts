@@ -31,12 +31,16 @@ export type PromptDictionary = Record<string, { default: string; pro: string; ne
  * 2. If successful, save to cache and return.
  * 3. If failed (offline), try to return cached version.
  */
-export async function fetchActivePrompts(): Promise<PromptDictionary> {
+export async function fetchActivePrompts(signal?: AbortSignal): Promise<PromptDictionary> {
     try {
-        const { data, error } = await supabase
+        const query = supabase
             .from('prompt_configs')
             .select('key, template, template_pro, negative_template, negative_template_pro')
             .eq('is_active', true);
+
+        const { data, error } = signal
+            ? await query.abortSignal(signal)
+            : await query;
 
         if (error) throw error;
 

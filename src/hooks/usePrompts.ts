@@ -53,8 +53,8 @@ export function usePrompts() {
         loading: true
     });
 
-    const loadRemoteConfig = useCallback(async () => {
-        const remotePrompts = await fetchActivePrompts();
+    const loadRemoteConfig = useCallback(async (signal?: AbortSignal) => {
+        const remotePrompts = await fetchActivePrompts(signal);
 
         // Update Styles
             const updatedStyles = PAINTING_STYLES.map(style => {
@@ -172,7 +172,21 @@ export function usePrompts() {
     }, []);
 
     useEffect(() => {
-        loadRemoteConfig();
+        const controller = new AbortController();
+
+        const run = async () => {
+            try {
+                await loadRemoteConfig(controller.signal);
+            } catch (error: any) {
+                if (error.name === 'AbortError') return;
+            }
+        };
+
+        run();
+
+        return () => {
+            controller.abort();
+        };
     }, [loadRemoteConfig]);
 
     return { ...state, refetch: loadRemoteConfig };

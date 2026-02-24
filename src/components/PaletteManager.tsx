@@ -1,3 +1,4 @@
+// TODO: Remove unused module — identified in audit #17
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Modal, ActivityIndicator } from 'react-native';
 import { PaletteColor, fetchAllPaints, fetchUserPaints } from '../services/paintService';
@@ -72,8 +73,7 @@ export const PaletteManager: React.FC<PaletteManagerProps> = ({
     const availableBrands = useMemo(() => {
         const brands = new Set<string>();
         dbColors.forEach(c => {
-            // @ts-ignore
-            const isUserPaint = c._isUserPaint === true;
+                const isUserPaint = (c as any)._isUserPaint === true;
             const b = isUserPaint ? "User Library" : (c.brand ? c.brand.trim() : "User Library");
             brands.add(b);
         });
@@ -87,8 +87,7 @@ export const PaletteManager: React.FC<PaletteManagerProps> = ({
     const groupedColors = useMemo(() => {
         const groups = dbColors.reduce((acc, color) => {
             // Check for user paint tag (added by paintService)
-            // @ts-ignore
-            const isUserPaint = color._isUserPaint === true;
+            const isUserPaint = (color as any)._isUserPaint === true;
 
             const b = isUserPaint ? "User Library" : (color.brand?.trim() || "User Library");
             const s = color.set?.trim() || "General";

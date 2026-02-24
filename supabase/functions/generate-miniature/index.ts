@@ -12,8 +12,10 @@ const CONFIG = {
     CIRCUIT_BREAKER_THRESHOLD: parseInt(Deno.env.get('CIRCUIT_BREAKER_THRESHOLD') || '5'),
     CIRCUIT_BREAKER_COOLDOWN_MS: parseInt(Deno.env.get('CIRCUIT_BREAKER_COOLDOWN_MS') || '600000'),
     // Webhook URL for async PoYo callbacks
-    POYO_WEBHOOK_URL: Deno.env.get('POYO_WEBHOOK_URL') || 
+    POYO_WEBHOOK_URL: Deno.env.get('POYO_WEBHOOK_URL') ||
         `${Deno.env.get('SUPABASE_URL')}/functions/v1/poyo-webhook`,
+    // Anonymous IP rate limit: max generations per IP per hour
+    ANON_IP_HOURLY_LIMIT: parseInt(Deno.env.get('ANON_IP_HOURLY_LIMIT') || '5'),
 };
 
 // SEC-002: Environment-based CORS origins
@@ -22,6 +24,17 @@ const corsHeaders = {
     'Access-Control-Allow-Origin': ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS[0] : '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+// SEC-005: Strict model whitelist with token costs (prevents cost manipulation via unknown models)
+const MODEL_COSTS: Record<string, number> = {
+    'gemini-2.5-flash-image': 1,
+    'gemini-2.0-flash-preview-image-generation': 2,
+    'gemini-2.5-pro-preview-06-05': 2,
+};
+// DoS guard on total assembled prompt (system template + colors + effects + user text)
+const MAX_PROMPT_LENGTH = 15000;
+// Limit on user-typed free-text fields (painterPrompt / designerPrompt)
+const MAX_USER_TEXT_LENGTH = 1000;
 
 // ============================================================================
 // LOGGING HELPERS
@@ -312,12 +325,14 @@ async function confirmGeneration(
     supabaseClient: any,
     jobId: string,
     provider: string,
-    model: string
+    model: string,
+    clientIp?: string
 ): Promise<void> {
     const { data, error } = await supabaseClient.rpc('confirm_generation', {
         p_job_id: jobId,
         p_provider: provider,
         p_model: model,
+        p_client_ip: clientIp || null,
     });
 
     if (error) {
@@ -342,6 +357,73 @@ async function releaseCredits(
     } else {
         log.info('POYO', `CREDITS: Released/refunded job ${jobId.substring(0, 8)}...`);
     }
+}
+
+// ============================================================================
+// ANONYMOUS IP RATE LIMITING
+// ============================================================================
+
+/**
+ * Extracts the real client IP from request headers.
+ * Supabase Edge Functions receive the IP via x-forwarded-for or x-real-ip.
+ */
+function getClientIp(req: Request): string {
+    const forwarded = req.headers.get('x-forwarded-for');
+    if (forwarded) {
+        // x-forwarded-for may be a comma-separated list; take the first entry
+        return forwarded.split(',')[0].trim();
+    }
+    return req.headers.get('x-real-ip') || 'unknown';
+}
+
+/**
+ * Checks whether an anonymous user has exceeded the per-IP hourly generation limit.
+ * Uses the generation_logs table to count recent anonymous generations from the same IP.
+ * Returns true if the request should be blocked.
+ */
+async function isAnonymousIpRateLimited(
+    supabaseClient: any,
+    ip: string,
+    userId: string,
+): Promise<boolean> {
+    if (ip === 'unknown') {
+        // Cannot determine IP — allow through but log warning
+        log.info('RATE', `Cannot determine client IP for anonymous user ${userId.substring(0, 8)}`);
+        return false;
+    }
+
+    const windowStart = new Date(Date.now() - 60 * 60 * 1000).toISOString(); // 1 hour ago
+
+    const { count, error } = await supabaseClient
+        .from('generation_logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('client_ip', ip)
+        .gte('created_at', windowStart);
+
+    if (error) {
+        log.error('RATE', `IP rate-limit check error: ${error.message}`);
+        // Fail open — don't block on DB errors
+        return false;
+    }
+
+    const requestCount = count ?? 0;
+    log.info('RATE', `Anonymous IP ${ip}: ${requestCount}/${CONFIG.ANON_IP_HOURLY_LIMIT} requests this hour`);
+    return requestCount >= CONFIG.ANON_IP_HOURLY_LIMIT;
+}
+
+// ============================================================================
+// SANITIZATION HELPERS
+// ============================================================================
+
+/**
+ * SEC: Server-side defense-in-depth sanitization.
+ * Strips null bytes and control characters from a prompt string.
+ * Preserves newlines (\n, \x0A) and tabs (\t, \x09) as legitimate whitespace.
+ * The client sanitizes first; this is a second layer of protection.
+ */
+function sanitizeServerSide(text: string): string {
+    // Strip null bytes and control characters (keep newlines \n and tabs \t)
+    return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 }
 
 // ============================================================================
@@ -377,15 +459,52 @@ Deno.serve(async (req) => {
         const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
 
         if (!user) {
-            return new Response(JSON.stringify({ error: `Unauthorized: ${authError?.message}` }), { 
-                status: 401, headers: corsHeaders 
+            return new Response(JSON.stringify({ error: `Unauthorized: ${authError?.message}` }), {
+                status: 401, headers: corsHeaders
             });
+        }
+
+        // ================================================================
+        // 1b. ANONYMOUS USER CHECKS
+        // Use the authoritative is_anonymous flag from the JWT/user object.
+        // Falls back to email heuristic for older anonymous accounts.
+        // ================================================================
+        const isAnonymous = user.is_anonymous === true
+            || user.email?.includes('@anon.')
+            || (!user.email && !user.phone);
+        const clientIp = getClientIp(req);
+
+        if (isAnonymous) {
+            // Guard: block anonymous users from spending purchased tokens.
+            // Anonymous accounts cannot purchase tokens (blocked in the UI), but as a
+            // server-side defence we check the balance and reject if purchased_balance > 0.
+            // This prevents credit loss when the anonymous account is later linked to a
+            // real account (the purchased balance would not transfer automatically).
+            const { data: statusData } = await supabaseClient.rpc('get_user_status');
+            if (statusData?.purchased_balance > 0) {
+                log.info('RATE', `Anonymous user ${user.id.substring(0, 8)} has purchased_balance=${statusData.purchased_balance}, blocking generation until signed in`);
+                return new Response(JSON.stringify({
+                    error: 'Please sign in to use your purchased tokens. Your balance is safe and will be available after sign-in.',
+                    reservation_error: 'anon_purchased_tokens',
+                }), { status: 403, headers: corsHeaders });
+            }
+
+            // IP rate limiting: prevents bypassing device_id tracking by spoofing a new
+            // device_id for every request from the same IP address.
+            const rateLimited = await isAnonymousIpRateLimited(supabaseClient, clientIp, user.id);
+            if (rateLimited) {
+                log.info('RATE', `Anonymous IP ${clientIp} exceeded hourly limit, blocking`);
+                return new Response(JSON.stringify({
+                    error: 'Rate limit exceeded. Please sign in to continue generating images.',
+                    reservation_error: 'anon_ip_rate_limited',
+                }), { status: 429, headers: corsHeaders });
+            }
         }
 
         // ================================================================
         // 2. PARSE REQUEST
         // ================================================================
-        const { prompt, promptFiltered, baseImage, model, action, temperature, device_id, metadata } = await req.json();
+        const { prompt, promptFiltered, baseImage, model, action, temperature, device_id, metadata, userText } = await req.json();
 
         log.section('POYO');
         log.info('POYO', `REQUEST START | User: ${user.id.substring(0, 8)}...`);
@@ -393,43 +512,69 @@ Deno.serve(async (req) => {
         log.divider('POYO');
 
         if (!prompt) {
-            return new Response(JSON.stringify({ error: "Missing prompt" }), { 
-                status: 400, headers: corsHeaders 
+            return new Response(JSON.stringify({ error: "Missing prompt" }), {
+                status: 400, headers: corsHeaders
             });
         }
+
+        // SEC-005: Validate user-typed text length (the injection surface)
+        if (userText && (typeof userText !== 'string' || userText.length > MAX_USER_TEXT_LENGTH)) {
+            return new Response(JSON.stringify({ error: `User text must be at most ${MAX_USER_TEXT_LENGTH} characters` }), {
+                status: 400, headers: corsHeaders
+            });
+        }
+
+        // SEC-005: DoS guard on total assembled prompt
+        if (typeof prompt !== 'string' || prompt.length > MAX_PROMPT_LENGTH) {
+            return new Response(JSON.stringify({ error: `Prompt too long (max ${MAX_PROMPT_LENGTH} characters)` }), {
+                status: 400, headers: corsHeaders
+            });
+        }
+
+        // SEC: Server-side defense-in-depth sanitization
+        const sanitizedPrompt = sanitizeServerSide(prompt);
+        const sanitizedPromptFiltered = promptFiltered ? sanitizeServerSide(promptFiltered) : undefined;
+
+        const targetModel = model || 'gemini-2.5-flash-image';
+
+        // SEC-005: Reject unknown models — only whitelisted models are allowed
+        if (!(targetModel in MODEL_COSTS)) {
+            return new Response(JSON.stringify({ error: `Unknown model: ${targetModel}` }), {
+                status: 400, headers: corsHeaders
+            });
+        }
+
+        // SEC-005: Clamp temperature to valid range 0-2
+        const safeTemperature = temperature !== undefined
+            ? Math.min(2, Math.max(0, Number(temperature)))
+            : undefined;
 
         // ================================================================
         // 3. RESERVE CREDITS
         // ================================================================
-        const targetModel = model || 'gemini-2.5-flash-image';
-        const isPro = targetModel.includes('pro') || targetModel.includes('preview');
-        const tokenCost = isPro ? 2 : 1;
+        const tokenCost = MODEL_COSTS[targetModel];
 
         const reservation = await reserveCredits(supabaseClient, user.id, tokenCost, device_id, metadata);
         
         if (!reservation.success) {
+            // Log detailed info server-side only — never expose balance or device tracking details to client
             log.error('CREDITS', `Reservation failed: ${reservation.error}, Balance: ${reservation.balance}`);
-            
-            let errorMessage = "Limit Reached.";
-            let errorDetails: any = {
-                error: errorMessage,
-                reservation_error: reservation.error,
-                balance: reservation.balance
-            };
-            
+
+            let errorMessage = "Limit reached.";
+
             if (reservation.error === 'insufficient_balance') {
-                errorMessage = `Insufficient tokens. Balance: ${reservation.balance || 0}, Required: ${tokenCost}`;
-                errorDetails.error = errorMessage;
+                errorMessage = "Insufficient tokens. Please purchase more to continue.";
             } else if (reservation.error === 'user_not_found') {
                 errorMessage = "User account not found.";
-                errorDetails.error = errorMessage;
             } else if (reservation.error === 'device_already_used') {
-                errorMessage = "This device has already received free tokens. Please sign in to continue.";
-                errorDetails.error = errorMessage;
+                errorMessage = "Free tokens are not available. Please sign in to continue.";
             }
-            
-            return new Response(JSON.stringify(errorDetails), { 
-                status: 403, headers: corsHeaders 
+
+            return new Response(JSON.stringify({
+                error: errorMessage,
+                reservation_error: reservation.error,
+            }), {
+                status: 403, headers: corsHeaders
             });
         }
 
@@ -457,9 +602,9 @@ Deno.serve(async (req) => {
                 
                 // Submit task with webhook - returns immediately
                 const { taskId } = await submitPoyoWithWebhook(
-                    supabaseClient, 
-                    jobId!, 
-                    prompt, 
+                    supabaseClient,
+                    jobId!,
+                    sanitizedPrompt,
                     imagePayload
                 );
 
@@ -511,9 +656,9 @@ Deno.serve(async (req) => {
         log.info('GOOGLE', 'MODE: Sync (direct response)');
         
         try {
-            const finalGooglePrompt = promptFiltered || prompt;
+            const finalGooglePrompt = sanitizedPromptFiltered || sanitizedPrompt;
             log.info('GOOGLE', `SUBMIT: Prompt length: ${finalGooglePrompt.length} chars | Filtered: ${!!promptFiltered}`);
-            const generatedImage = await generateWithGoogle(finalGooglePrompt, imagePayload, targetModel, temperature);
+            const generatedImage = await generateWithGoogle(finalGooglePrompt, imagePayload, targetModel, safeTemperature);
             
             // Check for cancellation
             if (isAborted || req.signal.aborted) {
@@ -521,8 +666,8 @@ Deno.serve(async (req) => {
                 throw new Error("Request cancelled by user.");
             }
 
-            // Confirm the generation
-            await confirmGeneration(supabaseClient, jobId!, 'google', targetModel);
+            // Confirm the generation (pass clientIp for IP rate-limit tracking)
+            await confirmGeneration(supabaseClient, jobId!, 'google', targetModel, clientIp);
 
             log.divider('GOOGLE');
             const duration = ((Date.now() - startTime) / 1000).toFixed(1);

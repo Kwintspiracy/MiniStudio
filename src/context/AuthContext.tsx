@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Platform } from 'react-native';
+import { router } from 'expo-router';
 import Constants from 'expo-constants';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase';
@@ -89,6 +90,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     setTimeout(() => reject(new Error('Session check timed out')), 5000)
                 );
 
+                // `as any` is required here because Promise.race infers a union of the two
+                // divergent promise types (Supabase session result vs. never-resolving reject),
+                // which TypeScript cannot narrow to the Supabase shape without this cast.
                 const { data: { session }, error } = await Promise.race([
                     sessionPromise,
                     timeoutPromise
@@ -179,7 +183,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                      // We use the imported 'router' from expo-router which acts as a global singleton
                      // This is safe to use in event callbacks
                      try {
-                         const { router } = require('expo-router');
                          router.replace('/update-password');
                      } catch (e) {
                          console.error("Navigation failed", e);

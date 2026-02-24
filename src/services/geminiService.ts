@@ -30,7 +30,7 @@ async function savePendingJob(job_id: string, prompt: string): Promise<void> {
         prompt
     };
     await AsyncStorage.setItem(PENDING_JOB_KEY, JSON.stringify(job));
-    console.log('[Gemini] Saved pending job:', job_id);
+    if (__DEV__) console.log('[Gemini] Saved pending job:', job_id);
 }
 
 /**
@@ -46,15 +46,15 @@ export async function loadPendingJob(): Promise<PendingJob | null> {
 
         // Check if job has timed out
         if (age > JOB_TIMEOUT_MS) {
-            console.log('[Gemini] Pending job timed out, clearing');
+            if (__DEV__) console.log('[Gemini] Pending job timed out, clearing');
             await clearPendingJob();
             return null;
         }
 
-        console.log('[Gemini] Found pending job:', job.job_id, `(${Math.round(age / 1000)}s old)`);
+        if (__DEV__) console.log('[Gemini] Found pending job:', job.job_id, `(${Math.round(age / 1000)}s old)`);
         return job;
     } catch (error) {
-        console.error('[Gemini] Error loading pending job:', error);
+        if (__DEV__) console.error('[Gemini] Error loading pending job:', error);
         return null;
     }
 }
@@ -64,18 +64,35 @@ export async function loadPendingJob(): Promise<PendingJob | null> {
  */
 export async function clearPendingJob(): Promise<void> {
     await AsyncStorage.removeItem(PENDING_JOB_KEY);
-    console.log('[Gemini] Cleared pending job');
+    if (__DEV__) console.log('[Gemini] Cleared pending job');
 }
 
 /**
- * Resume a pending generation by re-subscribing to Realtime
+ * Resume a pending generation by re-subscribing to Realtime.
+ * Returns an unsubscribe function that callers must invoke on unmount/navigation.
  */
-export async function resumePendingGeneration(
+export function resumePendingGeneration(
     job_id: string,
     onComplete: (base64Image: string) => void,
     onError: (error: Error) => void
-): Promise<void> {
-    console.log(`[Gemini] Resuming pending job ${job_id}`);
+): () => void {
+    if (__DEV__) console.log(`[Gemini] Resuming pending job ${job_id}`);
+
+    let resolved = false;
+
+    const cleanup = async (err?: Error) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timeoutId);
+        subscription.unsubscribe();
+        await clearPendingJob();
+        if (err) onError(err);
+    };
+
+    // Timeout: if the job doesn't complete within JOB_TIMEOUT_MS, give up
+    const timeoutId = setTimeout(() => {
+        cleanup(new Error('Image generation timed out. Please try again.'));
+    }, JOB_TIMEOUT_MS);
 
     const subscription = supabase
         .channel(`job-${job_id}`)
@@ -85,7 +102,7 @@ export async function resumePendingGeneration(
             table: 'generation_jobs',
             filter: `id=eq.${job_id}`
         }, async (payload) => {
-            console.log('[Gemini] Realtime update (resumed):', payload.new);
+            if (__DEV__) console.log('[Gemini] Realtime update (resumed):', payload.new);
 
             const job = payload.new as {
                 status: string;
@@ -94,13 +111,16 @@ export async function resumePendingGeneration(
             };
 
             if (job.status === 'completed' && job.result_image_url) {
-                console.log('[Gemini] Resumed job completed!');
-                
+                if (resolved) return;
+                if (__DEV__) console.log('[Gemini] Resumed job completed!');
+                // Mark resolved and clean up before the async fetch so
+                // concurrent cancel/timeout calls don't double-unsubscribe
+                resolved = true;
+                clearTimeout(timeoutId);
                 subscription.unsubscribe();
                 await clearPendingJob();
 
                 try {
-                    // Fetch image and convert to base64
                     const imageResponse = await fetch(job.result_image_url);
                     const blob = await imageResponse.blob();
                     const reader = new FileReader();
@@ -115,14 +135,18 @@ export async function resumePendingGeneration(
                     onError(new Error('Failed to fetch generated image'));
                 }
             } else if (job.status === 'failed') {
-                subscription.unsubscribe();
-                await clearPendingJob();
-                onError(new Error(job.error_message || 'Image generation failed'));
+                cleanup(new Error(job.error_message || 'Image generation failed'));
             }
         })
         .subscribe((status) => {
-            console.log(`[Gemini] Realtime subscription status (resumed): ${status}`);
+            if (__DEV__) console.log(`[Gemini] Realtime subscription status (resumed): ${status}`);
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                cleanup(new Error(`Realtime channel ${status.toLowerCase()} for resumed job`));
+            }
         });
+
+    // Return cancel function for callers to invoke on unmount/navigation
+    return () => { cleanup(new Error('Subscription cancelled')); };
 }
 
 export const cancelGeneration = () => {
@@ -161,14 +185,14 @@ export async function generatePaintedMiniature(
 
     abortController = new AbortController();
 
-    console.log("[AI Proxy] Sending request to Supabase Edge Function...");
-    console.log(`[AI Proxy] Target: ${model === 'gemini-3-pro-image-preview' ? 'Pro' : 'Base'} Mode, Prompt Lengths: PoYo=${prompt.length}, Gemini=${promptFiltered?.length || 0}`);
+    if (__DEV__) console.log("[AI Proxy] Sending request to Supabase Edge Function...");
+    if (__DEV__) console.log(`[AI Proxy] Target: ${model === 'gemini-3-pro-image-preview' ? 'Pro' : 'Base'} Mode, Prompt Lengths: PoYo=${prompt.length}, Gemini=${promptFiltered?.length || 0}`);
     
     if (baseImagePayload && baseImagePayload.data) {
         const payloadSizeMB = baseImagePayload.data.length / 1024 / 1024;
-        console.log(`[Gemini Proxy] Image Payload Size: ${payloadSizeMB.toFixed(2)} MB`);
+        if (__DEV__) console.log(`[Gemini Proxy] Image Payload Size: ${payloadSizeMB.toFixed(2)} MB`);
         if (payloadSizeMB > 6) {
-             console.warn("[Gemini Proxy] WARNING: Image payload > 6MB. May cause network failure.");
+            if (__DEV__) console.warn("[Gemini Proxy] WARNING: Image payload > 6MB. May cause network failure.");
         }
     }
 
@@ -177,11 +201,11 @@ export async function generatePaintedMiniature(
     const token = session?.access_token;
 
     if (!token) {
-        console.warn("[AI Proxy] No active session token found!");
+        if (__DEV__) console.warn("[AI Proxy] No active session token found!");
     }
 
     // Call Supabase Edge Function with explicit Auth header
-    console.log(`[AI Proxy] Signal State before invoke: aborted=${abortController.signal.aborted}`);
+    if (__DEV__) console.log(`[AI Proxy] Signal State before invoke: aborted=${abortController.signal.aborted}`);
     
     // Explicitly check if we are already aborted
     if (abortController.signal.aborted) {
@@ -224,8 +248,8 @@ export async function generatePaintedMiniature(
            let errorJson;
            try { errorJson = JSON.parse(text); } catch (e) {}
            
-           console.log('[AI Proxy] Backend Error Response:', errorJson || text);
-           console.log('[AI Proxy] Response Status:', response.status);
+           if (__DEV__) console.log('[AI Proxy] Backend Error Response:', errorJson || text);
+           if (__DEV__) console.log('[AI Proxy] Response Status:', response.status);
            
            // Check for Overloaded Error from Edge Function
            if (errorJson?.code === 'OVERLOADED' || response.status === 503) {
@@ -236,15 +260,17 @@ export async function generatePaintedMiniature(
            
            // Log detailed info for limit errors
            if (errorMsg && typeof errorMsg === 'string' && errorMsg.toLowerCase().includes('limit')) {
-               console.log('[AI Proxy] Limit Error Details:');
-               console.log('[AI Proxy] - Full Error:', errorMsg);
-               console.log('[AI Proxy] - Backend Response:', errorJson);
-               console.log('[AI Proxy] - Status:', response.status);
+               if (__DEV__) {
+                   console.log('[AI Proxy] Limit Error Details:');
+                   console.log('[AI Proxy] - Full Error:', errorMsg);
+                   console.log('[AI Proxy] - Backend Response:', errorJson);
+                   console.log('[AI Proxy] - Status:', response.status);
+               }
            }
            
            // Client-side cleanup of the specific "undefined/undefined" error if backend isn't fixed yet
            if (typeof errorMsg === 'string' && errorMsg.includes("undefined/undefined")) {
-               console.warn("[AI Proxy] Detected malformed limit error from backend.");
+               if (__DEV__) console.warn("[AI Proxy] Detected malformed limit error from backend.");
                errorMsg = "Limit Reached. You have exhausted your daily or monthly quota.";
            }
 
@@ -258,10 +284,10 @@ export async function generatePaintedMiniature(
              throw new Error("Request cancelled by user.");
         }
 
-        console.log("[AI Proxy] Response received:", data);
+        if (__DEV__) console.log("[AI Proxy] Response received:", data);
 
         if (data?.error) {
-            console.error("AI Proxy Logic Error:", data.error);
+            if (__DEV__) console.error("AI Proxy Logic Error:", data.error);
             throw new Error(data.error);
         }
 
@@ -271,7 +297,7 @@ export async function generatePaintedMiniature(
         
         // SYNC RESPONSE (Gemini): Image returned immediately
         if (data.output) {
-            console.log("[AI Proxy] Sync response - image received directly");
+            if (__DEV__) console.log("[AI Proxy] Sync response - image received directly");
             const result = data.output;
             
             return [result.startsWith('data:') ? result : `data:image/png;base64,${result}`];
@@ -279,7 +305,7 @@ export async function generatePaintedMiniature(
         
         // ASYNC RESPONSE (PoYo): Subscribe to Realtime for job updates
         if (data.status === 'processing' && data.job_id) {
-            console.log(`[AI Proxy] Async response - subscribing to job ${data.job_id}`);
+            if (__DEV__) console.log(`[AI Proxy] Async response - subscribing to job ${data.job_id}`);
             
             // Save job for persistence across app sessions
             await savePendingJob(data.job_id, prompt);
@@ -287,30 +313,19 @@ export async function generatePaintedMiniature(
             return new Promise<string[]>((resolve, reject) => {
                 const TIMEOUT_MS = 180000; // 3 minute timeout for webhook
                 let resolved = false;
-                
-                // Setup timeout
-                const timeoutId = setTimeout(async () => {
-                    if (!resolved) {
-                        resolved = true;
-                        subscription.unsubscribe();
-                        await clearPendingJob();
-                        reject(new Error('Image generation timed out. Please try again.'));
-                    }
-                }, TIMEOUT_MS);
-                
-                // Handle abort signal
-                const handleAbort = async () => {
-                    if (!resolved) {
-                        resolved = true;
-                        clearTimeout(timeoutId);
-                        subscription.unsubscribe();
-                        await clearPendingJob();
-                        reject(new Error('Request cancelled by user.'));
-                    }
+
+                // Single cleanup helper — eliminates repeated unsubscribe/clearTimeout/removeEventListener
+                // scattered across every code path. Safe to call via `resolved` guard.
+                const cleanup = async () => {
+                    clearTimeout(timeoutId);
+                    abortController?.signal.removeEventListener('abort', handleAbort);
+                    subscription.unsubscribe();
+                    await clearPendingJob();
                 };
-                abortController?.signal.addEventListener('abort', handleAbort);
-                
-                // Subscribe to Realtime updates for this job
+
+                // Create the subscription FIRST so `subscription` is defined before
+                // setTimeout/addEventListener can reference it (prevents TDZ errors if
+                // the abort signal is already set or the timeout fires synchronously).
                 const subscription = supabase
                     .channel(`job-${data.job_id}`)
                     .on('postgres_changes', {
@@ -319,26 +334,21 @@ export async function generatePaintedMiniature(
                         table: 'generation_jobs',
                         filter: `id=eq.${data.job_id}`
                     }, async (payload) => {
-                        console.log('[Gemini Proxy] Realtime update:', payload.new);
-                        
-                        const job = payload.new as { 
-                            status: string; 
-                            result_image_url?: string; 
+                        if (__DEV__) console.log('[Gemini Proxy] Realtime update:', payload.new);
+
+                        const job = payload.new as {
+                            status: string;
+                            result_image_url?: string;
                             error_message?: string;
                         };
-                        
+
                         if (job.status === 'completed' && job.result_image_url) {
                             if (!resolved) {
-                                console.log('[AI Proxy] Job completed!');
-                                
+                                if (__DEV__) console.log('[AI Proxy] Job completed!');
                                 resolved = true;
-                                clearTimeout(timeoutId);
-                                abortController?.signal.removeEventListener('abort', handleAbort);
-                                subscription.unsubscribe();
-                                await clearPendingJob();
-                                
+                                await cleanup();
+
                                 try {
-                                    // Fetch image and convert to base64
                                     const imageResponse = await fetch(job.result_image_url);
                                     const blob = await imageResponse.blob();
                                     const reader = new FileReader();
@@ -347,7 +357,7 @@ export async function generatePaintedMiniature(
                                         reader.onerror = rej;
                                         reader.readAsDataURL(blob);
                                     });
-                                    
+
                                     resolve([base64]);
                                 } catch (fetchError) {
                                     reject(new Error('Failed to fetch generated image'));
@@ -356,33 +366,55 @@ export async function generatePaintedMiniature(
                         } else if (job.status === 'failed') {
                             if (!resolved) {
                                 resolved = true;
-                                clearTimeout(timeoutId);
-                                abortController?.signal.removeEventListener('abort', handleAbort);
-                                subscription.unsubscribe();
-                                await clearPendingJob();
+                                await cleanup();
                                 reject(new Error(job.error_message || 'Image generation failed'));
                             }
                         }
                     })
                     .subscribe((status) => {
-                        console.log(`[Gemini Proxy] Realtime subscription status: ${status}`);
+                        if (__DEV__) console.log(`[Gemini Proxy] Realtime subscription status: ${status}`);
+                        if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && !resolved) {
+                            resolved = true;
+                            cleanup().then(() =>
+                                reject(new Error(`Realtime channel ${status.toLowerCase()}. Please try again.`))
+                            );
+                        }
                     });
+
+                // Setup timeout — subscription is guaranteed defined here
+                const timeoutId = setTimeout(async () => {
+                    if (!resolved) {
+                        resolved = true;
+                        await cleanup();
+                        reject(new Error('Image generation timed out. Please try again.'));
+                    }
+                }, TIMEOUT_MS);
+
+                // Handle abort signal — subscription is guaranteed defined here
+                const handleAbort = async () => {
+                    if (!resolved) {
+                        resolved = true;
+                        await cleanup();
+                        reject(new Error('Request cancelled by user.'));
+                    }
+                };
+                abortController?.signal.addEventListener('abort', handleAbort);
             });
         }
-        
-        console.warn("[AI Proxy] No output in response");
+
+        if (__DEV__) console.warn("[AI Proxy] No output in response");
         return [];
 
     } catch (error: any) {
         if (error.name === 'AbortError' || error.message === 'Aborted' || error.message.includes('cancelled')) {
-             console.log("[AI Proxy] Request successfully aborted.");
+             if (__DEV__) console.log("[AI Proxy] Request successfully aborted.");
              throw new Error("Request cancelled by user.");
         }
-        
+
         if (!error.message?.includes("Limit Reached")) {
-             console.error("AI Proxy Error:", error);
+             if (__DEV__) console.error("AI Proxy Error:", error);
         } else {
-             console.log("AI Proxy Info: Limit Reached (handled by UI)");
+             if (__DEV__) console.log("AI Proxy Info: Limit Reached (handled by UI)");
         }
         let errorMessage = error.message || "Failed to connect to the AI service.";
         

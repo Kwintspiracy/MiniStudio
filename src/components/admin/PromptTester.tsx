@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share } from 'react-native';
 import { colors, fontFamily } from '@/theme';
-import { generatePaintPrompt, PromptParams } from '@/utils/promptGenerator';
+import { generatePaintPrompt, PromptParams, PromptEffect } from '@/utils/promptGenerator';
 import { StyleOption } from '@/types';
 import { PaletteColor } from '@/services/paintService';
 
@@ -11,12 +11,12 @@ interface Scenario {
     params: Partial<PromptParams>;
 }
 
-export const PromptTester = ({ 
-    stylesList, 
-    effectsList 
-}: { 
-    stylesList: StyleOption[], 
-    effectsList: Record<string, any> 
+export const PromptTester = ({
+    stylesList,
+    effectsList
+}: {
+    stylesList: StyleOption[],
+    effectsList: Record<string, PromptEffect>
 }) => {
     const [selectedScenario, setSelectedScenario] = useState<number | null>(null);
 

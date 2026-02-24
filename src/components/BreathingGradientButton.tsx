@@ -1,13 +1,14 @@
 import React, { useEffect } from 'react';
-import { View, TouchableOpacity, StyleSheet, StyleProp, ViewStyle, Dimensions } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, StyleProp, ViewStyle, useWindowDimensions } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Circle, Rect, Filter, FeGaussianBlur, G } from 'react-native-svg';
-import Animated, { 
-    useSharedValue, 
-    useAnimatedProps, 
-    withRepeat, 
-    withTiming, 
-    Easing, 
-    withSequence 
+import Animated, {
+    useSharedValue,
+    useAnimatedProps,
+    withRepeat,
+    withTiming,
+    Easing,
+    withSequence,
+    cancelAnimation,
 } from 'react-native-reanimated';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -18,19 +19,17 @@ interface BreathingGradientButtonProps {
     style?: StyleProp<ViewStyle>;
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 // Random Generators - Ranges for maximum spread
 const randomRange = (min: number, max: number) => min + Math.random() * (max - min);
 const randomScale = () => 1.0 + Math.random() * 0.8; // 1.0x to 1.8x (Huge)
 const randomDuration = () => 4000 + Math.random() * 3000; // Slow, fluid movement
 
-const MovingOrb = ({ gradId }: { gradId: string }) => {
+const MovingOrb = ({ gradId, screenWidth }: { gradId: string; screenWidth: number }) => {
     // Range extends SIGNIFICANTLY beyond edges to ensure no gaps
     // Min X: -100 (Way off left)
     // Max X: Screen Width + 100 (Way off right)
     const minX = -100;
-    const maxX = SCREEN_WIDTH + 100;
+    const maxX = screenWidth + 100;
     const minY = -50;
     const maxY = 110; // Button height is ~60, so this covers vertical fully
 
@@ -46,25 +45,31 @@ const MovingOrb = ({ gradId }: { gradId: string }) => {
 
     useEffect(() => {
         // X Animation Loop
-        const sequenceX = stepsX.slice(1).map(val => 
+        const sequenceX = stepsX.slice(1).map(val =>
             withTiming(val, { duration: dur, easing: Easing.inOut(Easing.ease) })
         );
         sequenceX.push(withTiming(stepsX[0], { duration: dur, easing: Easing.inOut(Easing.ease) }));
         cx.value = withRepeat(withSequence(...sequenceX), -1, true);
 
         // Y Animation Loop
-        const sequenceY = stepsY.slice(1).map(val => 
+        const sequenceY = stepsY.slice(1).map(val =>
             withTiming(val, { duration: dur, easing: Easing.inOut(Easing.ease) })
         );
         sequenceY.push(withTiming(stepsY[0], { duration: dur, easing: Easing.inOut(Easing.ease) }));
         cy.value = withRepeat(withSequence(...sequenceY), -1, true);
 
         // Scale Animation Loop
-        const sequenceScale = stepsScale.slice(1).map(val => 
+        const sequenceScale = stepsScale.slice(1).map(val =>
             withTiming(val, { duration: dur, easing: Easing.inOut(Easing.ease) })
         );
         sequenceScale.push(withTiming(stepsScale[0], { duration: dur, easing: Easing.inOut(Easing.ease) }));
         scale.value = withRepeat(withSequence(...sequenceScale), -1, true);
+
+        return () => {
+            cancelAnimation(cx);
+            cancelAnimation(cy);
+            cancelAnimation(scale);
+        };
     }, []);
 
     const animatedProps = useAnimatedProps(() => ({
@@ -83,9 +88,11 @@ const MovingOrb = ({ gradId }: { gradId: string }) => {
 };
 
 export const BreathingGradientButton = ({ onPress, children, style }: BreathingGradientButtonProps) => {
+    const { width: screenWidth } = useWindowDimensions();
+
     return (
-        <TouchableOpacity 
-            onPress={onPress} 
+        <TouchableOpacity
+            onPress={onPress}
             activeOpacity={0.9}
             style={[styles.container, style]}
         >
@@ -117,19 +124,19 @@ export const BreathingGradientButton = ({ onPress, children, style }: BreathingG
                             <Stop offset="100%" stopColor="#00FFCC" stopOpacity="0" />
                         </RadialGradient>
                     </Defs>
-                    
+
                     <Rect x="0" y="0" width="100%" height="100%" fill="#1a0b2e" />
 
                     <G filter="url(#blur)">
                         {/* 8 Huge Orbs for Maximum Coverage without clutter */}
-                        <MovingOrb gradId="grad_blue" />
-                        <MovingOrb gradId="grad_purple" />
-                        <MovingOrb gradId="grad_pink" />
-                        <MovingOrb gradId="grad_orange" />
-                        <MovingOrb gradId="grad_teal" />
-                        <MovingOrb gradId="grad_blue" />
-                        <MovingOrb gradId="grad_purple" />
-                        <MovingOrb gradId="grad_pink" />
+                        <MovingOrb gradId="grad_blue" screenWidth={screenWidth} />
+                        <MovingOrb gradId="grad_purple" screenWidth={screenWidth} />
+                        <MovingOrb gradId="grad_pink" screenWidth={screenWidth} />
+                        <MovingOrb gradId="grad_orange" screenWidth={screenWidth} />
+                        <MovingOrb gradId="grad_teal" screenWidth={screenWidth} />
+                        <MovingOrb gradId="grad_blue" screenWidth={screenWidth} />
+                        <MovingOrb gradId="grad_purple" screenWidth={screenWidth} />
+                        <MovingOrb gradId="grad_pink" screenWidth={screenWidth} />
                     </G>
                 </Svg>
             </View>

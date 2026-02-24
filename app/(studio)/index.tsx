@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   View, Text, TouchableOpacity, ScrollView, Image, TextInput, FlatList,
   ActivityIndicator, Alert, Modal, StyleSheet, Platform, Dimensions, StatusBar, Share,
-  KeyboardAvoidingView, Keyboard, Pressable, InteractionManager
+  KeyboardAvoidingView, Pressable
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -34,7 +34,7 @@ import { generatePaintPrompt } from '@/utils/promptGenerator';
 
 import { usePrompts } from '@/hooks/usePrompts';
 import { generatePaintedMiniature, generateImageFromImage, cancelGeneration } from '@/services/geminiService';
-import { fetchAllPaints, fetchUserPaints, PaletteColor } from '@/services/paintService';
+import { PaletteColor } from '@/services/paintService';
 import { filterPaintsByDiversity, getNMMRecipes } from '@/utils/paintFilter';
 import { useImagePicker } from '@/hooks/useImagePicker';
 import { useMediaSave } from '@/hooks/useMediaSave';
@@ -50,7 +50,6 @@ import { ToggleButton } from '@/components/ToggleButton';
 import { SectionHeader } from '@/components/SectionHeader';
 import { ModeCardSelector } from '@/components/studio/ModeCardSelector';
 import { SourceContainer } from '@/components/studio/SourceContainer';
-import { OnboardingOverlay, TutorialStep } from '@/components/OnboardingOverlay';
 import { GenerationTooltip } from '@/components/GenerationTooltip';
 import { BreathingGradientButton } from '@/components/BreathingGradientButton';
 import { WelcomeOnboarding } from '@/components/WelcomeOnboarding';
@@ -80,11 +79,6 @@ const historyItemWidth = (availableHistoryWidth - (numHistoryColumns - 1) * HIST
 
 
 
-
-// --- Figma Component: Section Accent ---
-const SectionAccent = () => (
-    <View style={{ width: 4, height: 16, backgroundColor: colors.button.primary, borderRadius: 0 }} />
-);
 
 const CreativitySlider = React.memo(({ initialValue, onValueChange }: { initialValue: number, onValueChange: (val: number) => void }) => {
   const widthSV = useSharedValue(0);
@@ -189,30 +183,6 @@ const INITIAL_INPUT_HEIGHT = 40;
 const MAX_INPUT_LINES = 4;
 const INPUT_VERTICAL_PADDING = 10; // (18 * 4) + (10 * 2) = 92px max
 
-// --- Figma Components ---
-
-// --- Figma Components ---
-
-// Basic/Pro Toggle Badge - Figma Toggle-button Component
-
-// Basic/Pro Toggle Badge - Figma Toggle-button Component
-const ModeBadge = ({ isAdvanced, onToggle }: { isAdvanced: boolean; onToggle: () => void }) => (
-  <TouchableOpacity
-    onPress={onToggle}
-    style={[styles.modeBadge, isAdvanced ? styles.modeBadgePro : styles.modeBadgeBasic]}
-    activeOpacity={0.8}
-  >
-    <View style={[styles.modeBadgeInner, isAdvanced && styles.modeBadgeInnerPro]}>
-      {/* Basic: dot on left, text on right | Pro: text on left, dot on right (aligned to end) */}
-      {!isAdvanced && <View style={styles.modeBadgeDotBasic} />}
-      <Text style={[styles.modeBadgeText, isAdvanced ? styles.modeBadgeTextPro : styles.modeBadgeTextBasic]}>
-        {isAdvanced ? 'PRO' : 'BASE'}
-      </Text>
-      {isAdvanced && <View style={styles.modeBadgeDotPro} />}
-    </View>
-  </TouchableOpacity>
-);
-
 export default function StudioScreen() {
   const { user, loading: authLoading, isAnonymous } = useAuth();
   const { selectedImage, setSelectedImage } = useImageContext();
@@ -266,18 +236,6 @@ export default function StudioScreen() {
     }
   }, [paintStylesList]);
 
-  // Pre-fetch all paints on app launch for caching
-  useEffect(() => {
-    const preFetchAllPaints = async () => {
-      try {
-        const allPaints = await fetchAllPaints();
-        setLoadedPaints(allPaints);
-      } catch (e) {
-        console.log('Pre-fetch paints failed:', e);
-      }
-    };
-    preFetchAllPaints();
-  }, []);
   const [isNMMEnabled, setIsNMMEnabled] = useState(false);
   const [isOSLEnabled, setIsOSLEnabled] = useState(false);
   const [isPhotoshootEnabled, setIsPhotoshootEnabled] = useState(false);
@@ -292,7 +250,6 @@ export default function StudioScreen() {
   // Sketch Feature Enhancements
   const [sketchStyle, setSketchStyle] = useState<'fantasy' | 'sci-fi'>('fantasy');
   const [creativityLevel, setCreativityLevel] = useState(0.7); // Default to 0.7 for good balance
-  const [sliderWidth, setSliderWidth] = useState(0);
 
   const handleCreativityChange = useCallback((val: number) => {
       setCreativityLevel(val);
@@ -390,11 +347,6 @@ export default function StudioScreen() {
   }, []);
 
   const [showMyPaintsAlert, setShowMyPaintsAlert] = useState(false);
-  // Tutorial State
-  // Tutorial State
-  const [tutorialStep, setTutorialStep] = useState<TutorialStep>('checking');
-  const [targetLayout, setTargetLayout] = useState<{ x: number, y: number, width: number, height: number } | null>(null);
-  const targetRefs = useRef<{ [key: string]: View | null }>({});
 
   // Batch Deletion State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -481,18 +433,10 @@ export default function StudioScreen() {
           const parsed = JSON.parse(stored) as HistoryItem[];
           setGenerationHistory(parsed);
         } catch (e) {
-          console.warn('Failed to parse generation history:', e);
+          if (__DEV__) console.warn('Failed to parse generation history:', e);
         }
       }
     });
-
-    // Check onboarding status (V2)
-    const checkTutorial = async () => {
-        // FULLY DISABLE ONBOARDING FOR NOW
-        setTutorialStep('idle');
-        return;
-    };
-    checkTutorial();
 
   }, []);
 
@@ -503,7 +447,7 @@ export default function StudioScreen() {
     const migrationNeeded = generationHistory.some(item => item.url.startsWith('data:image'));
     if (!migrationNeeded) return;
 
-    console.log('[Gallery] Migration needed: converting base64 history to local files...');
+    if (__DEV__) console.log('[Gallery] Migration needed: converting base64 history to local files...');
     
     const migrateHistory = async () => {
       let changed = false;
@@ -524,101 +468,12 @@ export default function StudioScreen() {
       if (changed) {
         setGenerationHistory(migratedHistory);
         await AsyncStorage.setItem('generation_history', JSON.stringify(migratedHistory.filter(i => i.timestamp !== 0)));
-        console.log('[Gallery] Migration complete.');
+        if (__DEV__) console.log('[Gallery] Migration complete.');
       }
     };
 
     migrateHistory();
   }, [generationHistory.length]); // Only run when length changes or on mount
-
-  const handleTutorialNext = () => {
-    if (tutorialStep === 'welcome') {
-      setTutorialStep('open_gallery');
-    }
-  };
-
-  const handleDismissTutorial = () => {
-    setTutorialStep('finished');
-    AsyncStorage.setItem('has_seen_onboarding_v2', 'true');
-    supabase.rpc('complete_onboarding').then(({ error }) => {
-        if (error) console.log('Failed to complete onboarding RPC:', error);
-    });
-  };
-
-  // Layout Capture Loop
-  useEffect(() => {
-    const measureTarget = () => {
-       const step = tutorialStep;
-       let targetKey = '';
-
-       if (step === 'open_gallery') targetKey = 'gallery_btn';
-       else if (step === 'select_demo_image') targetKey = 'demo_image';
-       else if (step === 'confirm_source') targetKey = 'use_source_btn';
-       else if (step === 'select_style_vivid') targetKey = 'style_Vivid';
-       else if (step === 'enable_palette') targetKey = 'palette_toggle';
-       else if (step === 'select_brand_vallejo') targetKey = 'brand_Vallejo';
-       else if (step === 'toggle_pro') targetKey = 'pro_badge';
-       else if (step === 'generate') targetKey = 'create_btn';
-
-       if (targetKey && targetRefs.current[targetKey]) {
-          targetRefs.current[targetKey]?.measureInWindow((x, y, width, height) => {
-              setTargetLayout(prev => {
-                  if (prev && prev.x === x && prev.y === y && prev.width === width && prev.height === height) {
-                      return prev;
-                  }
-                  return { x, y, width, height };
-              });
-          });
-       } else {
-           setTargetLayout(prev => prev === null ? prev : null);
-       }
-    };
-
-    // Run immediately when step changes
-    measureTarget();
-
-    const timer = setInterval(measureTarget, 50); // Improved: Check every 50ms for responsiveness
-    return () => clearInterval(timer);
-  }, [tutorialStep, isResultsDrawerOpen]);
-
-  // Auto-Advance Logic
-  useEffect(() => {
-      // 1. Open Gallery
-      if (tutorialStep === 'open_gallery' && isResultsDrawerOpen) {
-          setTutorialStep('select_demo_image');
-      }
-      // 2. Select Demo Image (When preview updates and we are in gallery)
-      else if (tutorialStep === 'select_demo_image' && activePreviewImage) {
-          setTutorialStep('confirm_source');
-      }
-      // 3. Confirm Source (When gallery closes and we have source)
-      else if (tutorialStep === 'confirm_source' && !isResultsDrawerOpen && sourceImages.length > 0) {
-          // If the user already selected Vivid, skip? Or force re-select? Let's just go to next.
-          setTutorialStep('select_style_vivid');
-      }
-      // 4. Select Style (Vivid)
-      else if (tutorialStep === 'select_style_vivid' && selectedStyle?.name === 'Vivid') {
-           setTutorialStep('enable_palette');
-      }
-      // 5. Enable Palette
-      else if (tutorialStep === 'enable_palette' && isPaletteEnabled) {
-           setTutorialStep('select_brand_vallejo');
-      }
-      // 6. Select Vallejo
-      else if (tutorialStep === 'select_brand_vallejo' && selectedBrands.includes('Vallejo')) {
-           setTutorialStep('toggle_pro');
-      }
-      // 7. Toggle Pro
-      else if (tutorialStep === 'toggle_pro' && isPro) {
-           setTutorialStep('generate');
-      }
-      // 8. Generate (Loading starts)
-      else if (tutorialStep === 'generate' && isLoading) {
-           setTutorialStep('finished');
-           AsyncStorage.setItem('has_seen_onboarding_v2', 'true');
-      }
-
-  }, [tutorialStep, isResultsDrawerOpen, sourceImages, activePreviewImage, selectedStyle, isPaletteEnabled, selectedBrands, isPro, isLoading]);
 
   // Auto-scroll when palette is enabled
   useEffect(() => {
@@ -655,17 +510,6 @@ export default function StudioScreen() {
     }
   }, [exampleAssets, hiddenDemoAssets]);
 
-  // Auto-open Gallery drawer on fresh start when no source is selected
-  useEffect(() => {
-    // DISABLED: Prevent auto-opening drawer as it feels like an onboarding "leak"
-    return;
-    /*
-    if (!authLoading && sourceImages.length === 0 && !activePreviewImage && tutorialStep === 'idle') {
-      setIsResultsDrawerOpen(true);
-    }
-    */
-  }, [authLoading, tutorialStep]);
-
   // Persist generation history with 10-image limit for anonymous users
   useEffect(() => {
     const userGeneratedItems = generationHistory.filter(item => item.timestamp !== 0);
@@ -692,7 +536,7 @@ export default function StudioScreen() {
     // Show modal on app launch if user is anonymous and has reached 10-image limit
     if (isAnonymous && userGeneratedItems.length >= 10 && !hasShownGalleryFullModal.current) {
       hasShownGalleryFullModal.current = true;
-      console.log('[DEBUG] App launch: Gallery limit reached, showing modal');
+      if (__DEV__) console.log('[DEBUG] App launch: Gallery limit reached, showing modal');
       
       showModal(
         "Gallery full",
@@ -829,7 +673,7 @@ export default function StudioScreen() {
         // Generate single prompt with color filtering enabled for PoYo
         const finalPrompt = generatePaintPrompt({ ...promptParams, skipColorFiltering: false });
 
-        console.log(`\n--- GENERATION PROMPT (PoYo Only) ---\n${finalPrompt}\n----------------------------------\n`);
+        if (__DEV__) console.log(`\n--- GENERATION PROMPT (PoYo Only) ---\n${finalPrompt}\n----------------------------------\n`);
         
         images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, model, undefined, undefined, metadata);
       } else if (activeMode === 'sketch' || activeMode === 'sculpt') {
@@ -895,24 +739,24 @@ export default function StudioScreen() {
           effects: [isPhotoshootEnabled && 'Photoshoot'].filter(Boolean)
         };
 
-        console.log(`\n--- ${activeMode.toUpperCase()} PROMPT (Temp: ${creativityLevel}) ---\n${finalPrompt}\n----------------------------------\n`);
+        if (__DEV__) console.log(`\n--- ${activeMode.toUpperCase()} PROMPT (Temp: ${creativityLevel}) ---\n${finalPrompt}\n----------------------------------\n`);
         images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, model, creativityLevel, undefined, metadata);
       }
       if (images && images.length > 0) {
         const resultUrl = images[0];
-        console.log('[DEBUG] Generation success, result URL type:', resultUrl.startsWith('data:') ? 'base64' : (resultUrl.startsWith('http') ? 'remote' : 'file'));
+        if (__DEV__) console.log('[DEBUG] Generation success, result URL type:', resultUrl.startsWith('data:') ? 'base64' : (resultUrl.startsWith('http') ? 'remote' : 'file'));
         
         // Save the result base64 to a local file permanently
         let persistentUrl = resultUrl;
         try {
-          console.log('[DEBUG] Attempting to save to file...');
+          if (__DEV__) console.log('[DEBUG] Attempting to save to file...');
           persistentUrl = await saveBase64ToFile(resultUrl, 'gen_');
-          console.log('[DEBUG] Saved to file:', persistentUrl.substring(0, 50));
+          if (__DEV__) console.log('[DEBUG] Saved to file:', persistentUrl.substring(0, 50));
         } catch (e) {
           console.error('Failed to save generated image to file:', e);
         }
 
-        console.log('[DEBUG] Setting preview and adding to history immediately...');
+        if (__DEV__) console.log('[DEBUG] Setting preview and adding to history immediately...');
         setActivePreviewImage(persistentUrl);
         
         // Add to history with immediate 10-image limit for anonymous users
@@ -929,17 +773,11 @@ export default function StudioScreen() {
           return allItems;
         });
         
-        console.log('[DEBUG] Opening results drawer...');
+        if (__DEV__) console.log('[DEBUG] Opening results drawer...');
         setIsResultsDrawerOpen(true);
         
         // Modal will be shown when user manually closes drawer (see Modal onRequestClose handler)
         
-        // Complete onboarding for tutorial
-        if (tutorialStep === 'generate' || tutorialStep === 'finished') {
-             supabase.rpc('complete_onboarding').then(({ error }) => {
-               if (error) console.log('Failed to complete onboarding RPC (Success):', error);
-             });
-        }
       }
     } catch (err: any) {
       if (err.name !== 'AbortError' && !err.message?.includes('cancelled')) {
@@ -1210,23 +1048,11 @@ export default function StudioScreen() {
       <View style={[styles.statusBarBackground, { height: insets.top }]} />
       <StatusBar barStyle="light-content" backgroundColor="#12121F" />
       
-      {/* Global Onboarding Overlay (Root Level for correct coordinates) */}
-      <OnboardingOverlay 
-          step={tutorialStep} 
-          onNext={handleTutorialNext} 
-          targetLayout={targetLayout} 
-      />
-
       <View style={styles.container}>
 
         {/* Top Navigation */}
         <View style={styles.topNav}>
-          <View 
-            style={styles.topNavLeft}
-            ref={view => { targetRefs.current['pro_badge'] = view; }}
-            collapsable={false}
-          >
-            {/* <ModeBadge isAdvanced={isPro} onToggle={handleProToggle} /> */}
+          <View style={styles.topNavLeft}>
             <AppTitleSvg width={182} height={14} />
           </View>
           <View style={styles.topNavTitle}>
@@ -1234,11 +1060,11 @@ export default function StudioScreen() {
           </View>
           <TouchableOpacity onPress={() => router.push('/settings')} style={styles.topNavRight} activeOpacity={0.7}>
             <View style={styles.userAvatar}>
-              {isAnonymous ? (
+              {isAnonymous || !user ? (
                 <Ionicons name="person" size={24} color={colors.text.secondary} />
-              ) : user?.user_metadata?.avatar_url ? (
-                <Image 
-                  source={{ uri: user.user_metadata.avatar_url }} 
+              ) : user.user_metadata?.avatar_url ? (
+                <Image
+                  source={{ uri: user.user_metadata.avatar_url }}
                   style={styles.userAvatarImage}
                 />
               ) : (
@@ -1360,15 +1186,10 @@ export default function StudioScreen() {
                       icon={<RiPaintFillIcon size={16} color="#32D278" />}
                       title="CHOOSE A STYLE"
                     />
-                    <View 
-                       style={styles.styleGrid}
-                       ref={view => { targetRefs.current['style_selector'] = view; }}
-                       collapsable={false}
-                    >
+                    <View style={styles.styleGrid}>
                       {paintStylesList.map((style) => (
                         <TouchableOpacity
                           key={style.id}
-                          ref={view => { if (style.name === 'Vivid') targetRefs.current['style_Vivid'] = view; }}
                           onPress={() => setSelectedStyleId(style.id)}
                           style={[styles.unifiedOptionButton, selectedStyle?.id === style.id && styles.unifiedOptionButtonActive]}
                           accessibilityRole="button"
@@ -1411,7 +1232,6 @@ export default function StudioScreen() {
                             key={brand}
                             onPress={() => handleToggleBrand(brand)}
                             style={[styles.unifiedOptionButton, isSelected && styles.unifiedOptionButtonActive]}
-                            ref={view => { if (brand === 'Vallejo') targetRefs.current['brand_Vallejo'] = view; }}
                           >
                             {brand === 'My Collection' && <BiSolidUserCircleIcon size={16} color={isSelected ? '#1D1D1D' : '#F4F4F4'} opacity={1} />}
                             <Text style={[styles.unifiedOptionText, isSelected && styles.unifiedOptionTextActive]}>{brand}</Text>
@@ -1537,11 +1357,7 @@ export default function StudioScreen() {
                           <Text style={styles.galleryButtonText}>Source</Text>
                           </TouchableOpacity>
                       </View>
-                      <View 
-                          ref={view => { targetRefs.current['create_btn'] = view; }}
-                          collapsable={false}
-                          style={{ flex: 1 }} // Ensure it takes available space in the row
-                      >
+                      <View style={{ flex: 1 }}>
                           {isLoading ? (
                             <BreathingGradientButton
                               onPress={handleCancelGeneration}
@@ -1588,15 +1404,15 @@ export default function StudioScreen() {
         </View>
 
         <Modal visible={isResultsDrawerOpen} animationType="slide" presentationStyle="formSheet" onRequestClose={() => {
-          console.log('[DEBUG] Gallery Modal onRequestClose triggered');
-          console.log('[DEBUG] Total history items:', generationHistory.length);
-          console.log('[DEBUG] hasShownGalleryFullModal:', hasShownGalleryFullModal.current);
+          if (__DEV__) console.log('[DEBUG] Gallery Modal onRequestClose triggered');
+          if (__DEV__) console.log('[DEBUG] Total history items:', generationHistory.length);
+          if (__DEV__) console.log('[DEBUG] hasShownGalleryFullModal:', hasShownGalleryFullModal.current);
           setIsResultsDrawerOpen(false);
-          console.log('[DEBUG] Gallery Modal isResultsDrawerOpen set to false');
-          
+          if (__DEV__) console.log('[DEBUG] Gallery Modal isResultsDrawerOpen set to false');
+
           // CRITICAL FIX: Never show modal after closing drawer - causes freeze with many images
           // Instead, modal will only show from the useEffect when limit is first reached
-          console.log('[DEBUG] Skipping all modal logic in onRequestClose to prevent freeze');
+          if (__DEV__) console.log('[DEBUG] Skipping all modal logic in onRequestClose to prevent freeze');
         }}>
           <SafeAreaView style={styles.modalContainer} edges={['top']}>
             <View style={styles.grabberContainer}><View style={styles.grabber} /></View>
@@ -1634,12 +1450,11 @@ export default function StudioScreen() {
                     <View style={[styles.resultContainer, { marginBottom: 24 }]}>
                       <Image source={{ uri: activePreviewImage }} style={[styles.activeResultImage, { aspectRatio: previewAspectRatio }]} resizeMode="cover" />
                       <View style={styles.resultActions}>
-                        <TouchableOpacity 
-                            onPress={handleUseAsSource} 
-                            style={[styles.resultActionButton, styles.resultActionButtonPrimary]} 
-                            accessibilityLabel="Use as source image" 
+                        <TouchableOpacity
+                            onPress={handleUseAsSource}
+                            style={[styles.resultActionButton, styles.resultActionButtonPrimary]}
+                            accessibilityLabel="Use as source image"
                             accessibilityRole="button"
-                            ref={view => { targetRefs.current['use_source_btn'] = view; }}
                         >
                             <Text style={[styles.resultActionText, styles.resultActionTextDark]}>Use as source</Text>
                         </TouchableOpacity>
@@ -1665,8 +1480,7 @@ export default function StudioScreen() {
               renderItem={({ item, index }) => {
                 const isSelected = selectedHistoryItems.has(item.url);
                 return (
-                  <TouchableOpacity 
-                    ref={view => { if (index === 1) targetRefs.current['demo_image'] = view; }}
+                  <TouchableOpacity
                     style={[
                       styles.historyItem, 
                       activePreviewImage === item.url && !isSelectionMode && styles.historyItemActive,
@@ -1699,12 +1513,6 @@ export default function StudioScreen() {
               }}
               ListFooterComponent={<View style={{ height: 80 + insets.bottom }} />} // Bottom padding replacement
             />
-             {/* RENDER ONBOARDING OVERLAY INSIDE MODAL TO COVER IT */}
-             <OnboardingOverlay 
-                step={tutorialStep} 
-                onNext={handleTutorialNext} 
-                targetLayout={targetLayout} 
-             />
              <Toast 
                 visible={toastConfig.visible} 
                 message={toastConfig.message} 
@@ -1778,17 +1586,6 @@ export default function StudioScreen() {
 }
 
 const styles = StyleSheet.create({
-  // Mode Badge Styles (Basic/Pro) - Figma Toggle-button Component
-  modeBadge: { width: 80, height: 32, flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderRadius: 16 },
-  modeBadgeBasic: { backgroundColor: colors.button.primary, padding: 6 },
-  modeBadgePro: { backgroundColor: colors.accent.orange, padding: 6 },
-  modeBadgeInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 6, alignSelf: 'stretch' },
-  modeBadgeInnerPro: { justifyContent: 'flex-end' },
-  modeBadgeDotBasic: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.text.primary },
-  modeBadgeDotPro: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.button.dark },
-  modeBadgeText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto', fontWeight: '600', fontSize: 13, lineHeight: 16, includeFontPadding: false },
-  modeBadgeTextBasic: { color: colors.text.primary },
-  modeBadgeTextPro: { color: colors.button.dark },
   // Unified Option Button Styles
   unifiedOptionButton: { flexDirection: 'row', gap: 6, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 4, backgroundColor: colors.background.tertiary, borderWidth: 0, justifyContent: 'center', alignItems: 'center' },
   unifiedOptionButtonActive: { backgroundColor: colors.button.white },
@@ -1804,43 +1601,12 @@ const styles = StyleSheet.create({
   topNavTitle: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   userAvatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 3, borderColor: colors.button.primary, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background.tertiary },
   userAvatarImage: { width: '100%', height: '100%' },
-  topNavSide: { width: 91, alignItems: 'center', justifyContent: 'center' },
-  userIconContainer: { alignItems: 'flex-end', paddingRight: 16 },
-  proBadge: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, borderColor: colors.button.primary },
-  proBadgeInactive: { backgroundColor: '#002761' },
-  proBadgeActive: { backgroundColor: colors.button.primary },
-  proBadgeText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto', fontWeight: '500', fontSize: 14, letterSpacing: -0.41, marginLeft: 4 },
-  proTextInactive: { color: colors.text.primary },
-  proTextActive: { color: colors.text.primary },
   scrollContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 240 },
-  navTabContainer: { flexDirection: 'row', alignSelf: 'stretch', backgroundColor: colors.background.secondary, paddingHorizontal: 16, paddingVertical: 8 },
-  tabButton: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: 6 },
-  tabButtonActive: { backgroundColor: colors.button.primary },
-  tabButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '600', fontSize: 14, marginLeft: 4 },
-  tabTextActive: { color: colors.text.primary },
-  tabTextInactive: { color: colors.text.secondary },
-  inputContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch', backgroundColor: colors.background.secondary, borderRadius: 8, borderWidth: 2, borderColor: colors.border.strong, borderStyle: 'dashed', paddingVertical: 8, paddingHorizontal: 8 },
-  sourceInfo: { justifyContent: 'center' },
-  inputLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '700', fontSize: 12, color: colors.text.primary, paddingLeft: 8 },
-  inputSubtitle: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '400', fontSize: 13, color: colors.text.secondary, marginTop: 2, paddingLeft: 8, textAlign: 'center' },
-  optionsRow: { flexDirection: 'row', alignItems: 'center' },
-  optionButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 17, paddingHorizontal: 16, backgroundColor: colors.button.secondary, borderRadius: 4, marginLeft: 8 },
-  optionButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '500', fontSize: 13, color: colors.text.primary, marginLeft: 8 },
-  sourceImageWrapper: { width: 50, height: 50, borderRadius: 6, borderWidth: 2, borderColor: colors.button.primary, overflow: 'hidden' },
-  sourceImage: { width: '100%', height: '100%' },
-  removeImageOverlay: { position: 'absolute', top: 0, right: 0, width: 15, height: 15, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  removeImageTextSmall: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
   modeContent: { marginTop: 0, gap: 5, alignSelf: 'stretch' },
-  promptContainer: { alignSelf: 'stretch', backgroundColor: colors.text.textfieldbg, borderRadius: 4, paddingHorizontal: 16, paddingVertical: 12, minHeight: 110 },
-  promptInput: { flex: 1, fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto', fontSize: 14, color: colors.text.primary, lineHeight: 20 },
-  designStepSection: { gap: 5 },
   paintStepSection: { gap: 5 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 8, paddingVertical: 8, marginTop: 12 },
   sectionHeaderText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '600', fontSize: 13, color: colors.text.primary },
-  conceptTabContainer: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', gap: 4 },
-
   styleGrid: { flexDirection: 'row', alignSelf: 'stretch', flexWrap: 'wrap', gap: 4 },
-  sliderContainer: { alignSelf: 'stretch', paddingVertical: 0, paddingHorizontal: 0,},
   sliderTrack: { height: 40, backgroundColor: colors.background.secondary, borderRadius: 6, position: 'relative', overflow: 'hidden' }, // Matches Figma dark track
   sliderFill: { position: 'absolute', top: 0, left: 0, height: '100%', backgroundColor: colors.button.primary, borderRadius: 6 }, // Solid blue fill
   sliderThumb: { position: 'absolute', width: 5, height: 25, borderRadius: 2.5, backgroundColor: 'rgba(244, 244, 244, 0.4)'}, // Vertical bar
@@ -1850,23 +1616,12 @@ const styles = StyleSheet.create({
   optionItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', alignSelf: 'stretch', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 4, backgroundColor: colors.background.tertiary },
   optionLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '400', fontSize: 14, color: colors.text.primary },
   optionLabelActive: { color: colors.text.primary },
-  toggleContainer: { width: 46, height: 24, padding: 3, borderRadius: 12, justifyContent: 'center' },
-  toggleOn: { backgroundColor: colors.button.white },
-  toggleOff: { backgroundColor: colors.text.secondary },
-  toggleCircle: { width: 18, height: 18, borderRadius: 9 },
-  toggleCircleActive: { alignSelf: 'flex-end', backgroundColor: colors.button.primary },
-  toggleCircleInactive: { alignSelf: 'flex-start', backgroundColor: colors.text.dark },
-  paletteContainer: { padding: 12, borderRadius: 8, borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.05)', backgroundColor: 'transparent', gap: 12, alignSelf: 'stretch' },
-  paletteHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  paletteTitle: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '600', fontSize: 13, color: colors.text.secondary },
   clearAllText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '600', fontSize: 13, color: '#FF5050' },
   // Paint Selection Component Styles
   paintSelectionContainer: { borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, padding: 12, gap: 4, alignSelf: 'stretch', overflow: 'hidden' },
   paintSelectionContainerEmpty: { borderWidth: 0, padding: 0, overflow: 'visible' },
   paintSelectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4, paddingBottom: 8 },
   paintSelectionCount: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '600', fontSize: 13, color: colors.text.secondary, lineHeight: 14 },
-  paintSelectionEmpty: { paddingTop: 4, paddingBottom: 8 },
-  paintSelectionHint: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '500', fontSize: 14, color: colors.text.primary, lineHeight: 18 },
   paintSelectionButton: { flexDirection: 'row', alignSelf: 'stretch', padding: 16, backgroundColor: colors.button.white, borderRadius: 4, alignItems: 'center', justifyContent: 'center', marginTop: 12, gap: 8 },
   paintSelectionButtonEdit: { backgroundColor: colors.background.tertiary },
   paintSelectionButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '600', fontSize: 16, color: colors.text.dark, letterSpacing: -0.408 },
@@ -1877,13 +1632,8 @@ const styles = StyleSheet.create({
   colorChipName: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '400', fontSize: 13, color: colors.text.primary, maxWidth: 100 },
   colorChipClose: { marginLeft: 4 },
   brandTabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-
-  explorerButton: { alignSelf: 'stretch', padding: 16, backgroundColor: colors.button.white, borderRadius: 4, alignItems: 'center' },
-  explorerButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '600', fontSize: 14, color: colors.text.dark },
-  keyboardAvoidingFooter: { position: 'absolute', bottom: 0, left: 0, right: 0 },
   keyboardAvoidingTextArea: { position: 'absolute', bottom: 90, left: 0, right: 0 },
   floatingTextContainer: { backgroundColor: colors.background.secondary, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
-  floatingInputLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontSize: 12, fontWeight: '600', color: colors.text.secondary, marginBottom: 8, letterSpacing: 0.5 },
   footerContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.background.secondary, borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16 },
   footerInner: { gap: 16, justifyContent: 'space-between', alignItems: 'center' },
   footerPromptInput: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto', fontWeight: '400', fontStyle: 'italic', fontSize: 14, lineHeight: LINE_HEIGHT, color: colors.text.secondary, alignSelf: 'stretch', paddingTop: INPUT_VERTICAL_PADDING, paddingBottom: INPUT_VERTICAL_PADDING, paddingHorizontal: 16, textAlignVertical: 'top', backgroundColor: colors.background.primary, borderRadius: 16 },
@@ -1897,9 +1647,6 @@ const styles = StyleSheet.create({
   createButtonBasic: { backgroundColor: colors.button.primary },
   createButtonContent: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   createButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '500', fontSize: 16, color: colors.text.primary },
-  createButtonTextPro: { color: colors.button.dark },
-  cancelButton: { backgroundColor: colors.text.dark },
-  cancelButtonText: { color: colors.text.primary, opacity: 0.3 },
   buttonDisabled: { opacity: 0.5 },
   modalContainer: { flex: 1, backgroundColor: colors.background.secondary },
   grabberContainer: { width: '100%', height: 24, alignItems: 'center', justifyContent: 'center' },
@@ -1908,8 +1655,6 @@ const styles = StyleSheet.create({
   modalHeaderSide: { width: 80, justifyContent: 'center' },
   modalTitle: { flex: 1, textAlign: 'center', color: colors.text.primary, fontSize: 16, fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '700', letterSpacing: -0.41 },
   doneButtonText: { color: colors.text.primary, fontSize: 16, fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '600', textAlign: 'right' },
-  closeButton: { paddingVertical: 12, paddingHorizontal: 16, justifyContent: 'center', alignItems: 'flex-end' },
-  modalContent: { flex: 1, padding: 24 },
   resultContainer: { alignSelf: 'stretch', gap: 8, marginBottom: 32 },
   activeResultImage: { width: '100%', aspectRatio: undefined, borderRadius: 8, backgroundColor: '#000' },
   resultActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, alignSelf: 'stretch' },
@@ -1920,7 +1665,6 @@ const styles = StyleSheet.create({
   resultActionButtonIcon: { height: 40, paddingHorizontal: 24, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   historyContainer: { alignSelf: 'stretch', gap: 9, paddingBottom: 60 },
   historyTitle: { color: colors.text.primary, fontSize: 16, fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '700', letterSpacing: -0.41 },
-  historyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: HISTORY_GRID_GAP, alignSelf: 'stretch' },
   historyItem: { width: historyItemWidth, aspectRatio: 1, borderRadius: 8, overflow: 'hidden' },
   historyItemActive: { borderWidth: 2, borderColor: colors.button.primary },
   historyItemSelected: { borderWidth: 2, borderColor: colors.button.primary },
@@ -1930,10 +1674,6 @@ const styles = StyleSheet.create({
   selectionCheckActive: { backgroundColor: colors.button.primary, borderColor: colors.button.primary },
   selectionCheckInactive: { backgroundColor: 'rgba(0,0,0,0.3)' },
   historyImage: { width: '100%', height: '100%' },
-  modeIndicatorDot: { position: 'absolute', top: 6, right: 6, zIndex: 1 },
-  modeDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.3)' },
-  // FTUE Bottom Sheet
-  ftueSheetContent: { flex: 1, backgroundColor: colors.background.secondary },
   // Tip Box Styles
   tipBox: { 
     borderWidth: 2, 

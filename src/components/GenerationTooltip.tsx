@@ -13,8 +13,9 @@ export const GenerationTooltip = ({ visible, onDismiss }: GenerationTooltipProps
     const slideAnim = useRef(new Animated.Value(20)).current;
 
     useEffect(() => {
+        let animation: Animated.CompositeAnimation;
         if (visible) {
-            Animated.parallel([
+            animation = Animated.parallel([
                 Animated.timing(fadeAnim, {
                     toValue: 1,
                     duration: 400,
@@ -25,9 +26,9 @@ export const GenerationTooltip = ({ visible, onDismiss }: GenerationTooltipProps
                     friction: 8,
                     useNativeDriver: true,
                 })
-            ]).start();
+            ]);
         } else {
-            Animated.parallel([
+            animation = Animated.parallel([
                 Animated.timing(fadeAnim, {
                     toValue: 0,
                     duration: 300,
@@ -38,8 +39,10 @@ export const GenerationTooltip = ({ visible, onDismiss }: GenerationTooltipProps
                     duration: 300,
                     useNativeDriver: true,
                 })
-            ]).start();
+            ]);
         }
+        animation.start();
+        return () => animation.stop();
     }, [visible]);
 
     return (

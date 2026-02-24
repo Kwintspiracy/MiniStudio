@@ -13,6 +13,10 @@ export interface Entitlements {
   monthly_limit: number;
   remaining_total: number;
   is_onboarded: boolean;
+  /** True when the last fetch failed and data may be outdated */
+  isStale: boolean;
+  /** The error from the last failed fetch, or null if last fetch succeeded */
+  fetchError: string | null;
 }
 
 interface EntitlementsContextType {
@@ -31,6 +35,8 @@ const defaultEntitlements: Entitlements = {
   monthly_limit: 10,
   remaining_total: 0,
   is_onboarded: false,
+  isStale: false,
+  fetchError: null,
 };
 
 const EntitlementsContext = createContext<EntitlementsContextType | undefined>(undefined);
@@ -48,7 +54,7 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
     if (now - lastFetchTime.current < 500) {
       return;
     }
-    
+
     // Prevent concurrent fetches
     if (isFetching.current) {
       return;
@@ -58,15 +64,17 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
       setLoading(false);
       return;
     }
-    
+
     isFetching.current = true;
     lastFetchTime.current = now;
-    
+
     try {
       const { data, error } = await supabase.rpc('get_user_status');
-        
+
       if (error) {
         console.warn('[Entitlements] Error:', error);
+        // Mark data as stale and surface the error instead of silently returning
+        setEntitlements(prev => ({ ...prev, isStale: true, fetchError: error.message }));
         return;
       }
 
@@ -79,11 +87,14 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
         monthly_usage: data.monthly_usage || 0,
         monthly_limit: data.monthly_limit || 10,
         remaining_total: data.remaining_total || 0,
-        is_onboarded: data.is_onboarded || false
+        is_onboarded: data.is_onboarded || false,
+        isStale: false,
+        fetchError: null,
       });
 
-    } catch (e) {
+    } catch (e: any) {
       console.error('[Entitlements] Exception:', e);
+      setEntitlements(prev => ({ ...prev, isStale: true, fetchError: e?.message ?? 'Unknown error' }));
     } finally {
       setLoading(false);
       isFetching.current = false;
@@ -92,16 +103,16 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     fetchEntitlements();
-    
+
     // Single AppState listener for the entire app
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
         fetchEntitlements();
       }
     };
-    
+
     const sub = AppState.addEventListener('change', handleAppStateChange);
-    
+
     return () => {
       sub.remove();
     };

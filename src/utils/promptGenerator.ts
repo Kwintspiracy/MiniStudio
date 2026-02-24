@@ -150,28 +150,28 @@ export const generatePaintPrompt = (params: PromptParams): string => {
        const nmmEffect = effectPrompts['effect.nmm'];
        if (metallicColorsList.length > 0) {
           const mixedEffect = effectPrompts['effect.nmm.mixed'];
-          console.log('[Prompt Generator] Using NMM Mixed Effect:', mixedEffect ? 'FOUND' : 'NOT FOUND');
+          if (__DEV__) console.log('[Prompt Generator] Using NMM Mixed Effect:', mixedEffect ? 'FOUND' : 'NOT FOUND');
           if (mixedEffect) {
               const effectText = isPro ? mixedEffect.pro : mixedEffect.default;
-              console.log('[Prompt Generator] NMM Mixed Text:', effectText.substring(0, 100));
+              if (__DEV__) console.log('[Prompt Generator] NMM Mixed Text:', effectText.substring(0, 100));
               effectsParts.push(effectText);
           }
        } else if (nmmEffect) {
-          console.log('[Prompt Generator] Using NMM Effect:', nmmEffect ? 'FOUND' : 'NOT FOUND');
+          if (__DEV__) console.log('[Prompt Generator] Using NMM Effect:', nmmEffect ? 'FOUND' : 'NOT FOUND');
           const effectText = isPro ? nmmEffect.pro : nmmEffect.default;
-          console.log('[Prompt Generator] NMM Text:', effectText.substring(0, 100));
+          if (__DEV__) console.log('[Prompt Generator] NMM Text:', effectText.substring(0, 100));
           effectsParts.push(effectText);
        }
     } else {
        // TMM MODE
        const tmmEffect = effectPrompts['effect.tmm'];
-       console.log('[Prompt Generator] Using TMM Effect:', tmmEffect ? 'FOUND' : 'NOT FOUND');
+       if (__DEV__) console.log('[Prompt Generator] Using TMM Effect:', tmmEffect ? 'FOUND' : 'NOT FOUND');
        if (tmmEffect) {
            const effectText = isPro ? tmmEffect.pro : tmmEffect.default;
-           console.log('[Prompt Generator] TMM Text (from admin):', effectText.substring(0, 100));
+           if (__DEV__) console.log('[Prompt Generator] TMM Text (from admin):', effectText.substring(0, 100));
            effectsParts.push(effectText);
        } else {
-           console.log('[Prompt Generator] TMM Text (FALLBACK constant):', METALLIC_PAINT_INSTRUCTIONS.substring(0, 100));
+           if (__DEV__) console.log('[Prompt Generator] TMM Text (FALLBACK constant):', METALLIC_PAINT_INSTRUCTIONS.substring(0, 100));
            effectsParts.push(METALLIC_PAINT_INSTRUCTIONS);
        }
     }

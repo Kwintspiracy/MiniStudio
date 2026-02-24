@@ -1,3 +1,4 @@
+// TODO: Remove unused module — identified in audit #17
 import { useState, useCallback, useRef } from 'react';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import type { ImageFile } from '../types';

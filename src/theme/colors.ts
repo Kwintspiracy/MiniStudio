@@ -25,7 +25,7 @@ export const colors = {
     // Text colors
     text: {
         primary: '#EFEFF1',   // Restored original text color
-        secondary: '#7E808B', // Restored original secondary text
+        secondary: '#9A9CAB', // WCAG AA compliant (4.5:1 contrast on dark background)
         muted: 'rgba(244, 244, 244, 0.4)', // Placeholder/subdued text
         dark: '#1D1D1D',
         textfieldbg: '#16171D', // Restored original input bg

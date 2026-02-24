@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, Modal, StyleSheet, TouchableOpacity, Image, Dimensions, Platform } from 'react-native';
+import { View, Text, Modal, StyleSheet, TouchableOpacity, Image, useWindowDimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Polygon } from 'react-native-svg';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Polygon color - easy to customize
 const POLYGON_COLOR = '#3E516E'; // Blue
@@ -76,6 +74,7 @@ interface WelcomeOnboardingProps {
 }
 
 export const WelcomeOnboarding: React.FC<WelcomeOnboardingProps> = ({ visible, onComplete }) => {
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const [currentScreen, setCurrentScreen] = useState(0);
 
   const handleNext = () => {
@@ -146,7 +145,7 @@ export const WelcomeOnboarding: React.FC<WelcomeOnboardingProps> = ({ visible, o
             />
           </View>
 
-          <View style={styles.footer}>
+          <View style={[styles.footer, { width: SCREEN_WIDTH }]}>
             <View style={styles.textContainer}>
               <Text style={styles.title}>{screen.title}</Text>
               <Text style={styles.description}>{screen.description}</Text>
@@ -158,6 +157,8 @@ export const WelcomeOnboarding: React.FC<WelcomeOnboardingProps> = ({ visible, o
                   style={styles.singleButton}
                   onPress={handleNext}
                   activeOpacity={0.8}
+                  accessibilityLabel="Start the tour"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.onboardingButtonText}>Start the tour</Text>
                 </TouchableOpacity>
@@ -168,6 +169,8 @@ export const WelcomeOnboarding: React.FC<WelcomeOnboardingProps> = ({ visible, o
                   style={styles.previousButton}
                   onPress={handlePrevious}
                   activeOpacity={0.8}
+                  accessibilityLabel="Previous"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.previousButtonText} numberOfLines={1} ellipsizeMode="clip">Previous</Text>
                 </TouchableOpacity>
@@ -175,6 +178,8 @@ export const WelcomeOnboarding: React.FC<WelcomeOnboardingProps> = ({ visible, o
                   style={styles.nextButton}
                   onPress={handleNext}
                   activeOpacity={0.8}
+                  accessibilityLabel={screen.buttonText}
+                  accessibilityRole="button"
                 >
                   <Text style={styles.nextButtonText} numberOfLines={1} ellipsizeMode="clip">{screen.buttonText}</Text>
                 </TouchableOpacity>
@@ -237,7 +242,6 @@ const styles = StyleSheet.create({
     paddingTop: 32,
     paddingBottom: 50,
     gap: 40,
-    width: SCREEN_WIDTH,
   },
   textContainer: {
     alignItems: 'center',

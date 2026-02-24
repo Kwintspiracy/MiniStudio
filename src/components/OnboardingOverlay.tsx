@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, useWindowDimensions, Platform } from 'react-native';
 import Svg, { Defs, Rect, Mask } from 'react-native-svg';
 import { SparklesIcon } from './Icons';
 import { useHaptics } from '../hooks/useHaptics';
@@ -24,19 +24,20 @@ interface OnboardingOverlayProps {
     targetLayout?: { x: number; y: number; width: number; height: number } | null;
 }
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 export const OnboardingOverlay = ({ step, onNext, targetLayout }: OnboardingOverlayProps) => {
     const { trigger } = useHaptics();
     const fadeAnim = useRef(new Animated.Value(0)).current;
+    const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
 
     useEffect(() => {
         if (step !== 'idle' && step !== 'finished' && step !== 'checking') {
-            Animated.timing(fadeAnim, {
+            const animation = Animated.timing(fadeAnim, {
                 toValue: 1,
                 duration: 300,
                 useNativeDriver: true,
-            }).start();
+            });
+            animation.start();
+            return () => animation.stop();
         } else {
             fadeAnim.setValue(0);
         }
@@ -63,6 +64,8 @@ export const OnboardingOverlay = ({ step, onNext, targetLayout }: OnboardingOver
                         }}
                         style={styles.button}
                         activeOpacity={0.9}
+                        accessibilityLabel="Let's Go"
+                        accessibilityRole="button"
                     >
                         <Text style={styles.buttonText}>Let's Go</Text>
                     </TouchableOpacity>
@@ -157,15 +160,17 @@ export const OnboardingOverlay = ({ step, onNext, targetLayout }: OnboardingOver
             <View style={rightStyle} pointerEvents="auto" onStartShouldSetResponder={() => true} />
 
             {/* 3. TOOLTIP LAYER */}
-            <Animated.View 
+            <Animated.View
                 style={[
-                    styles.tooltipContainer, 
-                    { 
-                        top: tooltipY, 
+                    styles.tooltipContainer,
+                    {
+                        top: tooltipY,
                         left: tooltipX,
-                        opacity: fadeAnim 
+                        opacity: fadeAnim
                     }
                 ]}
+                accessibilityLabel={tooltipText}
+                accessibilityRole="text"
             >
                 <Text style={styles.tooltipText}>{tooltipText}</Text>
                 

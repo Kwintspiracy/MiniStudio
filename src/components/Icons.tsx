@@ -275,14 +275,16 @@ export const SpinnerIcon = ({ color = "#FFFFFF", size = 16 }: { color?: string; 
   const spinValue = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
-    Animated.loop(
+    const animation = Animated.loop(
       Animated.timing(spinValue, {
         toValue: 1,
         duration: 1000,
         easing: Easing.linear,
         useNativeDriver: true,
       })
-    ).start();
+    );
+    animation.start();
+    return () => animation.stop();
   }, [spinValue]);
 
   const spin = spinValue.interpolate({
