@@ -272,7 +272,6 @@ export default function StudioScreen() {
       try {
         const allPaints = await fetchAllPaints();
         setLoadedPaints(allPaints);
-        console.log('[App Launch] Pre-fetched all paints:', allPaints.length);
       } catch (e) {
         console.log('Pre-fetch paints failed:', e);
       }
@@ -555,7 +554,7 @@ export default function StudioScreen() {
        if (step === 'open_gallery') targetKey = 'gallery_btn';
        else if (step === 'select_demo_image') targetKey = 'demo_image';
        else if (step === 'confirm_source') targetKey = 'use_source_btn';
-       else if (step === 'select_style_craftworld') targetKey = 'style_Craftworld Studio';
+       else if (step === 'select_style_vivid') targetKey = 'style_Vivid';
        else if (step === 'enable_palette') targetKey = 'palette_toggle';
        else if (step === 'select_brand_vallejo') targetKey = 'brand_Vallejo';
        else if (step === 'toggle_pro') targetKey = 'pro_badge';
@@ -594,11 +593,11 @@ export default function StudioScreen() {
       }
       // 3. Confirm Source (When gallery closes and we have source)
       else if (tutorialStep === 'confirm_source' && !isResultsDrawerOpen && sourceImages.length > 0) {
-          // If the user already selected Craftworld, skip? Or force re-select? Let's just go to next.
-          setTutorialStep('select_style_craftworld');
+          // If the user already selected Vivid, skip? Or force re-select? Let's just go to next.
+          setTutorialStep('select_style_vivid');
       }
-      // 4. Select Style (Craftworld)
-      else if (tutorialStep === 'select_style_craftworld' && selectedStyle?.name === 'Craftworld Studio') {
+      // 4. Select Style (Vivid)
+      else if (tutorialStep === 'select_style_vivid' && selectedStyle?.name === 'Vivid') {
            setTutorialStep('enable_palette');
       }
       // 5. Enable Palette
@@ -1369,7 +1368,7 @@ export default function StudioScreen() {
                       {paintStylesList.map((style) => (
                         <TouchableOpacity
                           key={style.id}
-                          ref={view => { if (style.name === 'Craftworld Studio') targetRefs.current['style_Craftworld Studio'] = view; }}
+                          ref={view => { if (style.name === 'Vivid') targetRefs.current['style_Vivid'] = view; }}
                           onPress={() => setSelectedStyleId(style.id)}
                           style={[styles.unifiedOptionButton, selectedStyle?.id === style.id && styles.unifiedOptionButtonActive]}
                           accessibilityRole="button"

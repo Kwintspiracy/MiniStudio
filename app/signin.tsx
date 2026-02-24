@@ -42,7 +42,7 @@ const AppleIcon = ({ size = 16, color = colors.palette.white }: { size?: number;
 );
 
 export default function SignInScreen() {
-  const { session, loading, signInWithGoogle, signInWithEmail, signUpWithEmail, resendConfirmationEmail, resetPasswordForEmail, isAnonymous } = useAuth();
+  const { session, loading, signInWithGoogle, signInWithApple, signInWithEmail, signUpWithEmail, resendConfirmationEmail, resetPasswordForEmail, isAnonymous } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -156,7 +156,11 @@ export default function SignInScreen() {
   };
 
   const handleAppleSignIn = async () => {
-    setError('Apple Sign In coming soon');
+    try {
+      await signInWithApple();
+    } catch (err: any) {
+      setError(err.message || 'Apple sign in failed');
+    }
   };
 
   if (loading) {

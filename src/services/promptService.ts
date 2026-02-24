@@ -53,7 +53,6 @@ export async function fetchActivePrompts(): Promise<PromptDictionary> {
 
         // Save to offline cache
         await storeData(PROMPTS_CACHE_KEY, prompts);
-        if (__DEV__) console.log('[PromptService] Prompts fetched and cached.');
 
         return prompts;
     } catch (err) {
@@ -153,8 +152,6 @@ export async function adminUpdatePrompt(
 
     if (error) {
         console.error('[PromptService] Update Error:', error);
-    } else {
-        console.log('[PromptService] Update Success:', data);
     }
 
     return { data, error };

@@ -11,7 +11,7 @@ export type TutorialStep =
     | 'open_gallery' 
     | 'select_demo_image' 
     | 'confirm_source' 
-    | 'select_style_craftworld' 
+    | 'select_style_vivid' 
     | 'enable_palette'
     | 'select_brand_vallejo' 
     | 'toggle_pro' 
@@ -80,7 +80,7 @@ export const OnboardingOverlay = ({ step, onNext, targetLayout }: OnboardingOver
         case 'open_gallery': tooltipText = "Start here! Tap the Gallery button below."; break;
         case 'select_demo_image': tooltipText = "Pick this demo image to try out."; break;
         case 'confirm_source': tooltipText = "Great choice! Now use it as your source."; break;
-        case 'select_style_craftworld': tooltipText = "Select the 'Craftworld Studio' style."; break;
+        case 'select_style_vivid': tooltipText = "Select the 'Vivid' style."; break;
         case 'enable_palette': tooltipText = "Enable Custom Palette to choose brands."; break;
         case 'select_brand_vallejo': tooltipText = "Choose 'Vallejo' paints."; break;
         case 'toggle_pro': tooltipText = "Switch to Pro mode for high quality result."; break;

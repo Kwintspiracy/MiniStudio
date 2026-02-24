@@ -96,13 +96,6 @@ export function usePrompts() {
                 pro: 'using the Non-Metallic Metal (NMM) technique for all metallic parts'
             };
             
-            // Debug: Log what was actually fetched for NMM
-            if (remotePrompts['effect.nmm']) {
-                console.log('[usePrompts] NMM Effect loaded from database:');
-                console.log('[usePrompts] FULL Basic text:', remotePrompts['effect.nmm'].default);
-                console.log('[usePrompts] FULL Pro text:', remotePrompts['effect.nmm'].pro || 'N/A');
-            }
-
             newEffects['effect.osl'] = remotePrompts['effect.osl'] ? {
                 default: remotePrompts['effect.osl'].default,
                 pro: remotePrompts['effect.osl'].pro,

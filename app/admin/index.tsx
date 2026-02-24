@@ -23,19 +23,7 @@ import * as Sharing from 'expo-sharing';
 
 // --- Types & Constants ---
 
-type Category = 'Styles' | 'Modes' | 'Effects' | 'Rules' | 'Settings' | 'Tools';
 type ViewMode = 'Dashboard' | 'Prompts' | 'Modals' | 'Tools';
-
-const CATEGORY_MAP: Record<string, Category> = {
-    'style.': 'Styles',
-    'template.': 'Modes',
-    'effect.': 'Effects',
-    'rules.': 'Rules',
-    'share.': 'Settings',
-    'assets.': 'Settings',
-};
-
-const CATEGORY_ORDER: Category[] = ['Styles', 'Modes', 'Effects', 'Rules', 'Settings', 'Tools'];
 
 export default function AdminDashboard() {
     const [prompts, setPrompts] = useState<PromptConfig[]>([]);
@@ -225,8 +213,8 @@ export default function AdminDashboard() {
                 sections: [
                     { 
                         label: '//Styles', 
-                        keys: ['style.none', 'style.heavy-metal', 'style.grimdark', 'style.slapchop', 'style.craftworld'],
-                        labels: { 'style.none': 'None', 'style.heavy-metal': "'Eavy Metal", 'style.grimdark': 'Grimdark', 'style.slapchop': 'Slapchop', 'style.craftworld': 'Craftworld Studio' }
+                        keys: ['style.none', 'style.heavy-metal', 'style.grimdark', 'style.slapchop', 'style.vivid'],
+                        labels: { 'style.none': 'None', 'style.heavy-metal': "'Eavy Metal", 'style.grimdark': 'Grimdark', 'style.slapchop': 'Slapchop', 'style.vivid': 'Vivid' }
                     },
                     { 
                         label: '//Effects', 

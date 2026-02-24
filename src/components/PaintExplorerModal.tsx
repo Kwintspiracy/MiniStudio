@@ -126,8 +126,7 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
     // 1. Filter by Brands (Heavy lifting, cached until brands change)
     const brandFilteredPaints = useMemo(() => {
         if (__DEV__) {
-            const uniqueBrands = [...new Set(dbColors.map(c => c.brand?.trim()))];
-            console.log('PaintExplorer: Available brands in database:', uniqueBrands);
+            // console.log('PaintExplorer: Available brands in database:', [...new Set(dbColors.map(c => c.brand?.trim()))]);
         }
 
         const normalizedSelectedBrands = selectedBrands.map(b => b.toLowerCase().trim());
@@ -176,7 +175,7 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
         );
 
         if (__DEV__) {
-            console.log(`PaintExplorer: Found ${filteredPaints.length} paints (filtered)`);
+            // console.log(`PaintExplorer: Found ${filteredPaints.length} paints (filtered)`);
         }
 
         // Group by set/type

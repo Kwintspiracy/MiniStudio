@@ -6,6 +6,7 @@ import { supabase } from '../services/supabase';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import Purchases from 'react-native-purchases';
 import { AppModal } from '../components/AppModal';
 import { setRecoveryToken, getRecoveryToken, deleteRecoveryToken } from '../services/storageService';
@@ -18,6 +19,7 @@ interface AuthContextType {
     user: User | null;
     loading: boolean;
     signInWithGoogle: () => Promise<void>;
+    signInWithApple: () => Promise<void>;
     signInWithEmail: (email: string, password: string) => Promise<void>;
     signUpWithEmail: (email: string, password: string) => Promise<void>;
     resendConfirmationEmail: (email: string) => Promise<void>;
@@ -33,6 +35,7 @@ const AuthContext = createContext<AuthContextType>({
     user: null,
     loading: true,
     signInWithGoogle: async () => { },
+    signInWithApple: async () => { },
     signInWithEmail: async () => { },
     signUpWithEmail: async () => { },
     resendConfirmationEmail: async () => { },
@@ -106,10 +109,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                         });
                         
                         if (!recoveryError && recoveryData.session) {
-                            if (__DEV__) console.log("[AUTH] Recovery successful!");
                             currentSession = recoveryData.session;
                         } else {
-                            if (__DEV__) console.log("[AUTH] Recovery failed, cleaning up:", recoveryError?.message);
+                            if (__DEV__) console.log("[AUTH] Recovery failed");
                             await deleteRecoveryToken();
                         }
                     }
@@ -117,7 +119,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 // 3. If STILL no session, sign in anonymously (Guest Flow)
                 if (!currentSession) {
-                    if (__DEV__) console.log("[AUTH] No session found, signing in anonymously...");
                     const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
                     if (anonError) throw anonError;
                     currentSession = anonData.session;
@@ -163,9 +164,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // 2. Auth State Listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            if (__DEV__) console.log("Auth State Change:", event);
-
-            // Handle token refresh issues if relevant, otherwise just rely on standard events
             if (event === ('TOKEN_REFRESH_NOT_UPDATED' as any)) {
                 if (__DEV__) console.warn("Token refresh failed, forcing sign out");
                 setSession(null);
@@ -247,7 +245,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Deduplication Check
         if (lastAuthUrlRef.current === url) {
-            if (__DEV__) console.log("[AUTH] Duplicate URL detected, skipping processing.");
             return;
         }
         lastAuthUrlRef.current = url;
@@ -297,8 +294,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     if (!error.message.includes('signature is invalid')) {
                         showModal("Session Error", error.message, 'error');
                     }
-                } else {
-                    if (__DEV__) console.log("[AUTH] setSession Success for:", data.session?.user?.email);
                 }
             } else {
                 if (__DEV__) console.log("[AUTH] No tokens found in this URL.");
@@ -313,14 +308,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Handle Cold Start (App launched from link)
         Linking.getInitialURL().then((url) => {
             if (url) {
-                console.log("[AUTH] Cold Start Link:", url);
                 handleAuthResult(url);
             }
         });
 
         // Handle Warm Start (App already running)
         const sub = Linking.addEventListener('url', (event) => {
-            console.log("[AUTH] Warm Start Link Received:", event.url);
             handleAuthResult(event.url);
         });
         return () => sub.remove();
@@ -369,18 +362,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (error) throw error;
 
                 if (data?.url) {
-                    if (__DEV__) console.log("[AUTH] Opening Browser Flow...");
                     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-                    if (__DEV__) console.log("[AUTH] WebBrowser Result:", result.type);
 
                     if (result.type === 'success' && result.url) {
-                        if (__DEV__) console.log("[AUTH] WebBrowser Success URL captured.");
                         handleAuthResult(result.url);
                     }
                 }
             }
         } catch (error: any) {
             showModal("Sign In Error", error.message, 'error');
+        }
+    };
+
+    const signInWithApple = async () => {
+        try {
+            if (Platform.OS === 'ios') {
+                const credential = await AppleAuthentication.signInAsync({
+                    requestedScopes: [
+                        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+                        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+                    ],
+                });
+
+                if (credential.identityToken) {
+                    const { data, error } = await supabase.auth.signInWithIdToken({
+                        provider: 'apple',
+                        token: credential.identityToken,
+                    });
+                    if (error) throw error;
+                    if (__DEV__) console.log("[AUTH] Apple Sign In (Native) success");
+                } else {
+                    throw new Error('No identity token found');
+                }
+            } else {
+                // For Android/Web, use OAuth flow
+                const scheme = Constants.expoConfig?.scheme;
+                const redirectUrl = Platform.OS === 'web' 
+                    ? (typeof window !== 'undefined' ? window.location.origin : undefined)
+                    : `${scheme}://auth-callback`;
+
+                const { data, error } = await supabase.auth.signInWithOAuth({
+                    provider: 'apple',
+                    options: {
+                        redirectTo: redirectUrl,
+                        skipBrowserRedirect: Platform.OS !== 'web',
+                    },
+                });
+
+                if (error) throw error;
+
+                if (data?.url && Platform.OS !== 'web') {
+                    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl!);
+                    if (result.type === 'success' && result.url) {
+                        handleAuthResult(result.url);
+                    }
+                }
+            }
+        } catch (error: any) {
+            // Only show error if the user didn't cancel the request
+            if (error.code !== 'ERR_REQUEST_CANCELED' && error.code !== '1001') {
+                showModal("Apple Sign In Error", error.message, 'error');
+            }
         }
     };
 
@@ -518,7 +560,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             // RE-SIGN IN ANONYMOUSLY if they sign out
             // This ensures they revert to guest state immediately
-            if (__DEV__) console.log("[AUTH] Re-signing in anonymously after sign out...");
             const { data: anonData } = await supabase.auth.signInAnonymously();
             if (anonData.session) {
                 setSession(anonData.session);
@@ -608,6 +649,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         loading,
         signInWithGoogle,
+        signInWithApple,
         signInWithEmail,
         signUpWithEmail,
         resendConfirmationEmail,

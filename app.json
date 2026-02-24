@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.minipainterstudio.app",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Allow MiniStudio to use your camera to capture photos of your miniatures.",
         "NSPhotoLibraryUsageDescription": "Allow MiniStudio to access your photos to import miniature images.",
@@ -18,7 +19,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "PHPhotoLibraryPreventAutomaticLimitedAccessAlert": true
       },
-      "buildNumber": "21"
+      "buildNumber": "22"
     },
     "android": {
       "adaptiveIcon": {
@@ -63,7 +64,8 @@
       ],
       "expo-secure-store",
       "expo-font",
-      "expo-mail-composer"
+      "expo-mail-composer",
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true

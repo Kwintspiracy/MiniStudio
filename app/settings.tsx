@@ -106,27 +106,35 @@ export default function SettingsScreen() {
             >
                 {/* Profile Section - Centered */}
                 <View style={styles.profileSection}>
-                    <View style={styles.avatarContainer}>
-                        {isAnonymous ? (
-                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                                <Ionicons name="person" size={50} color={colors.text.secondary} />
-                            </View>
-                        ) : user?.user_metadata?.avatar_url ? (
-                            <Image
-                                source={{ uri: user.user_metadata.avatar_url }}
-                                style={styles.avatar}
-                            />
-                        ) : (
-                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                                <Text style={styles.avatarText}>
-                                    {user?.email?.charAt(0).toUpperCase() ?? 'U'}
-                                </Text>
-                            </View>
-                        )}
-                    </View>
+                    {!isAnonymous && (
+                        <View style={styles.avatarContainer}>
+                            {user?.user_metadata?.avatar_url ? (
+                                <Image
+                                    source={{ uri: user.user_metadata.avatar_url }}
+                                    style={styles.avatar}
+                                />
+                            ) : (
+                                <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                    <Text style={styles.avatarText}>
+                                        {user?.email?.charAt(0).toUpperCase() ?? 'U'}
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                    )}
                     <Text style={styles.userEmail}>
-                        {isAnonymous ? "Sign in to save your future history." : user?.email}
+                        {isAnonymous ? "Sign in to save your creations" : user?.email}
                     </Text>
+
+                    {isAnonymous && (
+                        <TouchableOpacity 
+                            style={styles.inlineSignInButton}
+                            onPress={() => router.push('/signin')}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.inlineSignInText}>Sign In</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* Divider */}
@@ -192,19 +200,6 @@ export default function SettingsScreen() {
                                     <Ionicons name="log-in-outline" size={20} color={colors.accent.blue} />
                                     <Text style={[styles.menuItemText, { color: colors.accent.blue }]}>Sign In</Text>
                                 </TouchableOpacity>
-                                
-                                {(isAnonymous || !user) && (
-                                    <TouchableOpacity 
-                                        style={styles.menuItem}
-                                        onPress={() => {
-                                            setIsMenuVisible(false);
-                                            resetGuestSession();
-                                        }}
-                                    >
-                                        <Ionicons name="refresh-outline" size={20} color={colors.accent.blue} />
-                                        <Text style={[styles.menuItemText, { color: colors.accent.blue }]}>Reset Guest Session</Text>
-                                    </TouchableOpacity>
-                                )}
                             </>
                         ) : (
                             <TouchableOpacity 
@@ -296,6 +291,19 @@ const styles = StyleSheet.create({
         fontFamily: fontFamily.primary,
         fontWeight: '400',
         fontSize: 15,
+    },
+    inlineSignInButton: {
+        marginTop: 16,
+        paddingHorizontal: 24,
+        paddingVertical: 10,
+        backgroundColor: colors.button.primary,
+        borderRadius: 20,
+    },
+    inlineSignInText: {
+        color: colors.text.primary,
+        fontFamily: fontFamily.primary,
+        fontWeight: '600',
+        fontSize: 14,
     },
     // Divider
     divider: {

@@ -46,18 +46,15 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
     // Debounce: prevent multiple fetches within 500ms
     const now = Date.now();
     if (now - lastFetchTime.current < 500) {
-      console.log('[Entitlements] Debounced - skipping fetch');
       return;
     }
     
     // Prevent concurrent fetches
     if (isFetching.current) {
-      console.log('[Entitlements] Already fetching - skipping');
       return;
     }
 
     if (!session?.user) {
-      console.log('[Entitlements] No user session, returning');
       setLoading(false);
       return;
     }
@@ -66,7 +63,6 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
     lastFetchTime.current = now;
     
     try {
-      console.log('[Entitlements] Fetching user status...');
       const { data, error } = await supabase.rpc('get_user_status');
         
       if (error) {
@@ -85,7 +81,6 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
         remaining_total: data.remaining_total || 0,
         is_onboarded: data.is_onboarded || false
       });
-      console.log('[Entitlements] Updated successfully');
 
     } catch (e) {
       console.error('[Entitlements] Exception:', e);
@@ -96,13 +91,10 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
   }, [session?.user?.id]);
 
   useEffect(() => {
-    console.log('[Entitlements] Provider mounted, fetching initial data');
     fetchEntitlements();
     
     // Single AppState listener for the entire app
-    console.log('[Entitlements] Registering single AppState listener');
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      console.log('[Entitlements] AppState changed to:', nextAppState);
       if (nextAppState === 'active') {
         fetchEntitlements();
       }
@@ -111,7 +103,6 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
     const sub = AppState.addEventListener('change', handleAppStateChange);
     
     return () => {
-      console.log('[Entitlements] Provider unmounting, cleaning up listener');
       sub.remove();
     };
   }, [fetchEntitlements]);
