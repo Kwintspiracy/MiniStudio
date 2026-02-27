@@ -111,3 +111,26 @@ export async function adminGetTokenUsage(): Promise<{ data: TokenUsageStats | nu
     const { data, error } = await supabase.rpc('get_admin_token_usage');
     return { data: data as TokenUsageStats | null, error };
 }
+
+export interface PromptHistoryEntry {
+    id: string;
+    created_at: string;
+    model_used: string;
+    action_type: string;
+    cost_units: number;
+    input_tokens: number | null;
+    output_tokens: number | null;
+    prompt_preview: string | null;
+    prompt_length: number | null;
+}
+
+export interface PromptHistoryResult {
+    success: boolean;
+    entries: PromptHistoryEntry[];
+}
+
+export async function adminGetPromptHistory(limit = 50): Promise<{ data: PromptHistoryResult | null; error: any }> {
+    if (!await isAdminUser()) return UNAUTHORIZED;
+    const { data, error } = await supabase.rpc('get_admin_prompt_history', { p_limit: limit });
+    return { data: data as PromptHistoryResult | null, error };
+}

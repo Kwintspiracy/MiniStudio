@@ -17,12 +17,15 @@ import {
     adminGetProviderConfig,
     adminUpdateProviderConfig,
     adminGetTokenUsage,
+    adminGetPromptHistory,
     DashboardStats,
     UserStats,
     StyleStats,
     ToolStats,
     ProviderConfig,
-    TokenUsageStats
+    TokenUsageStats,
+    PromptHistoryEntry,
+    PromptHistoryResult
 } from '../../src/services/adminService';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -95,6 +98,8 @@ export default function AdminDashboard() {
     const [providerConfig, setProviderConfig] = useState<ProviderConfig | null>(null);
     const [tokenUsage, setTokenUsage] = useState<TokenUsageStats | null>(null);
     const [providerUpdating, setProviderUpdating] = useState(false);
+    const [promptHistory, setPromptHistory] = useState<PromptHistoryEntry[]>([]);
+    const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -109,13 +114,14 @@ export default function AdminDashboard() {
 
     const fetchStats = async () => {
         setStatsLoading(true);
-        const [statsRes, usersRes, stylesRes, toolsRes, providerRes, tokenRes] = await Promise.all([
+        const [statsRes, usersRes, stylesRes, toolsRes, providerRes, tokenRes, historyRes] = await Promise.all([
             adminGetDashboardStats(),
             adminGetUsersList(),
             adminGetTopStyles(),
             adminGetTopTools(),
             adminGetProviderConfig(),
             adminGetTokenUsage(),
+            adminGetPromptHistory(50),
         ]);
 
         console.log('[Admin Dashboard] Stats Response:', statsRes);
@@ -137,6 +143,7 @@ export default function AdminDashboard() {
         if (toolsRes.data) setTopTools(toolsRes.data);
         if (providerRes.data) setProviderConfig(providerRes.data);
         if (tokenRes.data) setTokenUsage(tokenRes.data);
+        if (historyRes.data?.entries) setPromptHistory(historyRes.data.entries);
         setStatsLoading(false);
     };
 
@@ -643,6 +650,55 @@ export default function AdminDashboard() {
                             </View>
                         ))}
                     </View>
+
+                    {/* Prompt History */}
+                    {promptHistory.length > 0 && (
+                        <View style={[styles.ghCard, { marginTop: 24 }]}>
+                            <View style={styles.ghCardHeader}>
+                                <Text style={styles.ghCardTitle}>Prompt History</Text>
+                                <Text style={styles.ghRowMeta}>{promptHistory.length} recent generations</Text>
+                            </View>
+                            {promptHistory.map((entry: PromptHistoryEntry, i: number) => {
+                                const isExpanded = expandedPromptId === entry.id;
+                                const providerLabel = entry.model_used === 'poyo' ? 'PoYo' : 'Gemini';
+                                const providerColor = entry.model_used === 'poyo' ? '#6e40c9' : '#1a7f37';
+                                return (
+                                    <TouchableOpacity key={entry.id} onPress={() => setExpandedPromptId(isExpanded ? null : entry.id)}>
+                                        <View style={[styles.ghRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 4 }]}>
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                                                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                                                    <View style={[styles.ghPublicBadge, { backgroundColor: providerColor, borderColor: providerColor }]}>
+                                                        <Text style={styles.ghPublicBadgeText}>{providerLabel}</Text>
+                                                    </View>
+                                                    <Text style={styles.ghRowMeta}>
+                                                        {new Date(entry.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                    </Text>
+                                                </View>
+                                                <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                                                    {entry.input_tokens != null && (
+                                                        <Text style={styles.ghRowMeta}>{entry.input_tokens.toLocaleString()} in{entry.output_tokens != null ? ` / ${entry.output_tokens.toLocaleString()} out` : ''}</Text>
+                                                    )}
+                                                    <Text style={[styles.ghRowMeta, { color: GH_COLORS.accent }]}>{isExpanded ? '▲' : '▼'}</Text>
+                                                </View>
+                                            </View>
+                                            {entry.prompt_preview ? (
+                                                <Text style={[styles.ghRowMeta, { fontFamily: 'monospace', fontSize: 11, lineHeight: 16 }]} numberOfLines={isExpanded ? undefined : 2}>
+                                                    {isExpanded ? entry.prompt_preview : entry.prompt_preview.substring(0, 120) + (entry.prompt_preview.length > 120 ? '…' : '')}
+                                                </Text>
+                                            ) : (
+                                                <Text style={[styles.ghRowMeta, { fontStyle: 'italic' }]}>No prompt recorded</Text>
+                                            )}
+                                            {isExpanded && entry.prompt_length != null && entry.prompt_length > 500 && (
+                                                <Text style={[styles.ghRowMeta, { fontSize: 10 }]}>
+                                                    Showing first 500 of {entry.prompt_length} chars
+                                                </Text>
+                                            )}
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    )}
                 </>
             )}
         </ScrollView>

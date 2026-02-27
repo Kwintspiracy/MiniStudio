@@ -322,6 +322,24 @@ async function reserveCredits(
     return { success: true, jobId: data.job_id };
 }
 
+async function countTokensForPrompt(prompt: string, model: string): Promise<number | undefined> {
+    const apiKey = Deno.env.get('GOOGLE_API_KEY');
+    if (!apiKey) return undefined;
+    try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:countTokens?key=${apiKey}`;
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }),
+        });
+        if (!resp.ok) return undefined;
+        const data = await resp.json();
+        return typeof data.totalTokens === 'number' ? data.totalTokens : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 async function confirmGeneration(
     supabaseClient: any,
     jobId: string,
@@ -329,7 +347,8 @@ async function confirmGeneration(
     model: string,
     clientIp?: string,
     inputTokens?: number,
-    outputTokens?: number
+    outputTokens?: number,
+    prompt?: string
 ): Promise<void> {
     const { data, error } = await supabaseClient.rpc('confirm_generation', {
         p_job_id: jobId,
@@ -338,6 +357,7 @@ async function confirmGeneration(
         p_client_ip: clientIp || null,
         p_input_tokens: inputTokens || null,
         p_output_tokens: outputTokens || null,
+        p_prompt: prompt || null,
     });
 
     if (error) {
@@ -622,7 +642,18 @@ Deno.serve(async (req) => {
         if (primaryProvider === 'poyo' && primaryHealthy) {
             try {
                 log.info('POYO', 'MODE: Async (webhook callback)');
-                
+
+                // Count tokens for PoYo prompt (non-blocking, fire and update job)
+                countTokensForPrompt(sanitizedPrompt, targetModel).then(async (inputTokens) => {
+                    if (inputTokens != null && jobId) {
+                        log.info('POYO', `countTokens: ${inputTokens} input tokens`);
+                        await supabaseAdminClient
+                            .from('generation_jobs')
+                            .update({ input_tokens: inputTokens, prompt: sanitizedPrompt })
+                            .eq('id', jobId);
+                    }
+                }).catch(() => { /* non-critical */ });
+
                 // Submit task with webhook - returns immediately
                 const { taskId } = await submitPoyoWithWebhook(
                     supabaseClient,
@@ -689,8 +720,8 @@ Deno.serve(async (req) => {
                 throw new Error("Request cancelled by user.");
             }
 
-            // Confirm the generation (pass clientIp for IP rate-limit tracking)
-            await confirmGeneration(supabaseClient, jobId!, 'google', targetModel, clientIp, inputTokens, outputTokens);
+            // Confirm the generation (pass clientIp for IP rate-limit tracking, prompt for history)
+            await confirmGeneration(supabaseClient, jobId!, 'google', targetModel, clientIp, inputTokens, outputTokens, sanitizedPrompt);
 
             log.divider('GOOGLE');
             const duration = ((Date.now() - startTime) / 1000).toFixed(1);

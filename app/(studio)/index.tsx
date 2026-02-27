@@ -687,7 +687,7 @@ export default function StudioScreen() {
         // Generate single prompt with color filtering enabled for PoYo
         const finalPrompt = generatePaintPrompt({ ...promptParams, skipColorFiltering: false });
 
-        if (__DEV__) console.log(`\n--- GENERATION PROMPT (PoYo Only) ---\n${finalPrompt}\n----------------------------------\n`);
+        if (__DEV__) console.log(`\n--- GENERATION PROMPT ---\n${finalPrompt}\n----------------------------------\n`);
         
         images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, model, undefined, metadata);
       } else if (activeMode === 'sketch' || activeMode === 'sculpt') {
