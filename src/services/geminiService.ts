@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import * as Application from 'expo-application';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import type { ImageFile } from '../types';
 
 let abortController: AbortController | null = null;
@@ -73,7 +74,7 @@ export async function clearPendingJob(): Promise<void> {
  */
 export function resumePendingGeneration(
     job_id: string,
-    onComplete: (base64Image: string) => void,
+    onComplete: (fileUri: string) => void,
     onError: (error: Error) => void
 ): () => void {
     if (__DEV__) console.log(`[Gemini] Resuming pending job ${job_id}`);
@@ -84,7 +85,7 @@ export function resumePendingGeneration(
         if (resolved) return;
         resolved = true;
         clearTimeout(timeoutId);
-        subscription.unsubscribe();
+        await supabase.removeChannel(subscription);
         await clearPendingJob();
         if (err) onError(err);
     };
@@ -117,20 +118,13 @@ export function resumePendingGeneration(
                 // concurrent cancel/timeout calls don't double-unsubscribe
                 resolved = true;
                 clearTimeout(timeoutId);
-                subscription.unsubscribe();
+                await supabase.removeChannel(subscription);
                 await clearPendingJob();
 
                 try {
-                    const imageResponse = await fetch(job.result_image_url);
-                    const blob = await imageResponse.blob();
-                    const reader = new FileReader();
-                    const base64 = await new Promise<string>((res, rej) => {
-                        reader.onloadend = () => res(reader.result as string);
-                        reader.onerror = rej;
-                        reader.readAsDataURL(blob);
-                    });
-
-                    onComplete(base64);
+                    const localUri = `${FileSystem.cacheDirectory}resumed_${Date.now()}.png`;
+                    await FileSystem.downloadAsync(job.result_image_url, localUri);
+                    onComplete(localUri);
                 } catch (fetchError) {
                     onError(new Error('Failed to fetch generated image'));
                 }
@@ -175,9 +169,8 @@ export async function generatePaintedMiniature(
     baseImages: ImageFile | ImageFile[] | null,
     prompt: string,
     numberOfImages: number,
-    model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview',
+    model: 'gemini-3.1-flash-image-preview',
     temperature?: number,
-    promptFiltered?: string,
     metadata?: any
 ): Promise<string[]> {
     const imagesToProcess = Array.isArray(baseImages) ? baseImages : (baseImages ? [baseImages] : []);
@@ -186,7 +179,7 @@ export async function generatePaintedMiniature(
     abortController = new AbortController();
 
     if (__DEV__) console.log("[AI Proxy] Sending request to Supabase Edge Function...");
-    if (__DEV__) console.log(`[AI Proxy] Target: ${model === 'gemini-3-pro-image-preview' ? 'Pro' : 'Base'} Mode, Prompt Lengths: PoYo=${prompt.length}, Gemini=${promptFiltered?.length || 0}`);
+    if (__DEV__) console.log(`[AI Proxy] Target: ${model}, Prompt Length: ${prompt.length}`);
     
     if (baseImagePayload && baseImagePayload.data) {
         const payloadSizeMB = baseImagePayload.data.length / 1024 / 1024;
@@ -232,7 +225,6 @@ export async function generatePaintedMiniature(
             },
             body: JSON.stringify({
                 prompt,
-                promptFiltered,
                 baseImage: baseImagePayload,
                 model,
                 action: 'generate',
@@ -299,8 +291,12 @@ export async function generatePaintedMiniature(
         if (data.output) {
             if (__DEV__) console.log("[AI Proxy] Sync response - image received directly");
             const result = data.output;
-            
-            return [result.startsWith('data:') ? result : `data:image/png;base64,${result}`];
+            const base64Data = result.startsWith('data:') ? result.split(',')[1] : result;
+            const localUri = `${FileSystem.cacheDirectory}sync_${Date.now()}.png`;
+            await FileSystem.writeAsStringAsync(localUri, base64Data, {
+                encoding: FileSystem.EncodingType.Base64,
+            });
+            return [localUri];
         }
         
         // ASYNC RESPONSE (PoYo): Subscribe to Realtime for job updates
@@ -310,22 +306,74 @@ export async function generatePaintedMiniature(
             // Save job for persistence across app sessions
             await savePendingJob(data.job_id, prompt);
             
+            // Clean up any stale job channels from previous generations
+            const existingChannels = supabase.getChannels();
+            for (const ch of existingChannels) {
+                if (ch.topic.startsWith('realtime:job-')) {
+                    if (__DEV__) console.log(`[AI Proxy] Removing stale channel: ${ch.topic}`);
+                    await supabase.removeChannel(ch);
+                }
+            }
+
             return new Promise<string[]>((resolve, reject) => {
                 const TIMEOUT_MS = 180000; // 3 minute timeout for webhook
                 let resolved = false;
+                let pollIntervalId: ReturnType<typeof setInterval>;
+                let pollDelayId: ReturnType<typeof setTimeout>;
 
                 // Single cleanup helper — eliminates repeated unsubscribe/clearTimeout/removeEventListener
                 // scattered across every code path. Safe to call via `resolved` guard.
                 const cleanup = async () => {
                     clearTimeout(timeoutId);
+                    clearTimeout(pollDelayId);
+                    clearInterval(pollIntervalId);
                     abortController?.signal.removeEventListener('abort', handleAbort);
-                    subscription.unsubscribe();
+                    await supabase.removeChannel(subscription);
                     await clearPendingJob();
                 };
 
                 // Create the subscription FIRST so `subscription` is defined before
                 // setTimeout/addEventListener can reference it (prevents TDZ errors if
                 // the abort signal is already set or the timeout fires synchronously).
+
+                const startPoll = () => {
+                    if (pollIntervalId || resolved) return;
+                    pollIntervalId = setInterval(async () => {
+                        if (resolved) { clearInterval(pollIntervalId); return; }
+                        try {
+                            const { data: job } = await supabase
+                                .from('generation_jobs')
+                                .select('status, result_image_url, error_message')
+                                .eq('id', data.job_id)
+                                .single();
+
+                            if (job?.status === 'completed' && job.result_image_url) {
+                                if (!resolved) {
+                                    if (__DEV__) console.log('[AI Proxy] Poll fallback: job completed');
+                                    resolved = true;
+                                    await cleanup();
+
+                                    try {
+                                        const localUri = `${FileSystem.cacheDirectory}poll_${Date.now()}.png`;
+                                        await FileSystem.downloadAsync(job.result_image_url, localUri);
+                                        resolve([localUri]);
+                                    } catch (fetchError) {
+                                        reject(new Error('Failed to fetch generated image'));
+                                    }
+                                }
+                            } else if (job?.status === 'failed') {
+                                if (!resolved) {
+                                    resolved = true;
+                                    await cleanup();
+                                    reject(new Error(job.error_message || 'Image generation failed'));
+                                }
+                            }
+                        } catch (e) {
+                            if (__DEV__) console.warn('[AI Proxy] Poll check failed:', e);
+                        }
+                    }, 10000);
+                };
+
                 const subscription = supabase
                     .channel(`job-${data.job_id}`)
                     .on('postgres_changes', {
@@ -349,16 +397,9 @@ export async function generatePaintedMiniature(
                                 await cleanup();
 
                                 try {
-                                    const imageResponse = await fetch(job.result_image_url);
-                                    const blob = await imageResponse.blob();
-                                    const reader = new FileReader();
-                                    const base64 = await new Promise<string>((res, rej) => {
-                                        reader.onloadend = () => res(reader.result as string);
-                                        reader.onerror = rej;
-                                        reader.readAsDataURL(blob);
-                                    });
-
-                                    resolve([base64]);
+                                    const localUri = `${FileSystem.cacheDirectory}gen_${Date.now()}.png`;
+                                    await FileSystem.downloadAsync(job.result_image_url, localUri);
+                                    resolve([localUri]);
                                 } catch (fetchError) {
                                     reject(new Error('Failed to fetch generated image'));
                                 }
@@ -373,13 +414,18 @@ export async function generatePaintedMiniature(
                     })
                     .subscribe((status) => {
                         if (__DEV__) console.log(`[Gemini Proxy] Realtime subscription status: ${status}`);
+                        if (status === 'SUBSCRIBED') {
+                            if (__DEV__) console.log(`[AI Proxy] Successfully subscribed to job-${data.job_id}`);
+                        }
                         if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && !resolved) {
-                            resolved = true;
-                            cleanup().then(() =>
-                                reject(new Error(`Realtime channel ${status.toLowerCase()}. Please try again.`))
-                            );
+                            if (__DEV__) console.warn(`[AI Proxy] Realtime ${status} for job-${data.job_id}, starting poll fallback`);
+                            clearTimeout(pollDelayId);
+                            startPoll();
                         }
                     });
+
+                // Fallback: start polling after 30s delay in case Realtime misses the event
+                pollDelayId = setTimeout(() => startPoll(), 30000);
 
                 // Setup timeout — subscription is guaranteed defined here
                 const timeoutId = setTimeout(async () => {
@@ -432,9 +478,8 @@ export async function generatePaintedMiniature(
 export async function generateImageFromImage(
     baseImages: ImageFile | ImageFile[],
     prompt: string,
-    model: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview',
-    temperature?: number,
-    promptFiltered?: string
+    model: 'gemini-3.1-flash-image-preview',
+    temperature?: number
 ): Promise<string[]> {
-    return generatePaintedMiniature(baseImages, prompt, 1, model, temperature, promptFiltered);
+    return generatePaintedMiniature(baseImages, prompt, 1, model, temperature);
 }

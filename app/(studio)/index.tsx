@@ -39,7 +39,7 @@ import { filterPaintsByDiversity, getNMMRecipes } from '@/utils/paintFilter';
 import { useImagePicker } from '@/hooks/useImagePicker';
 import { useMediaSave } from '@/hooks/useMediaSave';
 import { useAuth } from '@/context/AuthContext';
-import { saveBase64ToFile } from '@/services/fileSystemService';
+import { saveBase64ToFile, cleanupTempFiles } from '@/services/fileSystemService';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { useImageContext } from '@/context/ImageContext';
 import { PaintExplorerModal } from '@/components/PaintExplorerModal';
@@ -306,12 +306,18 @@ export default function StudioScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showLongGenerationTooltip, setShowLongGenerationTooltip] = useState(false);
 
-  // Long generation tooltip timer
+  // Long generation tooltip timer — show at most once per week
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     if (isLoading) {
-        timer = setTimeout(() => {
-            setShowLongGenerationTooltip(true);
+        timer = setTimeout(async () => {
+            try {
+                const lastShown = await AsyncStorage.getItem('long_gen_tooltip_last_shown');
+                const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+                if (lastShown && Date.now() - parseInt(lastShown, 10) < oneWeekMs) return;
+                await AsyncStorage.setItem('long_gen_tooltip_last_shown', String(Date.now()));
+                setShowLongGenerationTooltip(true);
+            } catch {}
         }, 10000); // 10 seconds
     } else {
         setShowLongGenerationTooltip(false);
@@ -510,21 +516,24 @@ export default function StudioScreen() {
     }
   }, [exampleAssets, hiddenDemoAssets]);
 
-  // Persist generation history with 10-image limit for anonymous users
+  // Persist generation history with 10-image limit for anonymous users (debounced 1s)
   useEffect(() => {
-    const userGeneratedItems = generationHistory.filter(item => item.timestamp !== 0);
-    
-    // Apply 10-image limit for anonymous users only
-    const imagesToSave = isAnonymous 
-      ? userGeneratedItems.slice(0, 10)  // Last 10 for anonymous
-      : userGeneratedItems;               // Unlimited for signed-in
-    
-    // Save to AsyncStorage in background
-    if (imagesToSave.length > 0) {
-      AsyncStorage.setItem('generation_history', JSON.stringify(imagesToSave));
-    } else {
-      AsyncStorage.removeItem('generation_history');
-    }
+    const timer = setTimeout(() => {
+      const userGeneratedItems = generationHistory.filter(item => item.timestamp !== 0);
+
+      // Apply 10-image limit for anonymous users only
+      const imagesToSave = isAnonymous
+        ? userGeneratedItems.slice(0, 10)  // Last 10 for anonymous
+        : userGeneratedItems;               // Unlimited for signed-in
+
+      // Save to AsyncStorage in background
+      if (imagesToSave.length > 0) {
+        AsyncStorage.setItem('generation_history', JSON.stringify(imagesToSave));
+      } else {
+        AsyncStorage.removeItem('generation_history');
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
   }, [generationHistory, isAnonymous]);
 
   // Show gallery full modal ONLY on app launch (once per session)
@@ -565,7 +574,13 @@ export default function StudioScreen() {
   }, [pickDocument]);
 
   const handleFilesPress = useCallback(() => {
-    // Using native Alert/ActionSheet style choice because standard Modals 
+    if (Platform.OS === 'web') {
+      // On web, Alert.alert is a no-op. The web image picker already opens
+      // a file dialog that handles all file types, so go straight to it.
+      handlePickImage();
+      return;
+    }
+    // Using native Alert/ActionSheet style choice because standard Modals
     // often conflict when one is already open (like the Gallery drawer).
     Alert.alert(
       'Select Image Source',
@@ -621,8 +636,7 @@ export default function StudioScreen() {
     setIsLoading(true);
     // setError(null); // No longer needed
     // Unified 1-token cost for all generations as per user request.
-    // Logic preserved for future use: const model = isPro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-    const model = 'gemini-2.5-flash-image';
+    const model = 'gemini-3.1-flash-image-preview';
     try {
       // Prepare source images: if they are file URIs, read as base64
       const preparedSources = await Promise.all(sourceImages.map(async img => {
@@ -675,7 +689,7 @@ export default function StudioScreen() {
 
         if (__DEV__) console.log(`\n--- GENERATION PROMPT (PoYo Only) ---\n${finalPrompt}\n----------------------------------\n`);
         
-        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, model, undefined, undefined, metadata);
+        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, model, undefined, metadata);
       } else if (activeMode === 'sketch' || activeMode === 'sculpt') {
         const characterDesc = sanitizePrompt(designerPrompt).trim() || 'character';
         
@@ -740,7 +754,7 @@ export default function StudioScreen() {
         };
 
         if (__DEV__) console.log(`\n--- ${activeMode.toUpperCase()} PROMPT (Temp: ${creativityLevel}) ---\n${finalPrompt}\n----------------------------------\n`);
-        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, model, creativityLevel, undefined, metadata);
+        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, model, creativityLevel, metadata);
       }
       if (images && images.length > 0) {
         const resultUrl = images[0];
@@ -853,6 +867,7 @@ export default function StudioScreen() {
 
   const handleShare = useCallback(async () => {
     if (!activePreviewImage) return;
+    const tempFilesToCleanup: string[] = [];
     try {
       // Check if sharing is available
       const isAvailable = await isAvailableAsync();
@@ -869,13 +884,14 @@ export default function StudioScreen() {
         fileUri = FileSystem.cacheDirectory + filename;
 
         // The base64 data usually comes with prefix "data:image/png;base64,", strip it if needed
-        const base64Data = activePreviewImage.includes(',') 
-          ? activePreviewImage.split(',')[1] 
+        const base64Data = activePreviewImage.includes(',')
+          ? activePreviewImage.split(',')[1]
           : activePreviewImage;
 
         await FileSystem.writeAsStringAsync(fileUri, base64Data, {
           encoding: 'base64',
         });
+        tempFilesToCleanup.push(fileUri);
       }
 
       if (Platform.OS === 'ios') {
@@ -892,6 +908,10 @@ export default function StudioScreen() {
       }
     } catch (error: any) {
       showModal('Error sharing', error.message, 'error');
+    } finally {
+      if (tempFilesToCleanup.length > 0) {
+        cleanupTempFiles(tempFilesToCleanup);
+      }
     }
   }, [activePreviewImage]);
 

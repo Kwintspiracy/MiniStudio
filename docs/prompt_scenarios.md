@@ -138,7 +138,6 @@ When brand has more than 50 paints:
 
 ## MODEL SELECTION
 
-| Mode | Model Used                 | Token Cost |
-| ---- | -------------------------- | ---------- |
-| BASE | gemini-2.5-flash-image     | 1 Token    |
-| PRO  | gemini-3-pro-image-preview | 2 Tokens   |
+| Model                          | Token Cost |
+| ------------------------------ | ---------- |
+| gemini-3.1-flash-image-preview | 1 Token    |

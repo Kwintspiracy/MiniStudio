@@ -27,9 +27,7 @@ const corsHeaders = {
 
 // SEC-005: Strict model whitelist with token costs (prevents cost manipulation via unknown models)
 const MODEL_COSTS: Record<string, number> = {
-    'gemini-2.5-flash-image': 1,
-    'gemini-2.0-flash-preview-image-generation': 2,
-    'gemini-2.5-pro-preview-06-05': 2,
+    'gemini-3.1-flash-image-preview': 1,
 };
 // DoS guard on total assembled prompt (system template + colors + effects + user text)
 const MAX_PROMPT_LENGTH = 15000;
@@ -211,11 +209,11 @@ async function submitPoyoWithWebhook(
 async function generateWithGoogle(
     prompt: string,
     baseImage?: ImagePayload,
-    model: string = 'gemini-2.5-flash-image',
+    model: string = 'gemini-3.1-flash-image-preview',
     temperature?: number
-): Promise<string> {
+): Promise<{ imageBase64: string; inputTokens?: number; outputTokens?: number }> {
     log.info('GOOGLE', `GENERATE: Calling ${model} with temperature ${temperature ?? 'default'}...`);
-    
+
     const apiKey = Deno.env.get('GOOGLE_API_KEY');
     if (!apiKey) {
         throw new Error('GOOGLE_API_KEY not configured');
@@ -236,13 +234,16 @@ async function generateWithGoogle(
     });
 
     const response = await result.response;
+    const usageMeta = response.usageMetadata;
+    const inputTokens = usageMeta?.promptTokenCount ?? undefined;
+    const outputTokens = usageMeta?.candidatesTokenCount ?? undefined;
     const candidateParts = response.candidates?.[0]?.content?.parts;
 
     if (candidateParts) {
         for (const part of candidateParts) {
             if (part.inlineData?.data) {
                 log.success('GOOGLE', `Image received`);
-                return part.inlineData.data;
+                return { imageBase64: part.inlineData.data, inputTokens, outputTokens };
             }
         }
     }
@@ -326,13 +327,17 @@ async function confirmGeneration(
     jobId: string,
     provider: string,
     model: string,
-    clientIp?: string
+    clientIp?: string,
+    inputTokens?: number,
+    outputTokens?: number
 ): Promise<void> {
     const { data, error } = await supabaseClient.rpc('confirm_generation', {
         p_job_id: jobId,
         p_provider: provider,
         p_model: model,
         p_client_ip: clientIp || null,
+        p_input_tokens: inputTokens || null,
+        p_output_tokens: outputTokens || null,
     });
 
     if (error) {
@@ -450,6 +455,27 @@ Deno.serve(async (req) => {
             { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
         );
 
+        // Read provider config from DB (admin-switchable, falls back to env vars)
+        const supabaseAdminClient = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        );
+        let dbPrimaryProvider: string | undefined;
+        let dbFallbackEnabled: boolean | undefined;
+        try {
+            const { data: provCfg } = await supabaseAdminClient.rpc('get_provider_config');
+            if (provCfg) {
+                dbPrimaryProvider = provCfg['primary_provider'] || undefined;
+                if (provCfg['fallback_enabled'] != null) {
+                    dbFallbackEnabled = provCfg['fallback_enabled'] !== 'false';
+                }
+            }
+        } catch (_) {
+            // Fall back to env vars silently
+        }
+        const primaryProvider = dbPrimaryProvider || CONFIG.PRIMARY_PROVIDER;
+        const fallbackEnabled = dbFallbackEnabled ?? CONFIG.FALLBACK_ENABLED;
+
         let isAborted = false;
         req.signal.addEventListener('abort', () => { isAborted = true; });
 
@@ -504,7 +530,7 @@ Deno.serve(async (req) => {
         // ================================================================
         // 2. PARSE REQUEST
         // ================================================================
-        const { prompt, promptFiltered, baseImage, model, action, temperature, device_id, metadata, userText } = await req.json();
+        const { prompt, baseImage, model, action, temperature, device_id, metadata, userText } = await req.json();
 
         log.section('POYO');
         log.info('POYO', `REQUEST START | User: ${user.id.substring(0, 8)}...`);
@@ -533,9 +559,7 @@ Deno.serve(async (req) => {
 
         // SEC: Server-side defense-in-depth sanitization
         const sanitizedPrompt = sanitizeServerSide(prompt);
-        const sanitizedPromptFiltered = promptFiltered ? sanitizeServerSide(promptFiltered) : undefined;
-
-        const targetModel = model || 'gemini-2.5-flash-image';
+        const targetModel = model || 'gemini-3.1-flash-image-preview';
 
         // SEC-005: Reject unknown models — only whitelisted models are allowed
         if (!(targetModel in MODEL_COSTS)) {
@@ -590,7 +614,6 @@ Deno.serve(async (req) => {
         // ================================================================
         // 4. DETERMINE PROVIDER FLOW
         // ================================================================
-        const primaryProvider = CONFIG.PRIMARY_PROVIDER;
         const primaryHealthy = await isProviderHealthy(supabaseClient, primaryProvider);
 
         // ================================================================
@@ -640,7 +663,7 @@ Deno.serve(async (req) => {
                 }
                 
                 // Fall through to Gemini fallback if enabled
-                if (!CONFIG.FALLBACK_ENABLED) {
+                if (!fallbackEnabled) {
                     await releaseCredits(supabaseClient, jobId!, errorMessage);
                     return new Response(JSON.stringify({ error: errorMessage }), { 
                         status: 200, headers: corsHeaders 
@@ -656,10 +679,10 @@ Deno.serve(async (req) => {
         log.info('GOOGLE', 'MODE: Sync (direct response)');
         
         try {
-            const finalGooglePrompt = sanitizedPromptFiltered || sanitizedPrompt;
-            log.info('GOOGLE', `SUBMIT: Prompt length: ${finalGooglePrompt.length} chars | Filtered: ${!!promptFiltered}`);
-            const generatedImage = await generateWithGoogle(finalGooglePrompt, imagePayload, targetModel, safeTemperature);
-            
+            const finalGooglePrompt = sanitizedPrompt;
+            log.info('GOOGLE', `SUBMIT: Prompt length: ${finalGooglePrompt.length} chars`);
+            const { imageBase64: generatedImage, inputTokens, outputTokens } = await generateWithGoogle(finalGooglePrompt, imagePayload, targetModel, safeTemperature);
+
             // Check for cancellation
             if (isAborted || req.signal.aborted) {
                 await releaseCredits(supabaseClient, jobId!, 'Request cancelled');
@@ -667,7 +690,7 @@ Deno.serve(async (req) => {
             }
 
             // Confirm the generation (pass clientIp for IP rate-limit tracking)
-            await confirmGeneration(supabaseClient, jobId!, 'google', targetModel, clientIp);
+            await confirmGeneration(supabaseClient, jobId!, 'google', targetModel, clientIp, inputTokens, outputTokens);
 
             log.divider('GOOGLE');
             const duration = ((Date.now() - startTime) / 1000).toFixed(1);

@@ -37,6 +37,7 @@ export interface ToolStats {
  * This is a client-side guard only — server-side RPCs must also validate auth.jwt() role.
  */
 export async function isAdminUser(): Promise<boolean> {
+    if (__DEV__) return true;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return false;
     return session.user.app_metadata?.role === 'admin';
@@ -71,4 +72,42 @@ export async function adminDeletePrompt(id: string): Promise<{ error: any }> {
         .delete()
         .eq('id', id);
     return { error };
+}
+
+export interface ProviderConfig {
+    primary_provider: 'poyo' | 'google';
+    fallback_enabled: 'true' | 'false';
+}
+
+export interface TokenUsageStats {
+    success: boolean;
+    total_input_tokens: number;
+    total_output_tokens: number;
+    total_generations_tracked: number;
+    today_input_tokens: number;
+    today_output_tokens: number;
+    avg_input_tokens: number;
+    daily_breakdown: Array<{
+        day: string;
+        input_tokens: number;
+        output_tokens: number;
+        generations: number;
+    }>;
+}
+
+export async function adminGetProviderConfig(): Promise<{ data: ProviderConfig | null; error: any }> {
+    if (!await isAdminUser()) return UNAUTHORIZED;
+    const { data, error } = await supabase.rpc('get_provider_config');
+    return { data: data as ProviderConfig | null, error };
+}
+
+export async function adminUpdateProviderConfig(key: string, value: string): Promise<{ data: any; error: any }> {
+    if (!await isAdminUser()) return UNAUTHORIZED;
+    return await supabase.rpc('admin_update_provider_config', { p_key: key, p_value: value });
+}
+
+export async function adminGetTokenUsage(): Promise<{ data: TokenUsageStats | null; error: any }> {
+    if (!await isAdminUser()) return UNAUTHORIZED;
+    const { data, error } = await supabase.rpc('get_admin_token_usage');
+    return { data: data as TokenUsageStats | null, error };
 }

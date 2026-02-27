@@ -8,16 +8,21 @@ import * as ImagePicker from 'expo-image-picker';
 import { AppModal } from '../../src/components/AppModal';
 import { PromptTester } from '../../src/components/admin/PromptTester';
 import { PAINTING_STYLES, NMM_MIXED_PROMPT, METALLIC_PAINT_INSTRUCTIONS } from '../../src/constants';
-import { 
-    adminGetDashboardStats, 
-    adminGetUsersList, 
-    adminGetTopStyles, 
-    adminGetTopTools, 
+import {
+    adminGetDashboardStats,
+    adminGetUsersList,
+    adminGetTopStyles,
+    adminGetTopTools,
     adminDeletePrompt,
+    adminGetProviderConfig,
+    adminUpdateProviderConfig,
+    adminGetTokenUsage,
     DashboardStats,
     UserStats,
     StyleStats,
-    ToolStats
+    ToolStats,
+    ProviderConfig,
+    TokenUsageStats
 } from '../../src/services/adminService';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -87,6 +92,9 @@ export default function AdminDashboard() {
     const [topStyles, setTopStyles] = useState<StyleStats[]>([]);
     const [topTools, setTopTools] = useState<ToolStats[]>([]);
     const [statsLoading, setStatsLoading] = useState(false);
+    const [providerConfig, setProviderConfig] = useState<ProviderConfig | null>(null);
+    const [tokenUsage, setTokenUsage] = useState<TokenUsageStats | null>(null);
+    const [providerUpdating, setProviderUpdating] = useState(false);
 
     const fetchData = async () => {
         setLoading(true);
@@ -101,11 +109,13 @@ export default function AdminDashboard() {
 
     const fetchStats = async () => {
         setStatsLoading(true);
-        const [statsRes, usersRes, stylesRes, toolsRes] = await Promise.all([
+        const [statsRes, usersRes, stylesRes, toolsRes, providerRes, tokenRes] = await Promise.all([
             adminGetDashboardStats(),
             adminGetUsersList(),
             adminGetTopStyles(),
-            adminGetTopTools()
+            adminGetTopTools(),
+            adminGetProviderConfig(),
+            adminGetTokenUsage(),
         ]);
 
         console.log('[Admin Dashboard] Stats Response:', statsRes);
@@ -125,7 +135,45 @@ export default function AdminDashboard() {
         if (usersRes.data) setUsersList(usersRes.data);
         if (stylesRes.data) setTopStyles(stylesRes.data);
         if (toolsRes.data) setTopTools(toolsRes.data);
+        if (providerRes.data) setProviderConfig(providerRes.data);
+        if (tokenRes.data) setTokenUsage(tokenRes.data);
         setStatsLoading(false);
+    };
+
+    const handleProviderSwitch = (newProvider: 'poyo' | 'google') => {
+        if (newProvider === providerConfig?.primary_provider) return;
+        const providerLabel = newProvider === 'poyo' ? 'PoYo Async' : 'Gemini Sync';
+        showModal(
+            'Switch Provider',
+            `Switch primary generation provider to ${providerLabel}? This takes effect immediately for all new generations.`,
+            'default',
+            {
+                label: 'Switch',
+                onPress: async () => {
+                    setProviderUpdating(true);
+                    const { data, error } = await adminUpdateProviderConfig('primary_provider', newProvider);
+                    if (error || data?.error) {
+                        showModal('Error', `Failed to switch provider: ${error?.message || data?.error}`, 'error');
+                    } else {
+                        setProviderConfig(prev => prev ? { ...prev, primary_provider: newProvider } : prev);
+                    }
+                    setProviderUpdating(false);
+                }
+            },
+            { label: 'Cancel', onPress: () => {} }
+        );
+    };
+
+    const handleFallbackToggle = async () => {
+        const newValue = providerConfig?.fallback_enabled === 'true' ? 'false' : 'true';
+        setProviderUpdating(true);
+        const { data, error } = await adminUpdateProviderConfig('fallback_enabled', newValue);
+        if (error || data?.error) {
+            showModal('Error', `Failed to update fallback: ${error?.message || data?.error}`, 'error');
+        } else {
+            setProviderConfig(prev => prev ? { ...prev, fallback_enabled: newValue as 'true' | 'false' } : prev);
+        }
+        setProviderUpdating(false);
     };
 
     useEffect(() => {
@@ -217,8 +265,8 @@ export default function AdminDashboard() {
                 sections: [
                     { 
                         label: '//Styles', 
-                        keys: ['style.none', 'style.heavy-metal', 'style.grimdark', 'style.slapchop', 'style.vivid'],
-                        labels: { 'style.none': 'None', 'style.heavy-metal': "'Eavy Metal", 'style.grimdark': 'Grimdark', 'style.slapchop': 'Slapchop', 'style.vivid': 'Vivid' }
+                        keys: ['style.none', 'style.vivid', 'style.heavy-metal', 'style.slapchop', 'style.grimdark'],
+                        labels: { 'style.none': 'None', 'style.vivid': 'Vibrant', 'style.heavy-metal': "'Eavy Metal", 'style.slapchop': 'Slapchop', 'style.grimdark': 'Grimdark' }
                     },
                     { 
                         label: '//Effects', 
@@ -416,6 +464,121 @@ export default function AdminDashboard() {
                     <Text style={styles.ghSecondaryBtnText}>Refresh Stats</Text>
                 </TouchableOpacity>
             </View>
+
+            {/* Provider Configuration */}
+            <View style={[styles.ghCard, { marginBottom: 24 }]}>
+                <View style={styles.ghCardHeader}>
+                    <Text style={styles.ghCardTitle}>Provider Configuration</Text>
+                    {providerUpdating && <ActivityIndicator size="small" color={GH_COLORS.accent} />}
+                </View>
+
+                {/* Primary Provider Toggle */}
+                <View style={[styles.ghRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
+                    <Text style={styles.ghRowMeta}>PRIMARY PROVIDER</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity
+                            style={[
+                                styles.ghSecondaryBtn,
+                                providerConfig?.primary_provider === 'poyo' && { backgroundColor: GH_COLORS.accent, borderColor: GH_COLORS.accent }
+                            ]}
+                            onPress={() => handleProviderSwitch('poyo')}
+                            disabled={providerUpdating}
+                        >
+                            <Text style={[
+                                styles.ghSecondaryBtnText,
+                                providerConfig?.primary_provider === 'poyo' && { color: '#fff' }
+                            ]}>PoYo Async</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[
+                                styles.ghSecondaryBtn,
+                                providerConfig?.primary_provider === 'google' && { backgroundColor: GH_COLORS.accent, borderColor: GH_COLORS.accent }
+                            ]}
+                            onPress={() => handleProviderSwitch('google')}
+                            disabled={providerUpdating}
+                        >
+                            <Text style={[
+                                styles.ghSecondaryBtnText,
+                                providerConfig?.primary_provider === 'google' && { color: '#fff' }
+                            ]}>Gemini Sync</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Fallback Enabled Toggle */}
+                <View style={[styles.ghRow, { justifyContent: 'space-between' }]}>
+                    <View>
+                        <Text style={styles.ghRowTitle}>Fallback Enabled</Text>
+                        <Text style={styles.ghRowMeta}>Fall back to secondary provider on failure</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={[
+                            styles.ghSecondaryBtn,
+                            providerConfig?.fallback_enabled === 'true' && { backgroundColor: '#238636', borderColor: '#238636' }
+                        ]}
+                        onPress={handleFallbackToggle}
+                        disabled={providerUpdating}
+                    >
+                        <Text style={[
+                            styles.ghSecondaryBtnText,
+                            providerConfig?.fallback_enabled === 'true' && { color: '#fff' }
+                        ]}>
+                            {providerConfig?.fallback_enabled === 'true' ? 'ON' : 'OFF'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            {/* Gemini Token Usage */}
+            {tokenUsage && tokenUsage.total_generations_tracked > 0 && (
+                <View style={[styles.ghCard, { marginBottom: 24 }]}>
+                    <View style={styles.ghCardHeader}>
+                        <Text style={styles.ghCardTitle}>Gemini Token Usage</Text>
+                    </View>
+
+                    {/* Summary stats */}
+                    <View style={{ flexDirection: 'row', gap: 12, marginBottom: 8 }}>
+                        <View style={[styles.statsCard, { flex: 1 }]}>
+                            <Text style={styles.statsLabel}>Total Input</Text>
+                            <Text style={styles.statsValue}>{(tokenUsage.total_input_tokens / 1000).toFixed(1)}K</Text>
+                        </View>
+                        <View style={[styles.statsCard, { flex: 1 }]}>
+                            <Text style={styles.statsLabel}>Total Output</Text>
+                            <Text style={styles.statsValue}>{(tokenUsage.total_output_tokens / 1000).toFixed(1)}K</Text>
+                        </View>
+                        <View style={[styles.statsCard, { flex: 1 }]}>
+                            <Text style={styles.statsLabel}>Avg Input/Gen</Text>
+                            <Text style={styles.statsValue}>{tokenUsage.avg_input_tokens.toLocaleString()}</Text>
+                        </View>
+                    </View>
+
+                    {/* Today */}
+                    <View style={styles.ghRow}>
+                        <Text style={styles.ghRowTitle}>Today</Text>
+                        <Text style={styles.ghRowMeta}>
+                            {tokenUsage.today_input_tokens.toLocaleString()} in / {tokenUsage.today_output_tokens.toLocaleString()} out
+                        </Text>
+                    </View>
+
+                    {/* Daily breakdown */}
+                    {tokenUsage.daily_breakdown.length > 0 && (
+                        <>
+                            <View style={[styles.ghCardHeader, { marginTop: 8 }]}>
+                                <Text style={[styles.ghRowMeta, { fontWeight: '600' }]}>LAST 7 DAYS</Text>
+                            </View>
+                            {tokenUsage.daily_breakdown.map((d, i) => (
+                                <View key={i} style={styles.ghRow}>
+                                    <Text style={styles.ghRowTitle}>{new Date(d.day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</Text>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={styles.ghRowTitle}>{d.generations} gens</Text>
+                                        <Text style={styles.ghRowMeta}>{d.input_tokens.toLocaleString()} in / {d.output_tokens.toLocaleString()} out</Text>
+                                    </View>
+                                </View>
+                            ))}
+                        </>
+                    )}
+                </View>
+            )}
 
             {statsLoading ? (
                 <View style={styles.center}><ActivityIndicator color={GH_COLORS.accent} /></View>
@@ -649,7 +812,7 @@ export default function AdminDashboard() {
 
     const selectedVersions = selectedKey ? (groupedPrompts[selectedKey] || []) : [];
 
-    if (!isAdmin) {
+    if (!isAdmin && !__DEV__) {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#161B22' }}>
                 <Text style={{ color: '#ff4444', fontSize: 18, fontWeight: '700' }}>Access Denied</Text>
