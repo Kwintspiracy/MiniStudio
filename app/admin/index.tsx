@@ -171,6 +171,20 @@ export default function AdminDashboard() {
         );
     };
 
+    const calcModelCost = (entry: PromptHistoryEntry): string => {
+        if (entry.model_used === 'poyo') {
+            return `$${POYO_COST_PER_GENERATION.toFixed(2)}`;
+        }
+        const pricing = MODEL_PRICING[entry.model_used];
+        if (!pricing || entry.input_tokens == null) return '—';
+        const inputCost = (entry.input_tokens / 1_000_000) * pricing.inputPer1M;
+        const outputCost = entry.output_tokens != null
+            ? (entry.output_tokens / 1_000_000) * pricing.outputPer1M
+            : 0;
+        const total = inputCost + outputCost;
+        return total < 0.001 ? '<$0.001' : `$${total.toFixed(4)}`;
+    };
+
     const handleFallbackToggle = async () => {
         const newValue = providerConfig?.fallback_enabled === 'true' ? 'false' : 'true';
         setProviderUpdating(true);
@@ -678,6 +692,9 @@ export default function AdminDashboard() {
                                                     {entry.input_tokens != null && (
                                                         <Text style={styles.ghRowMeta}>{entry.input_tokens.toLocaleString()} in{entry.output_tokens != null ? ` / ${entry.output_tokens.toLocaleString()} out` : ''}</Text>
                                                     )}
+                                                    <Text style={[styles.ghRowMeta, { color: '#e3b341', fontWeight: '600' }]}>
+                                                        {calcModelCost(entry)}
+                                                    </Text>
                                                     <Text style={[styles.ghRowMeta, { color: GH_COLORS.accent }]}>{isExpanded ? '▲' : '▼'}</Text>
                                                 </View>
                                             </View>
@@ -1227,6 +1244,13 @@ const GH_COLORS = {
     itemActive: '#1F6FEB',
     card: '#0D1117',
 };
+
+// API cost per 1M tokens — source: Google AI pricing page
+// Input: $0.25/1M (text/image), Output: $60.00/1M (image output)
+const MODEL_PRICING: Record<string, { inputPer1M: number; outputPer1M: number }> = {
+    'gemini-3.1-flash-image-preview': { inputPer1M: 0.25, outputPer1M: 60.00 },
+};
+const POYO_COST_PER_GENERATION = 0.05; // $0.05 flat per PoYo generation
 
 const styles = StyleSheet.create({
     outerContainer: { flex: 1, backgroundColor: GH_COLORS.canvas },
