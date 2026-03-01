@@ -171,18 +171,31 @@ export default function AdminDashboard() {
         );
     };
 
-    const calcModelCost = (entry: PromptHistoryEntry): string => {
+    const calcCostDetails = (entry: PromptHistoryEntry): {
+        total: string;
+        lines: Array<{ label: string; value: string }>;
+    } => {
         if (entry.model_used === 'poyo') {
-            return `$${POYO_COST_PER_GENERATION.toFixed(2)}`;
+            return {
+                total: `$${POYO_COST_PER_GENERATION.toFixed(2)}`,
+                lines: [{ label: 'Flat rate / generation', value: `$${POYO_COST_PER_GENERATION.toFixed(2)}` }],
+            };
         }
         const pricing = MODEL_PRICING[entry.model_used];
-        if (!pricing || entry.input_tokens == null) return '—';
+        if (!pricing || entry.input_tokens == null) return { total: '—', lines: [] };
         const inputCost = (entry.input_tokens / 1_000_000) * pricing.inputPer1M;
         const outputCost = entry.output_tokens != null
             ? (entry.output_tokens / 1_000_000) * pricing.outputPer1M
             : 0;
         const total = inputCost + outputCost;
-        return total < 0.001 ? '<$0.001' : `$${total.toFixed(4)}`;
+        const fmt = (n: number) => n < 0.00005 ? '<$0.0001' : `$${n.toFixed(4)}`;
+        const lines: Array<{ label: string; value: string }> = [
+            { label: `Input: ${entry.input_tokens.toLocaleString()} tok × $${pricing.inputPer1M}/1M`, value: fmt(inputCost) },
+        ];
+        if (entry.output_tokens != null) {
+            lines.push({ label: `Output: ${entry.output_tokens.toLocaleString()} tok × $${pricing.outputPer1M}/1M`, value: fmt(outputCost) });
+        }
+        return { total: total < 0.00005 ? '<$0.0001' : `$${total.toFixed(4)}`, lines };
     };
 
     const handleFallbackToggle = async () => {
@@ -494,8 +507,8 @@ export default function AdminDashboard() {
                 </View>
 
                 {/* Primary Provider Toggle */}
-                <View style={[styles.ghRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
-                    <Text style={styles.ghRowMeta}>PRIMARY PROVIDER</Text>
+                <View style={[styles.ghRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 10, paddingVertical: 16 }]}>
+                    <Text style={[styles.ghRowMeta, { fontWeight: '600', letterSpacing: 0.5 }]}>PRIMARY PROVIDER</Text>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                         <TouchableOpacity
                             style={[
@@ -526,8 +539,8 @@ export default function AdminDashboard() {
                     </View>
                 </View>
 
-                {/* Fallback Enabled Toggle */}
-                <View style={[styles.ghRow, { justifyContent: 'space-between' }]}>
+                {/* Fallback Enabled Toggle — last row, no bottom border */}
+                <View style={[styles.ghRow, { justifyContent: 'space-between', borderBottomWidth: 0 }]}>
                     <View>
                         <Text style={styles.ghRowTitle}>Fallback Enabled</Text>
                         <Text style={styles.ghRowMeta}>Fall back to secondary provider on failure</Text>
@@ -558,23 +571,23 @@ export default function AdminDashboard() {
                     </View>
 
                     {/* Summary stats */}
-                    <View style={{ flexDirection: 'row', gap: 12, marginBottom: 8 }}>
-                        <View style={[styles.statsCard, { flex: 1 }]}>
+                    <View style={{ flexDirection: 'row', gap: 12, padding: 16, borderBottomWidth: 1, borderBottomColor: GH_COLORS.border }}>
+                        <View style={[styles.statsCard, { flex: 1, margin: 0 }]}>
                             <Text style={styles.statsLabel}>Total Input</Text>
                             <Text style={styles.statsValue}>{(tokenUsage.total_input_tokens / 1000).toFixed(1)}K</Text>
                         </View>
-                        <View style={[styles.statsCard, { flex: 1 }]}>
+                        <View style={[styles.statsCard, { flex: 1, margin: 0 }]}>
                             <Text style={styles.statsLabel}>Total Output</Text>
                             <Text style={styles.statsValue}>{(tokenUsage.total_output_tokens / 1000).toFixed(1)}K</Text>
                         </View>
-                        <View style={[styles.statsCard, { flex: 1 }]}>
+                        <View style={[styles.statsCard, { flex: 1, margin: 0 }]}>
                             <Text style={styles.statsLabel}>Avg Input/Gen</Text>
                             <Text style={styles.statsValue}>{tokenUsage.avg_input_tokens.toLocaleString()}</Text>
                         </View>
                     </View>
 
                     {/* Today */}
-                    <View style={styles.ghRow}>
+                    <View style={[styles.ghRow, tokenUsage.daily_breakdown.length === 0 && { borderBottomWidth: 0 }]}>
                         <Text style={styles.ghRowTitle}>Today</Text>
                         <Text style={styles.ghRowMeta}>
                             {tokenUsage.today_input_tokens.toLocaleString()} in / {tokenUsage.today_output_tokens.toLocaleString()} out
@@ -584,11 +597,11 @@ export default function AdminDashboard() {
                     {/* Daily breakdown */}
                     {tokenUsage.daily_breakdown.length > 0 && (
                         <>
-                            <View style={[styles.ghCardHeader, { marginTop: 8 }]}>
-                                <Text style={[styles.ghRowMeta, { fontWeight: '600' }]}>LAST 7 DAYS</Text>
+                            <View style={styles.ghCardHeader}>
+                                <Text style={[styles.ghRowMeta, { fontWeight: '600', letterSpacing: 0.5 }]}>LAST 7 DAYS</Text>
                             </View>
                             {tokenUsage.daily_breakdown.map((d, i) => (
-                                <View key={i} style={styles.ghRow}>
+                                <View key={i} style={[styles.ghRow, i === tokenUsage.daily_breakdown.length - 1 && { borderBottomWidth: 0 }]}>
                                     <Text style={styles.ghRowTitle}>{new Date(d.day).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</Text>
                                     <View style={{ alignItems: 'flex-end' }}>
                                         <Text style={styles.ghRowTitle}>{d.generations} gens</Text>
@@ -626,7 +639,7 @@ export default function AdminDashboard() {
                         <View style={[styles.ghCard, { flex: 1, marginRight: 16 }]}>
                             <View style={styles.ghCardHeader}><Text style={styles.ghCardTitle}>Top Styles</Text></View>
                             {topStyles.map((s: StyleStats, i: number) => (
-                                <View key={i} style={styles.ghRow}>
+                                <View key={i} style={[styles.ghRow, i === topStyles.length - 1 && { borderBottomWidth: 0 }]}>
                                     <Text style={styles.ghRowTitle}>{s.style_name}</Text>
                                     <Text style={styles.ghRowMeta}>{s.usage_count} generations</Text>
                                 </View>
@@ -637,7 +650,7 @@ export default function AdminDashboard() {
                         <View style={[styles.ghCard, { flex: 1 }]}>
                             <View style={styles.ghCardHeader}><Text style={styles.ghCardTitle}>Top Tools</Text></View>
                             {topTools.map((t: ToolStats, i: number) => (
-                                <View key={i} style={styles.ghRow}>
+                                <View key={i} style={[styles.ghRow, i === topTools.length - 1 && { borderBottomWidth: 0 }]}>
                                     <Text style={styles.ghRowTitle}>{t.tool_name}</Text>
                                     <Text style={styles.ghRowMeta}>{t.usage_count} uses</Text>
                                 </View>
@@ -649,7 +662,7 @@ export default function AdminDashboard() {
                     <View style={[styles.ghCard, { marginTop: 24 }]}>
                         <View style={styles.ghCardHeader}><Text style={styles.ghCardTitle}>Recent Users</Text></View>
                         {usersList.map((u: UserStats, i: number) => (
-                            <View key={i} style={styles.ghRow}>
+                            <View key={i} style={[styles.ghRow, i === usersList.length - 1 && { borderBottomWidth: 0 }]}>
                                 <View style={{ flex: 1 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                         <Text style={styles.ghRowTitle}>{u.email || u.id.substring(0, 8)}</Text>
@@ -674,39 +687,63 @@ export default function AdminDashboard() {
                             </View>
                             {promptHistory.map((entry: PromptHistoryEntry, i: number) => {
                                 const isExpanded = expandedPromptId === entry.id;
+                                const isLast = i === promptHistory.length - 1;
                                 const providerLabel = entry.model_used === 'poyo' ? 'PoYo' : 'Gemini';
                                 const providerColor = entry.model_used === 'poyo' ? '#6e40c9' : '#1a7f37';
+                                const cost = calcCostDetails(entry);
                                 return (
                                     <TouchableOpacity key={entry.id} onPress={() => setExpandedPromptId(isExpanded ? null : entry.id)}>
-                                        <View style={[styles.ghRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 4 }]}>
-                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                                        <View style={[styles.phRow, isLast && { borderBottomWidth: 0 }]}>
+                                            {/* Header line: badge + timestamp | tokens + cost + toggle */}
+                                            <View style={styles.phRowHeader}>
                                                 <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                                                     <View style={[styles.ghPublicBadge, { backgroundColor: providerColor, borderColor: providerColor }]}>
-                                                        <Text style={styles.ghPublicBadgeText}>{providerLabel}</Text>
+                                                        <Text style={[styles.ghPublicBadgeText, { color: '#fff' }]}>{providerLabel}</Text>
                                                     </View>
                                                     <Text style={styles.ghRowMeta}>
                                                         {new Date(entry.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                                     </Text>
                                                 </View>
-                                                <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                                                <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
                                                     {entry.input_tokens != null && (
-                                                        <Text style={styles.ghRowMeta}>{entry.input_tokens.toLocaleString()} in{entry.output_tokens != null ? ` / ${entry.output_tokens.toLocaleString()} out` : ''}</Text>
+                                                        <Text style={styles.ghRowMeta}>
+                                                            {entry.input_tokens.toLocaleString()} in{entry.output_tokens != null ? ` / ${entry.output_tokens.toLocaleString()} out` : ''}
+                                                        </Text>
                                                     )}
-                                                    <Text style={[styles.ghRowMeta, { color: '#e3b341', fontWeight: '600' }]}>
-                                                        {calcModelCost(entry)}
-                                                    </Text>
-                                                    <Text style={[styles.ghRowMeta, { color: GH_COLORS.accent }]}>{isExpanded ? '▲' : '▼'}</Text>
+                                                    <Text style={styles.phCost}>{cost.total}</Text>
+                                                    <Text style={[styles.ghRowMeta, { color: GH_COLORS.accent, fontSize: 10 }]}>{isExpanded ? '▲' : '▼'}</Text>
                                                 </View>
                                             </View>
+
+                                            {/* Prompt preview */}
                                             {entry.prompt_preview ? (
-                                                <Text style={[styles.ghRowMeta, { fontFamily: 'monospace', fontSize: 11, lineHeight: 16 }]} numberOfLines={isExpanded ? undefined : 2}>
+                                                <Text style={styles.phPrompt} numberOfLines={isExpanded ? undefined : 2}>
                                                     {isExpanded ? entry.prompt_preview : entry.prompt_preview.substring(0, 120) + (entry.prompt_preview.length > 120 ? '…' : '')}
                                                 </Text>
                                             ) : (
                                                 <Text style={[styles.ghRowMeta, { fontStyle: 'italic' }]}>No prompt recorded</Text>
                                             )}
+
+                                            {/* Expanded: cost breakdown + prompt length note */}
+                                            {isExpanded && cost.lines.length > 0 && (
+                                                <View style={styles.phCostBox}>
+                                                    <Text style={styles.phCostLabel}>COST BREAKDOWN</Text>
+                                                    {cost.lines.map((line, li) => (
+                                                        <View key={li} style={styles.phCostRow}>
+                                                            <Text style={styles.phCostLineLabel}>{line.label}</Text>
+                                                            <Text style={styles.phCostLineValue}>{line.value}</Text>
+                                                        </View>
+                                                    ))}
+                                                    {cost.lines.length > 1 && (
+                                                        <View style={[styles.phCostRow, { borderTopWidth: 1, borderTopColor: GH_COLORS.border, marginTop: 4, paddingTop: 4 }]}>
+                                                            <Text style={[styles.phCostLineLabel, { fontWeight: '600', color: GH_COLORS.textPrimary }]}>Total</Text>
+                                                            <Text style={[styles.phCostLineValue, { color: '#e3b341', fontWeight: '700' }]}>{cost.total}</Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+                                            )}
                                             {isExpanded && entry.prompt_length != null && entry.prompt_length > 500 && (
-                                                <Text style={[styles.ghRowMeta, { fontSize: 10 }]}>
+                                                <Text style={[styles.ghRowMeta, { fontSize: 10, marginTop: 4 }]}>
                                                     Showing first 500 of {entry.prompt_length} chars
                                                 </Text>
                                             )}
@@ -1014,9 +1051,9 @@ export default function AdminDashboard() {
                 {/* Main Content Area */}
                 <View style={styles.main}>
                     {currentView === 'Dashboard' ? (
-                        <AdminDashboardView />
+                        AdminDashboardView()
                     ) : currentView === 'Modals' ? (
-                        <ModalRegistryView />
+                        ModalRegistryView()
                     ) : currentView === 'Tools' ? (
                         <View style={{ flex: 1, padding: 32 }}>
                              <PromptTester 
@@ -1390,5 +1427,16 @@ const styles = StyleSheet.create({
     ghRow: { padding: 16, borderBottomWidth: 1, borderBottomColor: GH_COLORS.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     ghRowTitle: { fontSize: 14, fontWeight: '600', color: GH_COLORS.textPrimary },
     ghRowMeta: { fontSize: 12, color: GH_COLORS.textSecondary, marginTop: 2 },
+
+    // Prompt History
+    phRow: { padding: 16, borderBottomWidth: 1, borderBottomColor: GH_COLORS.border },
+    phRowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    phCost: { fontSize: 12, color: '#e3b341', fontWeight: '600' },
+    phPrompt: { fontSize: 12, color: GH_COLORS.textPrimary, lineHeight: 18, fontFamily: 'monospace' },
+    phCostBox: { marginTop: 10, backgroundColor: '#0d1117', borderRadius: 6, borderWidth: 1, borderColor: GH_COLORS.border, padding: 12 },
+    phCostLabel: { fontSize: 10, fontWeight: '700', color: GH_COLORS.textSecondary, letterSpacing: 0.5, marginBottom: 8 },
+    phCostRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 3 },
+    phCostLineLabel: { fontSize: 12, color: GH_COLORS.textSecondary, flex: 1, fontFamily: 'monospace' },
+    phCostLineValue: { fontSize: 12, color: GH_COLORS.textPrimary, fontWeight: '600', fontFamily: 'monospace' },
 });
 

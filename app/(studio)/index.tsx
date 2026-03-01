@@ -34,7 +34,7 @@ import { generatePaintPrompt } from '@/utils/promptGenerator';
 
 import { usePrompts } from '@/hooks/usePrompts';
 import { generatePaintedMiniature, generateImageFromImage, cancelGeneration } from '@/services/geminiService';
-import { PaletteColor } from '@/services/paintService';
+import { PaletteColor, fetchUserPaints } from '@/services/paintService';
 import { filterPaintsByDiversity, getNMMRecipes } from '@/utils/paintFilter';
 import { useImagePicker } from '@/hooks/useImagePicker';
 import { useMediaSave } from '@/hooks/useMediaSave';
@@ -44,6 +44,7 @@ import { useEntitlements } from '@/hooks/useEntitlements';
 import { useImageContext } from '@/context/ImageContext';
 import { PaintExplorerModal } from '@/components/PaintExplorerModal';
 import { AppModal } from '@/components/AppModal';
+import { MiniPainterDBModal } from '@/components/MiniPainterDBModal';
 import { PaywallDrawer } from '@/components/PaywallDrawer';
 import { supabase } from '@/services/supabase';
 import { ToggleButton } from '@/components/ToggleButton';
@@ -56,6 +57,7 @@ import { WelcomeOnboarding } from '@/components/WelcomeOnboarding';
 import { colors, spacing, borderRadius, fontFamily, textStyles } from '@/theme';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { shareAsync, isAvailableAsync } from 'expo-sharing';
 import { Toast } from '@/components/Toast';
 
@@ -150,12 +152,20 @@ const CreativitySlider = React.memo(({ initialValue, onValueChange }: { initialV
     runOnJS(onValueChange)(clampedVal);
   };
 
+  const triggerReleaseHaptic = () => {
+    setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 50);
+  };
+
   const gesture = Gesture.Pan()
     .onBegin((e) => {
       updateValue(e.x, widthSV.value);
+      runOnJS(triggerReleaseHaptic)();
     })
     .onUpdate((e) => {
       updateValue(e.x, widthSV.value);
+    })
+    .onEnd(() => {
+      runOnJS(triggerReleaseHaptic)();
     });
 
   return (
@@ -351,6 +361,12 @@ export default function StudioScreen() {
   const hideModal = useCallback(() => {
       setModalConfig(prev => ({ ...prev, visible: false }));
   }, []);
+
+  const toggleHaptic = () => setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 50);
+
+  const handlePhotoshootToggle = useCallback(() => { toggleHaptic(); setIsPhotoshootEnabled(prev => !prev); }, []);
+  const handleNMMToggle = useCallback(() => { toggleHaptic(); setIsNMMEnabled(prev => !prev); }, []);
+  const handleOSLToggle = useCallback(() => { toggleHaptic(); setIsOSLEnabled(prev => !prev); }, []);
 
   const [showMyPaintsAlert, setShowMyPaintsAlert] = useState(false);
 
@@ -636,7 +652,6 @@ export default function StudioScreen() {
     setIsLoading(true);
     // setError(null); // No longer needed
     // Unified 1-token cost for all generations as per user request.
-    const model = 'gemini-3.1-flash-image-preview';
     try {
       // Prepare source images: if they are file URIs, read as base64
       const preparedSources = await Promise.all(sourceImages.map(async img => {
@@ -681,7 +696,6 @@ export default function StudioScreen() {
           effects: [isNMMEnabled && 'NMM', isOSLEnabled && 'OSL', isPhotoshootEnabled && 'Photoshoot'].filter(Boolean),
           colors_count: selectedColors.length,
           is_pro: isPro,
-          model: model
         };
 
         // Generate single prompt with color filtering enabled for PoYo
@@ -689,7 +703,7 @@ export default function StudioScreen() {
 
         if (__DEV__) console.log(`\n--- GENERATION PROMPT ---\n${finalPrompt}\n----------------------------------\n`);
         
-        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, model, undefined, metadata);
+        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, undefined, metadata);
       } else if (activeMode === 'sketch' || activeMode === 'sculpt') {
         const characterDesc = sanitizePrompt(designerPrompt).trim() || 'character';
         
@@ -747,14 +761,13 @@ export default function StudioScreen() {
         const metadata = {
           mode: activeMode,
           is_pro: isPro,
-          model: model,
           sketch_style: sketchStyle,
           creativity_level: (creativityLevel * 100).toFixed(0) + '%',
           effects: [isPhotoshootEnabled && 'Photoshoot'].filter(Boolean)
         };
 
         if (__DEV__) console.log(`\n--- ${activeMode.toUpperCase()} PROMPT (Temp: ${creativityLevel}) ---\n${finalPrompt}\n----------------------------------\n`);
-        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, model, creativityLevel, metadata);
+        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, creativityLevel, metadata);
       }
       if (images && images.length > 0) {
         const resultUrl = images[0];
@@ -772,10 +785,13 @@ export default function StudioScreen() {
 
         if (__DEV__) console.log('[DEBUG] Setting preview and adding to history immediately...');
         setActivePreviewImage(persistentUrl);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setTimeout(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success), 80);
+        setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 100);
         
         // Add to history with immediate 10-image limit for anonymous users
         setGenerationHistory(prev => {
-          const newItem = { url: persistentUrl, isPro, isMaster: false, modelName: model, timestamp: Date.now() };
+          const newItem = { url: persistentUrl, isPro, isMaster: false, modelName: 'generated', timestamp: Date.now() };
           const allItems = [newItem, ...prev];
           
           // For anonymous users: keep only the 10 most recent items (including demos)
@@ -1033,6 +1049,19 @@ export default function StudioScreen() {
         return;
     }
 
+    if (brand === 'My Collection') {
+        try {
+            const userPaints = await fetchUserPaints();
+            if (userPaints.length === 0) {
+                setShowMyPaintsAlert(true);
+                return; // No collection — show info modal, don't toggle brand
+            }
+        } catch {
+            setShowMyPaintsAlert(true);
+            return; // Show modal as fallback on error
+        }
+    }
+
     setSelectedBrands(prev => {
       if (prev.includes('All Brands')) {
         // Was on All Brands, now selecting a specific brand
@@ -1168,9 +1197,9 @@ export default function StudioScreen() {
                       icon={<AiFillFireIcon size={14} color="#E06948" />}
                       title="ADD EFFECTS"
                     />
-                    <TouchableOpacity style={styles.optionItem} onPress={() => setIsPhotoshootEnabled(!isPhotoshootEnabled)} activeOpacity={0.7}>
+                    <TouchableOpacity style={styles.optionItem} onPress={handlePhotoshootToggle} activeOpacity={0.7}>
                       <Text style={[styles.optionLabel, isPhotoshootEnabled && styles.optionLabelActive]}>Photoshoot - Studio Lighting</Text>
-                      <ToggleButton value={isPhotoshootEnabled} onToggle={() => setIsPhotoshootEnabled(!isPhotoshootEnabled)} />
+                      <ToggleButton value={isPhotoshootEnabled} onToggle={handlePhotoshootToggle} />
                     </TouchableOpacity>
                     
                     {/* Photoshoot Tip Box */}
@@ -1229,13 +1258,13 @@ export default function StudioScreen() {
                       icon={<AiFillFireIcon size={16} color="#E06948" />}
                       title="ADD EFFECTS"
                     />
-                    <TouchableOpacity style={styles.optionItem} onPress={() => setIsNMMEnabled(!isNMMEnabled)} activeOpacity={0.7}>
+                    <TouchableOpacity style={styles.optionItem} onPress={handleNMMToggle} activeOpacity={0.7}>
                       <Text style={[styles.optionLabel, isNMMEnabled && styles.optionLabelActive]}>NNM - Non Metallic Metal</Text>
-                      <ToggleButton value={isNMMEnabled} onToggle={() => setIsNMMEnabled(!isNMMEnabled)} />
+                      <ToggleButton value={isNMMEnabled} onToggle={handleNMMToggle} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.optionItem} onPress={() => setIsOSLEnabled(!isOSLEnabled)} activeOpacity={0.7}>
+                    <TouchableOpacity style={styles.optionItem} onPress={handleOSLToggle} activeOpacity={0.7}>
                       <Text style={[styles.optionLabel, isOSLEnabled && styles.optionLabelActive]}>OSL - Object Source Lighting</Text>
-                      <ToggleButton value={isOSLEnabled} onToggle={() => setIsOSLEnabled(!isOSLEnabled)} />
+                      <ToggleButton value={isOSLEnabled} onToggle={handleOSLToggle} />
                     </TouchableOpacity>
 
                     <SectionHeader 
@@ -1346,7 +1375,7 @@ export default function StudioScreen() {
                   /* NO SOURCE SELECTED: Show large "Pick a Source" button */
                   <TouchableOpacity
                       style={styles.pickSourceButton}
-                      onPress={() => setIsResultsDrawerOpen(true)}
+                      onPress={() => { setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 70); setIsResultsDrawerOpen(true); }}
                       activeOpacity={0.8}
                   >
                       {/* @ts-ignore - Icon props handling */}
@@ -1359,7 +1388,7 @@ export default function StudioScreen() {
                       <View>
                           <TouchableOpacity
                           style={styles.galleryButton}
-                          onPress={() => setIsResultsDrawerOpen(true)}
+                          onPress={() => { setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 70); setIsResultsDrawerOpen(true); }}
                           activeOpacity={0.7}
                           accessibilityLabel="Change source"
                           accessibilityRole="button"
@@ -1556,19 +1585,13 @@ export default function StudioScreen() {
           selectedBrands={selectedBrands}
           selectedColors={selectedColors}
           onToggleColor={toggleColor}
-          triggerLoad={isPaletteEnabled}
+          triggerLoad={isPaletteEnabled || selectedBrands.length > 0}
           onPaintsLoaded={setLoadedPaints}
         />
         
-        <AppModal
+        <MiniPainterDBModal
           visible={showMyPaintsAlert}
           onClose={() => setShowMyPaintsAlert(false)}
-          title="MiniPainterDB"
-          message="This feature links to your personal paint collection in MiniPainterDB. The app will be available soon!"
-          primaryAction={{
-            label: "OK",
-            onPress: () => setShowMyPaintsAlert(false)
-          }}
         />
 
         {/* Global/Standard App Modal */}

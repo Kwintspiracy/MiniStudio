@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import type { ImageFile } from '../types';
 
 interface UseImagePickerResult {
@@ -15,6 +16,14 @@ interface UseImagePickerResult {
 export function useImagePicker(): UseImagePickerResult {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const resizeImage = useCallback(async (uri: string): Promise<string> => {
+    const image = await ImageManipulator.manipulate(uri)
+      .resize({ width: 1024 })
+      .renderAsync();
+    const result = await image.saveAsync({ compress: 0.7, format: SaveFormat.JPEG });
+    return result.uri;
+  }, []);
 
   const convertToImageFile = useCallback(async (uri: string): Promise<ImageFile> => {
     try {
@@ -76,19 +85,9 @@ export function useImagePicker(): UseImagePickerResult {
       }
 
       const asset = result.assets[0];
+      const resizedUri = await resizeImage(asset.uri);
 
-      // If base64 is already provided, use it directly
-      if (asset.base64) {
-        const mimeType = asset.mimeType || 'image/jpeg';
-        return {
-          base64: `data:${mimeType};base64,${asset.base64}`,
-          mimeType,
-          uri: asset.uri,
-        };
-      }
-
-      // Otherwise convert from URI
-      return await convertToImageFile(asset.uri);
+      return await convertToImageFile(resizedUri);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to pick image';
       setError(message);
@@ -124,17 +123,9 @@ export function useImagePicker(): UseImagePickerResult {
       const imageFiles: ImageFile[] = [];
 
       for (const asset of result.assets) {
-        if (asset.base64) {
-          const mimeType = asset.mimeType || 'image/jpeg';
-          imageFiles.push({
-            base64: `data:${mimeType};base64,${asset.base64}`,
-            mimeType,
-            uri: asset.uri,
-          });
-        } else {
-          const imageFile = await convertToImageFile(asset.uri);
-          imageFiles.push(imageFile);
-        }
+        const resizedUri = await resizeImage(asset.uri);
+        const imageFile = await convertToImageFile(resizedUri);
+        imageFiles.push(imageFile);
       }
 
       return imageFiles;
@@ -162,7 +153,8 @@ export function useImagePicker(): UseImagePickerResult {
       }
 
       const asset = result.assets[0];
-      return await convertToImageFile(asset.uri);
+      const resizedUri = await resizeImage(asset.uri);
+      return await convertToImageFile(resizedUri);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to pick document';
       setError(message);

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useMemo, ReactNode } from 'react';
 
 interface ImageContextType {
     selectedImage: string | null;
@@ -10,8 +10,10 @@ const ImageContext = createContext<ImageContextType | undefined>(undefined);
 export const ImageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
+    const value = useMemo(() => ({ selectedImage, setSelectedImage }), [selectedImage]);
+
     return (
-        <ImageContext.Provider value={{ selectedImage, setSelectedImage }}>
+        <ImageContext.Provider value={value}>
             {children}
         </ImageContext.Provider>
     );

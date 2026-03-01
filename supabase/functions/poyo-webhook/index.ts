@@ -34,18 +34,21 @@ Deno.serve(async (req) => {
 
     // SEC-001: Verify PoYo Webhook Authorization Header
     const authHeader = req.headers.get('Authorization');
-    if (POYO_WEBHOOK_SECRET) {
-        if (!authHeader || authHeader !== `Bearer ${POYO_WEBHOOK_SECRET}`) {
-            log.error('Unauthorized: Invalid or missing Authorization header');
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-                status: 401,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-        }
-        log.info('Authorization verified');
-    } else {
-        log.info('WARNING: POYO_WEBHOOK_SECRET not configured. Webhook is not secured!');
+    if (!POYO_WEBHOOK_SECRET) {
+        log.error('POYO_WEBHOOK_SECRET is not configured');
+        return new Response(JSON.stringify({ error: 'Webhook secret not configured' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
     }
+    if (!authHeader || authHeader !== `Bearer ${POYO_WEBHOOK_SECRET}`) {
+        log.error('Unauthorized: Invalid or missing Authorization header');
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+    }
+    log.info('Authorization verified');
 
     try {
         // Parse callback payload

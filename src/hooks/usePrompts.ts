@@ -41,6 +41,10 @@ export function usePrompts() {
             'effect.tmm': {
                 default: METALLIC_PAINT_INSTRUCTIONS,
                 pro: METALLIC_PAINT_INSTRUCTIONS
+            },
+            'effect.no-osl': {
+                default: '',
+                pro: ''
             }
         },
         rules: {
@@ -134,6 +138,17 @@ export function usePrompts() {
             } : {
                 default: METALLIC_PAINT_INSTRUCTIONS,
                 pro: METALLIC_PAINT_INSTRUCTIONS
+            };
+
+            if (__DEV__) console.log('[usePrompts] effect.no-osl from DB:', remotePrompts['effect.no-osl'] ? `"${remotePrompts['effect.no-osl'].default.substring(0, 60)}"` : 'NOT FOUND');
+            newEffects['effect.no-osl'] = remotePrompts['effect.no-osl'] ? {
+                default: remotePrompts['effect.no-osl'].default,
+                pro: remotePrompts['effect.no-osl'].pro,
+                negative_default: remotePrompts['effect.no-osl'].negative_default,
+                negative_pro: remotePrompts['effect.no-osl'].negative_pro
+            } : {
+                default: '',
+                pro: ''
             };
 
             // Update Rules

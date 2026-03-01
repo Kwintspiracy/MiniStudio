@@ -1,7 +1,7 @@
 Scenario ID,Mode,Style,NMM Effect,OSL Effect,Photoshoot Effect,Brand Selection,Custom Palette,Colors Section Content,Effects Section Content,Notes
 1,BASE,Any Style,OFF,OFF,OFF,All Brands,None,"Smart filtered from all brands (categories: Flesh Tones, Neutrals, Colors, Metallics)",TMM default instructions,Default scenario with all brands available
 2,BASE,Any Style,OFF,OFF,OFF,Specific Brand(s),None,"Brand paints - smart filtered if >50, direct list if ≤50",TMM default instructions,Single or multiple brand selection
-3,BASE,Any Style,OFF,OFF,OFF,My Collection,None,User's saved paints only,TMM default instructions,Requires MiniPainterDB integration
+3,BASE,Any Style,OFF,OFF,OFF,My Collection,None,User's saved paints only,TMM default instructions,User's personal paint collection
 4,BASE,Any Style,OFF,OFF,OFF,Any,User Selected Colors,"STRICT COLOR PALETTE: exact user-selected colors (Standard + Metallic separated)",TMM default instructions,Custom palette overrides brand selection
 5,BASE,Any Style,ON,OFF,OFF,All Brands,None,"Smart filtered with NMM recipes for metallics",NMM instructions,Non-metallic metal rendering
 6,BASE,Any Style,ON,OFF,OFF,Specific Brand(s),None,"Brand paints with NMM metallic recipes",NMM instructions,NMM with brand constraint

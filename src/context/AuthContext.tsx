@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
@@ -136,14 +136,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setSession(currentSession);
                 setUser(currentSession?.user ?? null);
                 
-                // Link RevenueCat if user exists
+                // Link RevenueCat if user exists (fire-and-forget to not block auth startup)
                 if (currentSession?.user?.id && Platform.OS !== 'web') {
-                    try {
-                        await Purchases.logIn(currentSession.user.id);
-                    } catch (e) {
-                         // Ignore RC errors in dev/expo-go
-                         if (__DEV__) console.log("RC LogIn skipped (likely Expo Go)");
-                    }
+                    Purchases.logIn(currentSession.user.id).catch((e) => {
+                        // Ignore RC errors in dev/expo-go
+                        if (__DEV__) console.log("RC LogIn skipped (likely Expo Go)");
+                    });
                 }
             } catch (error: any) {
                 if (__DEV__) console.warn("Auth check failed:", error);
@@ -155,9 +153,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     // Use { scope: 'local' } to only clear local storage, not hit the server.
                     // This prevents "Auth session missing!" errors during subsequent signOut calls.
                     await supabase.auth.signOut({ scope: 'local' });
-                    setSession(null);
-                    setUser(null);
                     if (Platform.OS !== 'web') await deleteRecoveryToken();
+
+                    // Fall back to anonymous sign-in so the user isn't stuck without a session
+                    const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
+                    if (!anonError && anonData.session) {
+                        setSession(anonData.session);
+                        setUser(anonData.user);
+                        if (anonData.session.refresh_token && Platform.OS !== 'web') {
+                            await setRecoveryToken(anonData.session.refresh_token);
+                        }
+                    } else {
+                        setSession(null);
+                        setUser(null);
+                    }
                 }
             } finally {
                 setLoading(false);
@@ -322,7 +331,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => sub.remove();
     }, []);
 
-    const signInWithGoogle = async () => {
+    const signInWithGoogle = useCallback(async () => {
         try {
             if (Platform.OS === 'web') {
                 // Web Flow: Let Supabase handle the redirect
@@ -375,9 +384,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (error: any) {
             showModal("Sign In Error", error.message, 'error');
         }
-    };
+    }, []);
 
-    const signInWithApple = async () => {
+    const signInWithApple = useCallback(async () => {
         try {
             if (Platform.OS === 'ios') {
                 const credential = await AppleAuthentication.signInAsync({
@@ -427,9 +436,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 showModal("Apple Sign In Error", error.message, 'error');
             }
         }
-    };
+    }, []);
 
-    const signInWithEmail = async (email: string, password: string) => {
+    const signInWithEmail = useCallback(async (email: string, password: string) => {
         setLoading(true);
         try {
             const { data, error } = await supabase.auth.signInWithPassword({
@@ -445,13 +454,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
         } catch (error: any) {
             // Let the caller handle the UI alert so we can position it better or style it
-            throw error; 
+            throw error;
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const signUpWithEmail = async (email: string, password: string) => {
+    const signUpWithEmail = useCallback(async (email: string, password: string) => {
         setLoading(true);
         try {
             const { data, error } = await supabase.auth.signUp({
@@ -483,9 +492,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const resendConfirmationEmail = async (email: string) => {
+    const resendConfirmationEmail = useCallback(async (email: string) => {
         setLoading(true);
         try {
             const { error } = await supabase.auth.resend({
@@ -505,9 +514,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const resetPasswordForEmail = async (email: string) => {
+    const resetPasswordForEmail = useCallback(async (email: string) => {
         setLoading(true);
         try {
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -519,7 +528,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (error) throw error;
             
             showModal(
-                "Check your email", 
+                "Check your email",
                 "We've sent a password reset link to " + email,
                 'default'
             );
@@ -529,9 +538,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const signOut = async () => {
+    const signOut = useCallback(async () => {
         setLoading(true); // Start loading to prevent race conditions in UI checks
         try {
             // Check if we even have a session to sign out from
@@ -585,9 +594,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }
             }
         }
-    };
+    }, []);
 
-    const signInAnonymously = async () => {
+    const signInAnonymously = useCallback(async () => {
         setLoading(true);
         try {
             const { data, error } = await supabase.auth.signInAnonymously();
@@ -602,9 +611,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const resetGuestSession = async () => {
+    const resetGuestSession = useCallback(async () => {
         setLoading(true);
         try {
             if (__DEV__) console.log("[AUTH] Resetting guest session...");
@@ -643,11 +652,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     const isAnonymous = !!(user?.is_anonymous || user?.app_metadata?.provider === 'anonymous' || (user && !user.email));
 
-    const value = {
+    const value = useMemo(() => ({
         session,
         user,
         loading,
@@ -661,7 +670,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInAnonymously,
         resetGuestSession,
         isAnonymous,
-    };
+    }), [session, user, loading, isAnonymous, signInWithGoogle, signInWithApple, signInWithEmail, signUpWithEmail, resendConfirmationEmail, resetPasswordForEmail, signOut, signInAnonymously, resetGuestSession]);
 
     return (
         <AuthContext.Provider value={value}>

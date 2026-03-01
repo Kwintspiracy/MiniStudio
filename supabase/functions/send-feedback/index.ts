@@ -1,10 +1,23 @@
 import { serve } from "std/http/server.ts"
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
+const FEEDBACK_RECIPIENT_EMAIL = Deno.env.get('FEEDBACK_RECIPIENT_EMAIL') || 'quentinbeau@gmail.com'
 
+// SEC-6 + CORS: Restrict CORS to allowed origins
+const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filter(Boolean);
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS[0] : '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+// SEC-7: HTML escape helper to prevent XSS in email body
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 serve(async (req: Request): Promise<Response> => {
@@ -30,6 +43,9 @@ serve(async (req: Request): Promise<Response> => {
       )
     }
 
+    const safeFeedback = escapeHtml(String(feedback))
+    const safeUserEmail = userEmail ? escapeHtml(String(userEmail)) : 'Anonymous'
+
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -38,13 +54,13 @@ serve(async (req: Request): Promise<Response> => {
       },
       body: JSON.stringify({
         from: 'MiniStudio <onboarding@resend.dev>',
-        to: 'quentinbeau@gmail.com',
+        to: FEEDBACK_RECIPIENT_EMAIL,
         subject: 'New Feedback from MiniStudio',
         html: `
           <h3>New Feedback Received</h3>
-          <p><strong>User Email:</strong> ${userEmail || 'Anonymous'}</p>
+          <p><strong>User Email:</strong> ${safeUserEmail}</p>
           <p><strong>Message:</strong></p>
-          <p style="white-space: pre-wrap;">${feedback}</p>
+          <p style="white-space: pre-wrap;">${safeFeedback}</p>
         `,
       }),
     })

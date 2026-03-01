@@ -11,8 +11,10 @@ import { useEntitlements } from '../src/hooks/useEntitlements';
 import { PaywallDrawer } from '../src/components/PaywallDrawer';
 import { FeedbackDrawer } from '../src/components/FeedbackDrawer';
 
-// Import treasure image
+// Import images
 const treasureImage = require('../assets/treasure.png');
+const studioIcon = require('../assets/icons/studio.png');
+const dbIcon = require('../assets/icons/db.png');
 
 export default function SettingsScreen() {
     const { user, signOut, isAnonymous, resetGuestSession } = useAuth();
@@ -90,88 +92,106 @@ export default function SettingsScreen() {
                 }}
             />
 
-            <ScrollView 
+            <ScrollView
                 style={styles.content}
                 contentContainerStyle={styles.contentContainer}
                 refreshControl={
-                    <RefreshControl 
-                        refreshing={refreshing} 
+                    <RefreshControl
+                        refreshing={refreshing}
                         onRefresh={onRefresh}
                         tintColor={colors.accent.blue}
                         colors={[colors.accent.blue]}
                     />
                 }
             >
-                {/* Profile Section - Centered */}
-                <View style={styles.profileSection}>
-                    <View style={styles.avatarContainer}>
-                        {!isAnonymous && user?.user_metadata?.avatar_url ? (
-                            <Image
-                                source={{ uri: user.user_metadata.avatar_url }}
-                                style={styles.avatar}
-                            />
-                        ) : !isAnonymous && user?.email ? (
-                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                                <Text style={styles.avatarText}>
-                                    {user.email.charAt(0).toUpperCase()}
+                {/* ── Top section ── */}
+                <View style={styles.topSection}>
+                    {isAnonymous ? (
+                        /* Anonymous: Shared Account */
+                        <>
+                            <View style={styles.appIconsRow}>
+                                <Image source={studioIcon} style={styles.appIcon} resizeMode="cover" />
+                                <Image source={dbIcon} style={styles.appIcon} resizeMode="cover" />
+                            </View>
+                            <View style={styles.sharedAccountTextBlock}>
+                                <Text style={styles.sharedAccountTitle}>Shared Account</Text>
+                                <Text style={styles.sharedAccountSubtitle}>
+                                    Sign up once and use the same account across our Apps, MiniPainterStudio and MiniPainterDB
                                 </Text>
                             </View>
-                        ) : (
-                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                                <Ionicons name="person" size={48} color={colors.text.secondary} />
+                            <View style={styles.signInButtonRow}>
+                                <TouchableOpacity
+                                    style={styles.signInPillButton}
+                                    onPress={() => router.push('/signin')}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={styles.signInPillText}>Sign In</Text>
+                                </TouchableOpacity>
                             </View>
-                        )}
-                    </View>
-                    {!isAnonymous && user?.email && (
-                        <Text style={styles.userEmail}>{user.email}</Text>
+                        </>
+                    ) : (
+                        /* Signed in: avatar + email */
+                        <View style={styles.profileSection}>
+                            <View style={styles.avatarContainer}>
+                                {user?.user_metadata?.avatar_url ? (
+                                    <Image
+                                        source={{ uri: user.user_metadata.avatar_url }}
+                                        style={styles.avatar}
+                                    />
+                                ) : user?.email ? (
+                                    <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                        <Text style={styles.avatarText}>
+                                            {user.email.charAt(0).toUpperCase()}
+                                        </Text>
+                                    </View>
+                                ) : (
+                                    <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                        <Ionicons name="person" size={48} color={colors.text.secondary} />
+                                    </View>
+                                )}
+                            </View>
+                            {user?.email && (
+                                <Text style={styles.userEmail}>{user.email}</Text>
+                            )}
+                        </View>
                     )}
-
-                    {isAnonymous && (
-                        <TouchableOpacity
-                            style={styles.inlineSignInButton}
-                            onPress={() => router.push('/signin')}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.inlineSignInText}>Sign In</Text>
-                        </TouchableOpacity>
-                    )}
+                    {/* Divider — inside top section */}
+                    <View style={styles.divider} />
                 </View>
 
-                {/* Divider */}
-                <View style={styles.divider} />
-
-                {/* Token Display Section */}
+                {/* ── Middle section: treasure + tokens ── */}
                 <View style={styles.tokenSection}>
-                    <Image 
-                        source={treasureImage} 
+                    <Image
+                        source={treasureImage}
                         style={styles.treasureImage}
                         resizeMode="contain"
                     />
-                    <Text style={styles.tokenCount}>
-                        {entitlements.remaining_total ?? entitlements.purchased_balance ?? 0}
-                    </Text>
-                    <Text style={styles.tokenLabel}>CREATIVE TOKENS</Text>
+                    <View style={styles.tokenTextBlock}>
+                        <Text style={styles.tokenCount}>
+                            {entitlements.remaining_total ?? entitlements.purchased_balance ?? 0}
+                        </Text>
+                        <Text style={styles.tokenLabel}>CREATIVE TOKENS</Text>
+                    </View>
+                </View>
+
+                {/* ── Footer buttons ── */}
+                <View style={[styles.footerContainer, { paddingBottom: Math.max(insets.bottom + 16, 24) }]}>
+                    <TouchableOpacity
+                        style={styles.getTokensButton}
+                        onPress={() => setIsPaywallVisible(true)}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={styles.getTokensText}>Get more Tokens</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.feedbackButton}
+                        onPress={() => setIsFeedbackDrawerOpen(true)}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={styles.feedbackButtonText}>Send Feedback</Text>
+                    </TouchableOpacity>
                 </View>
             </ScrollView>
-
-            {/* Footer with Get more Tokens button */}
-            <View style={[styles.footerContainer, { paddingBottom: Math.max(insets.bottom + 16, 24) }]}>
-                <TouchableOpacity
-                    style={styles.getTokensButton}
-                    onPress={() => setIsPaywallVisible(true)}
-                    activeOpacity={0.8}
-                >
-                    <Text style={styles.getTokensText}>Get more Tokens</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                    style={[styles.getTokensButton, { marginTop: 12, backgroundColor: colors.button.secondary, borderWidth: 1, borderColor: colors.border.subtle }]}
-                    onPress={() => setIsFeedbackDrawerOpen(true)}
-                    activeOpacity={0.8}
-                >
-                    <Text style={[styles.getTokensText, { color: colors.text.primary }]}>Send Feedback</Text>
-                </TouchableOpacity>
-            </View>
 
             {/* Menu Dropdown */}
             <Modal
@@ -255,13 +275,71 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     contentContainer: {
-        paddingTop: 40,
+        flexGrow: 1,
+        justifyContent: 'space-between',
         alignItems: 'center',
+        paddingTop: 40,
+        paddingBottom: 50,
     },
-    // Profile Section
+    // ── Top section (full-width, items centered, gap 16) ──
+    topSection: {
+        width: '100%',
+        alignItems: 'center',
+        gap: 16,
+    },
+    appIconsRow: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    appIcon: {
+        width: 60,
+        height: 60,
+        borderRadius: 12,
+    },
+    sharedAccountTextBlock: {
+        width: '100%',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 32,
+    },
+    sharedAccountTitle: {
+        color: '#f4f4f4',
+        fontFamily: fontFamily.primary,
+        fontWeight: '700',
+        fontSize: 24,
+        textAlign: 'center',
+        width: 302,
+    },
+    sharedAccountSubtitle: {
+        color: '#878892',
+        fontFamily: fontFamily.primary,
+        fontWeight: '400',
+        fontSize: 16,
+        textAlign: 'center',
+        width: '100%',
+    },
+    signInButtonRow: {
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 16,
+    },
+    signInPillButton: {
+        backgroundColor: colors.button.primary,
+        borderRadius: 24,
+        paddingHorizontal: 24,
+        paddingVertical: 8,
+    },
+    signInPillText: {
+        color: colors.text.primary,
+        fontFamily: fontFamily.primary,
+        fontWeight: '500',
+        fontSize: 15,
+        letterSpacing: -0.408,
+    },
+    // Profile Section (signed in)
     profileSection: {
         alignItems: 'center',
-        marginBottom: 16,
     },
     avatarContainer: {
         width: 100,
@@ -292,67 +370,49 @@ const styles = StyleSheet.create({
         fontWeight: '400',
         fontSize: 15,
     },
-    inlineSignInButton: {
-        marginTop: 16,
-        paddingHorizontal: 24,
-        paddingVertical: 10,
-        backgroundColor: colors.button.primary,
-        borderRadius: 20,
-    },
-    inlineSignInText: {
-        color: colors.text.primary,
-        fontFamily: fontFamily.primary,
-        fontWeight: '600',
-        fontSize: 14,
-    },
-    // Divider
+    // Divider — inside top section
     divider: {
         width: 313,
         height: 1,
-        backgroundColor: colors.overlay.soft,
-        marginVertical: 20,
+        backgroundColor: colors.background.primary,
     },
-    // Token Section
+    // ── Middle: treasure + token text ──
     tokenSection: {
         alignItems: 'center',
-        paddingVertical: 20,
+        gap: 16,
     },
     treasureImage: {
-        width: 200,
-        height: 180,
-        marginBottom: 16,
+        width: 143,
+        height: 107,
+    },
+    tokenTextBlock: {
+        alignItems: 'center',
+        gap: 8,
     },
     tokenCount: {
-        fontSize: 72,
+        fontSize: 64,
         fontWeight: '700',
-        color: colors.text.primary,
+        color: '#f4f4f4',
         fontFamily: fontFamily.primary,
-        letterSpacing: -2,
+        lineHeight: undefined,
     },
     tokenLabel: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: colors.text.secondary,
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#7e808b',
         fontFamily: fontFamily.primary,
-        letterSpacing: 1,
-        marginTop: 4,
+        lineHeight: 14,
     },
-    // Footer - Standardized to match mainView
+    // ── Footer buttons (inside scroll, at bottom) ──
     footerContainer: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: 'transparent',
-        borderTopLeftRadius: 32,
-        borderTopRightRadius: 32,
-        paddingHorizontal: 24,
-        paddingTop: 12,
+        width: '100%',
+        gap: 8,
+        paddingHorizontal: 16,
     },
     getTokensButton: {
-        height: 52,
-        backgroundColor: colors.palette.white,
-        borderRadius: 26,
+        height: 48,
+        backgroundColor: colors.text.primary,
+        borderRadius: 24,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -361,6 +421,22 @@ const styles = StyleSheet.create({
         fontFamily: fontFamily.primary,
         fontWeight: '500',
         fontSize: 15,
+        letterSpacing: -0.408,
+    },
+    feedbackButton: {
+        height: 48,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    feedbackButtonText: {
+        color: colors.text.primary,
+        fontFamily: fontFamily.primary,
+        fontWeight: '500',
+        fontSize: 15,
+        letterSpacing: -0.408,
     },
     // Menu
     menuOverlay: {

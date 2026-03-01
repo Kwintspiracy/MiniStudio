@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "expo-web",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["D:/APPS/MiniStudio/node_modules/expo/bin/cli", "start", "--web"],
+      "port": 8081
+    },
+    {
+      "name": "expo-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["D:/APPS/MiniStudio/node_modules/expo/bin/cli", "start"],
+      "port": 8081
+    }
+  ]
+}

@@ -20,20 +20,21 @@ Deno.serve(async (req) => {
     // SEC-001: Verify RevenueCat Authorization Header
     const authHeader = req.headers.get("Authorization");
     
-    if (REVENUECAT_WEBHOOK_SECRET) {
-      // If a secret is configured, verify it matches
-      if (!authHeader || authHeader !== `Bearer ${REVENUECAT_WEBHOOK_SECRET}`) {
-        console.error("[Webhook] Unauthorized: Invalid or missing Authorization header");
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      console.log("[Webhook] Authorization verified");
-    } else {
-      // Warn if no secret is configured (should be set in production)
-      console.warn("[Webhook] WARNING: REVENUECAT_WEBHOOK_SECRET not configured. Webhook is not secured!");
+    if (!REVENUECAT_WEBHOOK_SECRET) {
+      console.error("[Webhook] REVENUECAT_WEBHOOK_SECRET is not configured");
+      return new Response(JSON.stringify({ error: "Webhook secret not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+    if (!authHeader || authHeader !== `Bearer ${REVENUECAT_WEBHOOK_SECRET}`) {
+      console.error("[Webhook] Unauthorized: Invalid or missing Authorization header");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    console.log("[Webhook] Authorization verified");
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -73,23 +74,20 @@ Deno.serve(async (req) => {
       if (error) throw error;
       console.log(`[Webhook] Updated user ${userId} to Pro (Active)`);
 
-      // CUMULATIVE TOKEN LOGIC: Add 100 tokens on Purchase/Renewal
-      // FIX: Only add tokens if the product is actually the Pro Monthly subscription
+      // Add 40 tokens on Purchase/Renewal for all subscription plans
       if (["INITIAL_PURCHASE", "RENEWAL"].includes(type)) {
-          // You should verify your actual RevenueCat product identifier for Pro Monthly
-          // Assuming 'pro_monthly' based on earlier context. 
-          if (productId.includes("pro_monthly")) { 
+          if (["pro_monthly", "pro_annual"].includes(productId)) {
               const { error: tokenError } = await supabaseClient.rpc('increment_token_balance', {
                 p_user_id: userId,
-                p_tokens: 100
+                p_tokens: 40
               });
               if (tokenError) {
                  console.error("[Webhook] Failed to add Pro tokens:", tokenError);
               } else {
-                 console.log(`[Webhook] Added 100 Pro tokens to user ${userId}`);
+                 console.log(`[Webhook] Added 40 Pro tokens to user ${userId} (${productId})`);
               }
           } else {
-              console.log(`[Webhook] consistently ignored non-Pro product ${productId} for Pro token award.`);
+              console.log(`[Webhook] Ignored non-Pro product ${productId} for token award.`);
           }
       }
     }
@@ -123,14 +121,38 @@ Deno.serve(async (req) => {
 
     // 2. Handle Token Packs (NON_RENEWING_PURCHASE)
     if (type === "NON_RENEWING_PURCHASE") {
-      // Determine token amount from Product ID
-      let tokensToAdd = 0;
-      if (productId.includes("tokens_200")) tokensToAdd = 200;
-      if (productId.includes("tokens_50")) tokensToAdd = 50;
-      if (productId.includes("token_pack")) tokensToAdd = 50;
-      if (productId.includes("tokens_10")) tokensToAdd = 10;
+      const TOKEN_PACK_MAP: Record<string, number> = {
+        "tokens_150": 150,
+        "tokens_200": 150, // legacy product ID — grants 150
+        "tokens_50": 50,
+        "token_pack": 50,
+        "tokens_10": 10,
+      };
+
+      const tokensToAdd = TOKEN_PACK_MAP[productId] ?? 0;
 
       if (tokensToAdd > 0) {
+        // SEC-005: Idempotency check - prevent double-crediting on webhook retries
+        const eventId = event.id;
+        if (eventId) {
+          const { data: existing } = await supabaseClient
+            .from("processed_webhook_events")
+            .select("event_id")
+            .eq("event_id", eventId)
+            .maybeSingle();
+
+          if (existing) {
+            console.log(`[Webhook] Event ${eventId} already processed, skipping.`);
+            return new Response(JSON.stringify({ success: true, skipped: true }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          await supabaseClient
+            .from("processed_webhook_events")
+            .insert({ event_id: eventId, processed_at: new Date().toISOString() });
+        }
+
         // SEC-003: Use atomic increment via RPC to prevent race conditions
         const { data, error } = await supabaseClient.rpc('increment_token_balance', {
           p_user_id: userId,
@@ -141,7 +163,7 @@ Deno.serve(async (req) => {
           console.error("[Webhook] RPC increment_token_balance error:", error);
           throw error;
         }
-        
+
         console.log(`[Webhook] Added ${tokensToAdd} tokens to user ${userId}. New Balance: ${data}`);
       }
     }

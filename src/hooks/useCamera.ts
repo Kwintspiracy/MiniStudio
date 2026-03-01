@@ -1,6 +1,8 @@
 // TODO: Remove unused module — identified in audit #17
 import { useState, useCallback, useRef } from 'react';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as FileSystem from 'expo-file-system/legacy';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import type { ImageFile } from '../types';
 
 interface UseCameraResult {
@@ -45,15 +47,24 @@ export function useCamera(): UseCameraResult {
         quality: 0.8,
       });
 
-      if (!photo || !photo.base64) {
+      if (!photo) {
         setError('Failed to capture photo');
         return null;
       }
 
+      const image = await ImageManipulator.manipulate(photo.uri)
+        .resize({ width: 1024 })
+        .renderAsync();
+      const resized = await image.saveAsync({ compress: 0.7, format: SaveFormat.JPEG });
+
+      const base64Raw = await FileSystem.readAsStringAsync(resized.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
       return {
-        base64: `data:image/jpeg;base64,${photo.base64}`,
+        base64: `data:image/jpeg;base64,${base64Raw}`,
         mimeType: 'image/jpeg',
-        uri: photo.uri,
+        uri: resized.uri,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to take picture';

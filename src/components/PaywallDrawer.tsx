@@ -13,6 +13,7 @@ import { colors, fontFamily } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Purchases, { PurchasesPackage } from 'react-native-purchases';
 import Constants from 'expo-constants';
+import { purchaseService } from '../services/purchaseService';
 import { AppModal } from './AppModal';
 import { useEntitlements } from '../hooks/useEntitlements';
 import { useAuth } from '../context/AuthContext';
@@ -168,21 +169,21 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
         if (!isMounted.current) return;
         setLoading(true);
         try {
-            const offerings = await Purchases.getOfferings();
+            const pkgs = await purchaseService.getOfferings();
             if (!isMounted.current) return;
-            if (offerings.current && offerings.current.availablePackages.length !== 0) {
-                console.log('[PaywallDrawer] Loaded packages from RevenueCat:', offerings.current.availablePackages.map(p => ({ id: p.identifier, type: p.packageType })));
-                setPackages(offerings.current.availablePackages);
+            if (pkgs.length > 0) {
+                if (__DEV__) console.log('[PaywallDrawer] Loaded packages:', pkgs.map(p => ({ id: p.identifier, type: p.packageType })));
+                setPackages(pkgs);
             } else {
-                // Mock data fallback
-                console.log("Using Mock Offerings for UI Dev");
-                setPackages(mockPackages);
+                if (__DEV__) {
+                    console.log("Using Mock Offerings for UI Dev");
+                    setPackages(mockPackages);
+                }
             }
         } catch (e) {
-            console.warn("Error fetching offerings:", e);
+            if (__DEV__) console.warn("Error fetching offerings:", e);
             if (!isMounted.current) return;
-            // Fallback mock data
-            setPackages(mockPackages);
+            if (__DEV__) setPackages(mockPackages);
         } finally {
             if (isMounted.current) {
                 setLoading(false);
@@ -192,22 +193,16 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
 
     const getPackageForPlan = (planId: PlanType): PurchasesPackage | undefined => {
         const plan = plans.find(p => p.id === planId);
-        console.log(`[PaywallDrawer] Looking for package - planId: ${planId}, plan:`, plan);
         if (!plan?.packageIdentifier) {
-            console.log('[PaywallDrawer] No packageIdentifier found for plan');
             return undefined;
         }
-        console.log(`[PaywallDrawer] Searching for package with identifier: ${plan.packageIdentifier}`);
-        console.log('[PaywallDrawer] Available packages:', packages.map(p => ({ id: p.identifier, type: p.packageType })));
         const foundPackage = packages.find(p => p.identifier === plan.packageIdentifier);
-        console.log('[PaywallDrawer] Found package:', foundPackage ? foundPackage.identifier : 'NOT FOUND');
         return foundPackage;
     };
 
     const handlePurchase = async () => {
-        console.log('[PaywallDrawer] 1. handlePurchase started');
         const pack = getPackageForPlan(selectedPlan);
-        
+
         if (!pack) {
             // Annual plan not yet available
             if (selectedPlan === 'annual') {
@@ -222,14 +217,11 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
         }
 
         if (purchasing) return;
-        console.log('[PaywallDrawer] 2. Setting purchasing=true');
         setPurchasing(true);
 
-        // Mock package handling
-        if (pack.product.title.includes("(Mock)") || Constants.appOwnership === 'expo') {
-            console.log('[PaywallDrawer] 3. Mock purchase detected');
+        // Mock package handling (dev only)
+        if (__DEV__ && pack.product.title.includes("(Mock)")) {
             setTimeout(() => {
-                console.log('[PaywallDrawer] 4. Mock purchase completed');
                 setPurchasing(false);
                 showModal(
                     "Simulated Purchase Successful",
@@ -238,14 +230,9 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
                     {
                         label: "Continue",
                         onPress: () => {
-                            console.log('[PaywallDrawer] 5. Mock modal OK pressed');
                             hideModal();
-                            console.log('[PaywallDrawer] 6. Modal hidden, waiting before closing drawer');
-                            // Wait for AppModal to animate out before closing PaywallDrawer
                             setTimeout(() => {
-                                console.log('[PaywallDrawer] 7. Closing drawer');
                                 onClose();
-                                console.log('[PaywallDrawer] 8. Mock drawer closed');
                             }, 350);
                         }
                     }
@@ -255,39 +242,24 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
         }
 
         try {
-            console.log('[PaywallDrawer] 3. Calling Purchases.purchasePackage');
             await Purchases.purchasePackage(pack);
-            console.log('[PaywallDrawer] 4. Purchase successful');
-            
-            // Trigger background refresh (non-blocking)
-            console.log('[PaywallDrawer] 5. Calling refetch (non-blocking)');
-            refetch();
-            console.log('[PaywallDrawer] 6. Refetch called, showing modal');
 
-            showModal("Tokens added!", selectedPlan === 'tokens' ? "You’re ready to generate." : "Welcome to Pro!", 'default', {
+            // Trigger background refresh (non-blocking)
+            refetch();
+
+            showModal("Tokens added!", selectedPlan === 'tokens' ? "You're ready to generate." : "Welcome to Pro!", 'default', {
                 label: "OK",
                 onPress: () => {
-                    console.log('[PaywallDrawer] 7. Success modal OK pressed');
                     hideModal();
-                    console.log('[PaywallDrawer] 8. Modal hidden, waiting before closing drawer');
-                    // Wait for AppModal to animate out before closing PaywallDrawer
-                    // This prevents simultaneous modal close animations that cause freeze
                     setTimeout(() => {
-                        console.log('[PaywallDrawer] 9. Closing drawer');
                         onClose();
-                        console.log('[PaywallDrawer] 10. Drawer closed, scheduling delayed refetch');
-                        // Give drawer time to close before refetching
                         setTimeout(() => {
-                            console.log('[PaywallDrawer] 11. Executing delayed refetch');
                             refetch();
-                            console.log('[PaywallDrawer] 12. Delayed refetch completed');
                         }, 300);
                     }, 350);
                 }
             });
-            console.log('[PaywallDrawer] Modal shown');
         } catch (e: any) {
-            console.log('[PaywallDrawer] Purchase error:', e);
             if (!e.userCancelled) {
                 if (e.message?.includes("cancelled") || e.code === 1) {
                     return;
@@ -296,7 +268,6 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
                 showModal("Error", e.message, 'error');
             }
         } finally {
-            console.log('[PaywallDrawer] Setting purchasing=false');
             setPurchasing(false);
         }
     };

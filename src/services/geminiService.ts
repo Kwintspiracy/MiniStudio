@@ -169,7 +169,6 @@ export async function generatePaintedMiniature(
     baseImages: ImageFile | ImageFile[] | null,
     prompt: string,
     numberOfImages: number,
-    model: 'gemini-3.1-flash-image-preview',
     temperature?: number,
     metadata?: any
 ): Promise<string[]> {
@@ -179,7 +178,7 @@ export async function generatePaintedMiniature(
     abortController = new AbortController();
 
     if (__DEV__) console.log("[AI Proxy] Sending request to Supabase Edge Function...");
-    if (__DEV__) console.log(`[AI Proxy] Target: ${model}, Prompt Length: ${prompt.length}`);
+    if (__DEV__) console.log(`[AI Proxy] Prompt Length: ${prompt.length}`);
     
     if (baseImagePayload && baseImagePayload.data) {
         const payloadSizeMB = baseImagePayload.data.length / 1024 / 1024;
@@ -226,7 +225,6 @@ export async function generatePaintedMiniature(
             body: JSON.stringify({
                 prompt,
                 baseImage: baseImagePayload,
-                model,
                 action: 'generate',
                 temperature,
                 device_id: deviceId,
@@ -478,8 +476,7 @@ export async function generatePaintedMiniature(
 export async function generateImageFromImage(
     baseImages: ImageFile | ImageFile[],
     prompt: string,
-    model: 'gemini-3.1-flash-image-preview',
     temperature?: number
 ): Promise<string[]> {
-    return generatePaintedMiniature(baseImages, prompt, 1, model, temperature);
+    return generatePaintedMiniature(baseImages, prompt, 1, temperature);
 }

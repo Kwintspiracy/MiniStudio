@@ -50,97 +50,15 @@ export const generatePaintPrompt = (params: PromptParams): string => {
     let standardColorsList: string[] = [];
     let metallicColorsList: string[] = [];
     
-    // Check if we need to process paints (Palette Enabled OR Brands Selected)
-    if (isPaletteEnabled || selectedBrands.length > 0) {
-      
-      let paintsToUse: { name: string, hex: string, finish?: string }[] = [];
-      
-      if (selectedColors.length > 0) {
-          // 1. MANUAL MODE: User picked specific colors.
-          paintsToUse = selectedColors;
-          
-          standardColorsList = paintsToUse
+    // Only apply intelligent color palette when user has made specific color selections
+    if (selectedColors.length > 0) {
+        standardColorsList = selectedColors
             .filter(c => c.finish !== 'Metallic')
             .map(c => `${c.name}: ${c.hex}`);
-          
-          metallicColorsList = paintsToUse
+
+        metallicColorsList = selectedColors
             .filter(c => c.finish === 'Metallic')
             .map(c => `${c.name}: ${c.hex}`);
-
-      } else if (loadedPaints.length > 0) {
-         // 2. BRAND OR ALL MODE
-         let paintsToFilter: { name: string, hex: string, finish?: string }[] = [];
-
-         if (selectedBrands.length > 0) {
-             const normalizedBrands = selectedBrands.map(b => b.toLowerCase().trim());
-
-             if (normalizedBrands.includes('all brands')) {
-                 paintsToFilter = loadedPaints;
-             } else {
-                 const includesMyPaints = normalizedBrands.includes('my collection');
-                 
-                 paintsToFilter = loadedPaints.filter((p: any) => {
-                    const isUserPaint = p._isUserPaint === true;
-                    if (isUserPaint) return includesMyPaints;
-                    const paintBrand = (p.brand?.trim() || 'Unknown').toLowerCase();
-                    return normalizedBrands.some(b => b !== 'my collection' && paintBrand === b);
-                 });
-             }
-
-             paintsToFilter = paintsToFilter.filter(p => {
-                const nameLower = p.name.toLowerCase();
-                return !nameLower.includes('cleaner') && 
-                       !nameLower.includes('thinner') && 
-                       !nameLower.includes('reducer') && 
-                       !nameLower.includes('flow improver');
-             }).map(p => ({ name: p.name, hex: p.hex, finish: p.finish }));
-
-         } else {
-             // ALL PAINTS fallback if palette enabled but nothing selected
-             paintsToFilter = loadedPaints.filter((p: any) => {
-                 const nameLower = p.name.toLowerCase();
-                 return !nameLower.includes('cleaner') && 
-                        !nameLower.includes('thinner') && 
-                        !nameLower.includes('reducer') && 
-                        !nameLower.includes('flow improver');
-             }).map((p: any) => ({ name: p.name, hex: p.hex, finish: p.finish }));
-         }
-
-         if (!params.skipColorFiltering && paintsToFilter.length > 50) {
-             // Smart Downsampling
-             const filteredResult = filterPaintsByDiversity(paintsToFilter) as any;
-             const format = (p: PaletteColor[]) => p.map(c => `${c.name}: ${c.hex}`).join(', ');
-
-             standardColorsList = [];
-             if (filteredResult.skin?.length) standardColorsList.push(`[Flesh Tones]\n${format(filteredResult.skin)}`);
-             if (filteredResult.neutrals?.length) standardColorsList.push(`[Neutrals]\n${format(filteredResult.neutrals)}`);
-             if (filteredResult.warmNeutrals?.length) standardColorsList.push(`[Warm Neutrals]\n${format(filteredResult.warmNeutrals)}`);
-             if (filteredResult.coolNeutrals?.length) standardColorsList.push(`[Cool Neutrals]\n${format(filteredResult.coolNeutrals)}`);
-             if (filteredResult.chromatics?.length) standardColorsList.push(`[Global Palette]\n${format(filteredResult.chromatics)}`);
-             
-             metallicColorsList = [];
-             if (isNMMEnabled) {
-                  const nmmFiltered = getNMMRecipes(paintsToFilter);
-                  if (nmmFiltered.metallics?.length) metallicColorsList.push(format(nmmFiltered.metallics));
-             } else if (filteredResult.metallics?.length) {
-                  metallicColorsList.push(format(filteredResult.metallics));
-             }
-         } else {
-             // Small list
-              standardColorsList = paintsToFilter
-                .filter(c => c.finish !== 'Metallic')
-                .map(c => `${c.name}: ${c.hex}`);
-              
-              if (isNMMEnabled) {
-                  const nmmFiltered = getNMMRecipes(paintsToFilter); 
-                   metallicColorsList = nmmFiltered.metallics.map(c => `${c.name}: ${c.hex}`);
-              } else {
-                  metallicColorsList = paintsToFilter
-                    .filter(c => c.finish === 'Metallic')
-                    .map(c => `${c.name}: ${c.hex}`);
-              }
-         }
-      }
     }
     
     // 3. EFFECTS SECTION
@@ -176,9 +94,18 @@ export const generatePaintPrompt = (params: PromptParams): string => {
        }
     }
 
-    const oslEffect = effectPrompts['effect.osl'];
-    if (isOSLEnabled && oslEffect) {
-      effectsParts.push(isPro ? oslEffect.pro : oslEffect.default);
+    if (isOSLEnabled) {
+        const oslEffect = effectPrompts['effect.osl'];
+        if (__DEV__) console.log('[Prompt Generator] OSL: ON, effect.osl =', oslEffect ? `"${oslEffect.default.substring(0, 60)}"` : 'MISSING');
+        if (oslEffect) {
+            effectsParts.push(isPro ? oslEffect.pro : oslEffect.default);
+        }
+    } else {
+        const noOslEffect = effectPrompts['effect.no-osl'];
+        if (__DEV__) console.log('[Prompt Generator] OSL: OFF, effect.no-osl =', noOslEffect ? `"${noOslEffect.default.substring(0, 60)}"` : 'MISSING');
+        if (noOslEffect && (noOslEffect.default || noOslEffect.pro)) {
+            effectsParts.push(isPro ? noOslEffect.pro : noOslEffect.default);
+        }
     }
     
     if (isPhotoshootEnabled) {

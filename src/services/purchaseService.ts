@@ -19,14 +19,15 @@ export interface SimplifiedPackage {
     packageType: string;
 }
 
+const OFFERINGS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 class PurchaseService {
     private initialized = false;
     private isMock = false; // Flag to force mock mode if needed
+    private offeringsCache: { packages: PurchasesPackage[]; ts: number } | null = null;
 
     constructor() {
-        // Auto-detect mock mode if running in Expo Go without keys or ownership is expo
-        // This is heuristic; adjust based on real requirements
-        if (Constants.appOwnership === 'expo' || __DEV__) {
+        if (__DEV__) {
             console.log('[PurchaseService] Running in Development/Expo mode.');
         }
     }
@@ -40,7 +41,7 @@ class PurchaseService {
         });
 
         if (!apiKey) {
-            console.warn('[PurchaseService] No RevenueCat API Key found. Falling back to Mock Mode.');
+            if (__DEV__) console.warn('[PurchaseService] No RevenueCat API Key found. Falling back to Mock Mode.');
             this.isMock = true;
             this.initialized = true;
             return;
@@ -48,12 +49,12 @@ class PurchaseService {
 
         try {
             if (Platform.OS === 'web') {
-                 console.warn('[PurchaseService] Web not supported for RevenueCat. Using Mock Mode.');
-                 this.isMock = true;
+                if (__DEV__) console.warn('[PurchaseService] Web not supported for RevenueCat. Using Mock Mode.');
+                this.isMock = true;
             } else {
                 await Purchases.configure({ apiKey });
                 this.initialized = true;
-                console.log('[PurchaseService] Initialized RevenueCat.');
+                if (__DEV__) console.log('[PurchaseService] Initialized RevenueCat.');
             }
         } catch (e) {
             console.error('[PurchaseService] Failed to initialize RevenueCat:', e);
@@ -65,31 +66,44 @@ class PurchaseService {
         if (!this.initialized) await this.init();
 
         if (this.isMock) {
-            return this.getMockPackages();
+            if (__DEV__) return this.getMockPackages();
+            return [];
+        }
+
+        // Return in-memory cached offerings if still fresh
+        if (this.offeringsCache && Date.now() - this.offeringsCache.ts < OFFERINGS_CACHE_TTL_MS) {
+            if (__DEV__) console.log('[PurchaseService] Returning cached offerings');
+            return this.offeringsCache.packages;
         }
 
         try {
             const offerings = await Purchases.getOfferings();
             if (offerings.current && offerings.current.availablePackages.length > 0) {
-                return offerings.current.availablePackages;
+                const packages = offerings.current.availablePackages;
+                this.offeringsCache = { packages, ts: Date.now() };
+                return packages;
             } else {
-                console.warn('[PurchaseService] No offerings found in RevenueCat. Using Mock data.');
-                return this.getMockPackages();
+                if (__DEV__) {
+                    console.warn('[PurchaseService] No offerings found in RevenueCat. Using Mock data.');
+                    return this.getMockPackages();
+                }
+                return [];
             }
         } catch (e) {
-            console.warn('[PurchaseService] Error fetching offerings:', e);
-            return this.getMockPackages();
+            if (__DEV__) {
+                console.warn('[PurchaseService] Error fetching offerings:', e);
+                return this.getMockPackages();
+            }
+            return [];
         }
     }
 
     async purchasePackage(pack: PurchasesPackage): Promise<{ success: boolean; customerInfo?: any; error?: any; isMock?: boolean }> {
         if (!this.initialized) await this.init();
 
-        // 1. Check for Mock Package or Mock Mode
-        // We identify mock packages by a special flag or just falling back if isMock is true
-        // Also check if the 'product' title contains "(Mock)" as seen in legacy code
-        if (this.isMock || pack.product.title.includes("(Mock)")) {
-            console.log('[PurchaseService] Simulating purchase for:', pack.product.identifier);
+        // Allow mock purchases only in dev mode
+        if (__DEV__ && (this.isMock || pack.product.title.includes("(Mock)"))) {
+            if (__DEV__) console.log('[PurchaseService] Simulating purchase for:', pack.product.identifier);
             return new Promise((resolve) => {
                 setTimeout(() => {
                     resolve({ success: true, isMock: true });
@@ -117,7 +131,7 @@ class PurchaseService {
                 packageType: 'MONTHLY',
                 product: {
                     identifier: 'pro_monthly',
-                    description: '60 Monthly Tokens',
+                    description: '40 Monthly Tokens',
                     title: 'Monthly (Mock)',
                     price: 5.99,
                     priceString: '$5.99',
@@ -131,7 +145,7 @@ class PurchaseService {
                 packageType: 'ANNUAL',
                 product: {
                     identifier: 'pro_annual',
-                    description: '60 Monthly Tokens',
+                    description: '40 Monthly Tokens',
                     title: 'Annual (Mock)',
                     price: 53.88,
                     priceString: '$53.88',
@@ -144,8 +158,8 @@ class PurchaseService {
                 identifier: 'Tokens_200',
                 packageType: 'CUSTOM',
                 product: {
-                    identifier: 'tokens_200',
-                    description: '200 Tokens',
+                    identifier: 'tokens_150',
+                    description: '150 Tokens',
                     title: 'Pack of Tokens (Mock)',
                     price: 17.99,
                     priceString: '$17.99',

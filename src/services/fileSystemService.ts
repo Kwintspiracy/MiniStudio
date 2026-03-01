@@ -2,6 +2,27 @@ import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
 
 /**
+ * Delete a list of temporary file URIs (cache directory only).
+ * Silently ignores files that have already been deleted.
+ */
+export const cleanupTempFiles = async (uris: string[]): Promise<void> => {
+    await Promise.all(
+        uris.map(async (uri) => {
+            try {
+                if (uri && uri.startsWith('file://') && uri.includes('/cache/')) {
+                    const info = await FileSystem.getInfoAsync(uri);
+                    if (info.exists) {
+                        await FileSystem.deleteAsync(uri, { idempotent: true });
+                    }
+                }
+            } catch (e) {
+                if (__DEV__) console.warn('[FileSystem] Failed to delete temp file:', uri, e);
+            }
+        })
+    );
+};
+
+/**
  * Save a base64 string to a local file in the document directory
  * Returns the file URI
  */
@@ -9,19 +30,25 @@ export const saveBase64ToFile = async (base64Data: string, prefix: string = 'min
     try {
         const filename = `${prefix}${Date.now()}.png`;
         const fileUri = `${FileSystem.documentDirectory}${filename}`;
-        
+
+        // If input is already a local file URI, copy it to document directory
+        if (base64Data.startsWith('file://')) {
+            await FileSystem.copyAsync({ from: base64Data, to: fileUri });
+            return fileUri;
+        }
+
         // Strip data URI prefix if present
         // Use substring instead of split to save memory
         const prefixMatch = 'base64,';
         const splitIndex = base64Data.indexOf(prefixMatch);
-        const pureBase64 = splitIndex !== -1 
-            ? base64Data.substring(splitIndex + prefixMatch.length) 
+        const pureBase64 = splitIndex !== -1
+            ? base64Data.substring(splitIndex + prefixMatch.length)
             : base64Data;
-        
+
         await FileSystem.writeAsStringAsync(fileUri, pureBase64, {
             encoding: FileSystem.EncodingType.Base64,
         });
-        
+
         return fileUri;
     } catch (error) {
         console.error('Error saving base64 to file:', error);

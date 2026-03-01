@@ -42,77 +42,37 @@ export default function PaywallScreen() {
     loadOfferings();
   }, []);
 
+  const mockOfferings: any[] = __DEV__ ? [
+    {
+      identifier: 'Monthly',
+      packageType: 'MONTHLY',
+      product: { identifier: 'pro_monthly', description: 'Unlimited Access + 40 Tokens/mo', title: 'Pro Monthly (Mock)', price: 5.99, priceString: '$5.99', currencyCode: 'USD', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
+    },
+    {
+      identifier: 'Annual',
+      packageType: 'ANNUAL',
+      product: { identifier: 'pro_annual', description: 'Unlimited Access + 40 Tokens/mo', title: 'Pro Annual (Mock)', price: 53.88, priceString: '$53.88', currencyCode: 'USD', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
+    },
+    {
+      identifier: 'Tokens_150',
+      packageType: 'CUSTOM',
+      product: { identifier: 'tokens_150', description: '150 Tokens (Consumable)', title: '150 Tokens (Mock)', price: 17.99, priceString: '$17.99', currencyCode: 'USD', productType: 'CONSUMABLE' }
+    }
+  ] : [];
+
   const loadOfferings = async () => {
     try {
       const offerings = await Purchases.getOfferings();
       if (offerings.current && offerings.current.availablePackages.length !== 0) {
         setPackages(offerings.current.availablePackages);
-      } else {
-          // MOCK DATA FALLBACK (For UI Development when Apple Blocked)
-           console.log("Using Mock Offerings for UI Dev");
-           setPackages([
-               {
-                   identifier: 'Monthly',
-                   packageType: 'MONTHLY',
-                   product: {
-                       identifier: 'pro_monthly',
-                       description: 'Unlimited Access + 60 Tokens/mo',
-                       title: 'Pro Monthly (Mock)',
-                       price: 5.99,
-                       priceString: '$5.99',
-                       currencyCode: 'USD',
-                       productType: 'AUTO_RENEWABLE_SUBSCRIPTION',
-                   }
-               },
-               {
-                   identifier: 'Annual',
-                   packageType: 'ANNUAL',
-                   product: {
-                       identifier: 'pro_annual',
-                       description: 'Unlimited Access + 60 Tokens/mo',
-                       title: 'Pro Annual (Mock)',
-                       price: 53.88,
-                       priceString: '$53.88',
-                       currencyCode: 'USD',
-                       productType: 'AUTO_RENEWABLE_SUBSCRIPTION',
-                   }
-               },
-               {
-                   identifier: 'Tokens_200',
-                   packageType: 'CUSTOM',
-                   product: {
-                       identifier: 'tokens_200',
-                       description: '200 Tokens (Consumable)',
-                       title: '200 Tokens (Mock)',
-                       price: 17.99,
-                       priceString: '$17.99',
-                       currencyCode: 'USD',
-                       productType: 'CONSUMABLE', // or NON_RENEWING_SUBSCRIPTION if that's what we call it
-                   }
-               }
-           ] as any);
+      } else if (__DEV__) {
+        setPackages(mockOfferings);
       }
     } catch (e) {
-      console.warn("Error fetching offerings (Native store may be missing)", e);
-      // Fallback on error too
-       console.log("Using Mock Offerings due to Error");
-           setPackages([
-               {
-                   identifier: 'Monthly',
-                   packageType: 'MONTHLY',
-                   product: { identifier: 'pro_monthly', description: 'Unlimited Access + 100 Tokens/mo', title: 'Pro Monthly (Mock)', priceString: '$5.99', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
-               },
-               {
-                   identifier: 'Annual',
-                   packageType: 'ANNUAL',
-                   product: { identifier: 'pro_annual', description: 'Unlimited Access + 100 Tokens/mo', title: 'Pro Annual (Mock)', priceString: '$53.88', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
-               },
-               {
-                   identifier: 'Tokens_200',
-                   packageType: 'CUSTOM',
-                   product: { identifier: 'tokens_200', description: '200 Tokens', title: '200 Tokens (Mock)', priceString: '$17.99', productType: 'CONSUMABLE' }
-               }
-           ] as any);
+      if (__DEV__) {
+        console.warn("Error fetching offerings (Native store may be missing)", e);
+        setPackages(mockOfferings);
+      }
     } finally {
       setLoading(false);
     }
@@ -122,8 +82,8 @@ export default function PaywallScreen() {
     if (purchasing) return;
     setPurchasing(true); // Start loading
 
-    // INTERCEPT MOCK PACKAGES
-    if (pack.product.title.includes("(Mock)")) {
+    // INTERCEPT MOCK PACKAGES (dev only)
+    if (__DEV__ && pack.product.title.includes("(Mock)")) {
         setTimeout(() => {
              setPurchasing(false);
              setPurchasing(false);
@@ -157,13 +117,11 @@ export default function PaywallScreen() {
       refetch();
 
       if (pack.product.productType === 'NON_CONSUMABLE' || pack.packageType === 'ANNUAL' || pack.packageType === 'MONTHLY') {
-          // Check for entitlement OR if in Expo Go/Test Store (where entitlements might not sync immediately)
-          if (typeof customerInfo.entitlements.active['pro_access'] !== "undefined" || Constants.appOwnership === 'expo') {
-            showModal("Success", "Welcome to Pro! (Test Store Verified)", 'default', 
-                { label: "OK", onPress: () => { 
-                    hideModal(); 
+          if (typeof customerInfo.entitlements.active['pro_access'] !== "undefined") {
+            showModal("Success", "Welcome to Pro!", 'default',
+                { label: "OK", onPress: () => {
+                    hideModal();
                     router.back();
-                    // Give modal time to close before refetching again
                     setTimeout(() => refetch(), 300);
                 } }
             );
@@ -184,26 +142,6 @@ export default function PaywallScreen() {
         // But usually userCancelled boolean is reliable
         if (e.message.includes("cancelled") || e.code === 1) {
              return; 
-        }
-
-        // Special Handling for Expo Go / Test Store (Loose equality for code)
-        if (Constants.appOwnership === 'expo' && (e.code == 5 || e.code === '5')) {
-            showModal(
-                "Simulated Purchase Successful",
-                "You successfully simulated a purchase in the Test Store. \n\n(No real money was charged. Entitlements may not update in Expo Go).",
-                'default',
-                {
-                    label: "Continue Test",
-                    onPress: () => {
-                         // Wait & Poll for Expo Sim too
-                         setTimeout(() => {
-                             hideModal();
-                             router.back();
-                         }, 1000);
-                    }
-                }
-            );
-            return;
         }
 
         console.error(e);

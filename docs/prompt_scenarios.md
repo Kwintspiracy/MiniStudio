@@ -132,7 +132,7 @@ When brand has more than 50 paints:
 
 - Filters to only paints marked with `_isUserPaint: true`
 - Shows empty state if user has no saved paints
-- Prompts to download MiniPainterDB companion app
+- Shows empty state with prompt to build their paint collection
 
 ---
 

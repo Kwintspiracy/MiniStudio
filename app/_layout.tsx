@@ -123,6 +123,7 @@ function RootLayoutNav() {
             animation: 'slide_from_bottom',
         }}
       />
+      <Stack.Screen name="admin" />
     </Stack>
   );
 }

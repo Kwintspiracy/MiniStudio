@@ -277,7 +277,7 @@ export const PaintExplorerModal: React.FC<PaintExplorerModalProps> = ({
                                 <Text style={styles.emptyTitle}>No paints found</Text>
                                 <Text style={styles.emptySubtitle}>
                                     {selectedBrands.includes('My Collection') && selectedBrands.length === 1
-                                        ? 'Download MiniPainterDB to track your paint collection.'
+                                        ? 'Add paints to your collection to see them here.'
                                         : 'No paints available for these brands.'}
                                 </Text>
                             </View>

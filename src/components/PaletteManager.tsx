@@ -217,15 +217,10 @@ export const PaletteManager: React.FC<PaletteManagerProps> = ({
 
                                                 {!hasPaints && brand === "User Library" ? (
                                                     <View className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-6 items-center">
-                                                        <Text className="text-zinc-400 text-xs font-bold mb-2">Build Your Collection</Text>
+                                                        <Text className="text-zinc-400 text-xs font-bold mb-2">No paints yet</Text>
                                                         <Text className="text-zinc-600 text-[10px] text-center mb-4">
-                                                            Download the MiniPainterDB app to track your paint collection and sync it here nicely.
+                                                            Start building your collection to see your paints here.
                                                         </Text>
-                                                        {/* 
-                                                        <TouchableOpacity className="bg-indigo-600 px-4 py-2 rounded-lg">
-                                                            <Text className="text-white text-[10px] font-bold uppercase">Get MiniPainterDB</Text>
-                                                        </TouchableOpacity> 
-                                                        */}
                                                     </View>
                                                 ) : (
                                                     Object.entries(sets).map(([setName, colors]) => (

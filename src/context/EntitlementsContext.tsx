@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { AppState, AppStateStatus } from 'react-native';
@@ -118,8 +118,13 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
     };
   }, [fetchEntitlements]);
 
+  const value = useMemo(
+    () => ({ entitlements, loading, refetch: fetchEntitlements }),
+    [entitlements, loading, fetchEntitlements]
+  );
+
   return (
-    <EntitlementsContext.Provider value={{ entitlements, loading, refetch: fetchEntitlements }}>
+    <EntitlementsContext.Provider value={value}>
       {children}
     </EntitlementsContext.Provider>
   );

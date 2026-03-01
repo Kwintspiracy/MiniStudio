@@ -16,8 +16,29 @@ export interface PaletteColor {
 }
 
 import { supabase } from './supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const PAINTS_CACHE_KEY = 'paints_cache';
+const PAINTS_CACHE_TS_KEY = 'paints_cache_ts';
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+const PAINT_COLUMNS = 'id,brand,set,name,hex,hue,saturation,lightness,code,is_discontinued,r,g,b,finish';
 
 export async function fetchAllPaints(): Promise<PaletteColor[]> {
+  // Return cached data if still fresh
+  try {
+    const [cached, cachedTs] = await Promise.all([
+      AsyncStorage.getItem(PAINTS_CACHE_KEY),
+      AsyncStorage.getItem(PAINTS_CACHE_TS_KEY),
+    ]);
+    if (cached && cachedTs && Date.now() - parseInt(cachedTs, 10) < CACHE_TTL_MS) {
+      if (__DEV__) console.log('[PaintService] Returning cached paints');
+      return JSON.parse(cached) as PaletteColor[];
+    }
+  } catch (e) {
+    if (__DEV__) console.warn('[PaintService] Cache read failed:', e);
+  }
+
   let allPaints: PaletteColor[] = [];
   let offset = 0;
   const limit = 1000;
@@ -26,7 +47,7 @@ export async function fetchAllPaints(): Promise<PaletteColor[]> {
   while (keepFetching) {
     const { data, error } = await supabase
       .from('paints')
-      .select('*')
+      .select(PAINT_COLUMNS)
       .order('brand', { ascending: true })
       .order('set', { ascending: true })
       .order('name', { ascending: true })
@@ -47,26 +68,27 @@ export async function fetchAllPaints(): Promise<PaletteColor[]> {
     if (offset > 20000) break;
   }
 
+  // Persist to cache
+  try {
+    await Promise.all([
+      AsyncStorage.setItem(PAINTS_CACHE_KEY, JSON.stringify(allPaints)),
+      AsyncStorage.setItem(PAINTS_CACHE_TS_KEY, String(Date.now())),
+    ]);
+    if (__DEV__) console.log(`[PaintService] Cached ${allPaints.length} paints`);
+  } catch (e) {
+    if (__DEV__) console.warn('[PaintService] Cache write failed:', e);
+  }
+
   return allPaints;
 }
 
 export async function fetchUserPaints(): Promise<PaletteColor[]> {
-  // This fetches paints from the user's personal library table
-  // Assuming the table is named 'user_paints' and has the same schema or is joined with 'paints'
-  // Strategy: Fetch the user's paint IDs from 'user_paints' and then (or if it stores valid paint objects) return them.
-  // Given the user said "This other app maintains another Supabase table where the colors of each user's library are stored",
-  // we will assume a simple structure for now. If it fails, we will debug.
-
-  // NOTE: We assume the table is 'user_libraries' or similar. 
-  // Let's try to select from 'user_paints' first, or fallback to returning empty if table doesn't exist.
-  // Ideally we would know the schema. For now, let's assume it stores full paint details or references.
-
-  // If the user_paints table only has references (paint_id), we would need a join.
-  // The user_paints table is a relation table. We need to fetch the actual paint data.
-  // Assuming there is a foreign key relation to 'paints' via 'paint_id'
+  // Fetch the user's personal paint collection.
+  // user_paints is a relation table joining users to their owned paints (status = 'owned').
+  // Uses a foreign key join to the paints table to get the full paint details.
   const { data, error } = await supabase
     .from('user_paints')
-    .select('paints ( * )') // Correct syntax for joining
+    .select(`paints (${PAINT_COLUMNS})`) // Correct syntax for joining
     .eq('status', 'owned'); // Filter for paints in 'Collection'
 
   if (__DEV__) console.log("Fetching User Paints...");
@@ -92,7 +114,7 @@ export async function fetchUserPaints(): Promise<PaletteColor[]> {
 export async function fetchPaintsByBrand(brand: string): Promise<PaletteColor[]> {
   const { data, error } = await supabase
     .from('paints')
-    .select('*')
+    .select(PAINT_COLUMNS)
     .eq('brand', brand)
     .order('set', { ascending: true })
     .order('name', { ascending: true });
@@ -107,7 +129,7 @@ export async function fetchPaintsByBrand(brand: string): Promise<PaletteColor[]>
 export async function searchPaints(query: string): Promise<PaletteColor[]> {
   const { data, error } = await supabase
     .from('paints')
-    .select('*')
+    .select(PAINT_COLUMNS)
     .ilike('name', `%${query}%`)
     .order('brand', { ascending: true })
     .order('name', { ascending: true })
