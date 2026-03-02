@@ -25,7 +25,7 @@ import {
   AppTitleIcon, BiSolidUserCircleIcon, BiSolidUserCircle32Icon,
   BuildIcon, DrawIcon, PaintIcon, MagicWandIcon, SculptIcon, ColorPaletteIcon, AiFillFireIcon, RiPaintFillIcon,
   CameraLensIcon, CloseIcon,
-  FileDownloadIcon as MdFileDownloadIcon, SpinnerIcon, TbProgressCheckIcon, ShareIcon, GalleryIcon
+  FileDownloadIcon as MdFileDownloadIcon, SpinnerIcon, TbProgressCheckIcon, ShareIcon, GalleryIcon, TrashIcon
 } from '@/components/Icons';
 import AppTitleSvg from '../../assets/icons/react-icons/apptitle.svg';
 import type { ImageFile, DesignerType, HistoryItem, StyleOption, StudioMode } from '@/types';
@@ -881,6 +881,39 @@ export default function StudioScreen() {
     }
   }, [activePreviewImage, saveImage, showToast]);
 
+  const handleDeleteActive = useCallback(() => {
+    if (!activePreviewImage) return;
+    const isHistoryItem = generationHistory.some(item => item.url === activePreviewImage);
+    const isSourceImage = sourceImages.some(img => (img.base64 || img.uri) === activePreviewImage);
+
+    Alert.alert(
+      'Delete Image',
+      'Are you sure you want to delete this image?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (isHistoryItem) {
+              const item = generationHistory.find(i => i.url === activePreviewImage);
+              if (item?.modelName === 'demo') {
+                const newHidden = [...hiddenDemoAssets, activePreviewImage];
+                setHiddenDemoAssets(newHidden);
+                await AsyncStorage.setItem('hidden_demo_assets', JSON.stringify(newHidden));
+              }
+              setGenerationHistory(prev => prev.filter(i => i.url !== activePreviewImage));
+            }
+            if (isSourceImage) {
+              setSourceImages([]);
+            }
+            setActivePreviewImage(null);
+          },
+        },
+      ]
+    );
+  }, [activePreviewImage, generationHistory, sourceImages, hiddenDemoAssets]);
+
   const handleShare = useCallback(async () => {
     if (!activePreviewImage) return;
     const tempFilesToCleanup: string[] = [];
@@ -1508,6 +1541,7 @@ export default function StudioScreen() {
                             <Text style={[styles.resultActionText, styles.resultActionTextDark]}>Use as source</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={handleDownload} style={styles.resultActionButtonIcon} accessibilityLabel="Download image" accessibilityRole="button"><MdFileDownloadIcon color="#F4F4F4" /></TouchableOpacity>
+                        <TouchableOpacity onPress={handleDeleteActive} style={styles.resultActionButtonIcon} accessibilityLabel="Delete image" accessibilityRole="button"><TrashIcon color="#F4F4F4" /></TouchableOpacity>
                         <TouchableOpacity onPress={handleShare} style={styles.resultActionButtonIcon} accessibilityLabel="Share image" accessibilityRole="button"><ShareIcon color="#F4F4F4" /></TouchableOpacity>
                       </View>
                     </View>

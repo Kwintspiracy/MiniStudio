@@ -180,6 +180,13 @@ export const FileDownloadIcon: React.FC<IconProps> = ({ size = 16, color = '#F4F
   </Svg>
 );
 
+export const TrashIcon: React.FC<IconProps> = ({ size = 16, color = '#F4F4F4' }) => (
+  <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+    <Path d="M2 4H3.33333H14" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    <Path d="M5.3335 4V2.66667C5.3335 2.31305 5.47397 1.97391 5.72402 1.72386C5.97407 1.47381 6.31321 1.33334 6.66683 1.33334H9.3335C9.68712 1.33334 10.0263 1.47381 10.2763 1.72386C10.5264 1.97391 10.6668 2.31305 10.6668 2.66667V4M12.6668 4V13.3333C12.6668 13.687 12.5264 14.0261 12.2763 14.2762C12.0263 14.5262 11.6871 14.6667 11.3335 14.6667H4.66683C4.31321 14.6667 3.97407 14.5262 3.72402 14.2762C3.47397 14.0261 3.3335 13.687 3.3335 13.3333V4H12.6668Z" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
 export const AppTitleIcon = () => (
   <Svg width={182} height={14} viewBox="0 0 182 14" fill="none">
     <Path d="M14.68 12.9H10.24L12.08 4.26L7.34 12.9H4.62L3.72 3.96L1.8 12.9H0L2.7 0.2H7.8L8.42 7.36L12.26 0.2H17.4L14.68 12.9Z" fill="#0058DB" />
