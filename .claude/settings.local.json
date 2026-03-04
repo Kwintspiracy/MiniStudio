@@ -13,7 +13,15 @@
       "Bash(ls:*)",
       "WebFetch(domain:docs.expo.dev)",
       "Bash(cd /d/APPS/MiniStudio && npx expo install expo-image-manipulator 2>&1)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(npx expo:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(git:*)",
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh api:*)",
+      "Bash(gh auth:*)",
+      "Bash(npx supabase:*)"
     ]
   }
 }

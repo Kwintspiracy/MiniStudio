@@ -656,7 +656,7 @@ Deno.serve(async (req) => {
 
                 // Submit task with webhook - returns immediately
                 const { taskId } = await submitPoyoWithWebhook(
-                    supabaseClient,
+                    supabaseAdminClient,
                     jobId!,
                     sanitizedPrompt,
                     imagePayload

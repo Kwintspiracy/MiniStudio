@@ -13,7 +13,7 @@ let abortController: AbortController | null = null;
 // ===================================================================
 
 const PENDING_JOB_KEY = 'pending_generation_job';
-const JOB_TIMEOUT_MS = 180000; // 3 minutes
+const JOB_TIMEOUT_MS = 300000; // 5 minutes
 
 interface PendingJob {
     job_id: string;
@@ -314,7 +314,7 @@ export async function generatePaintedMiniature(
             }
 
             return new Promise<string[]>((resolve, reject) => {
-                const TIMEOUT_MS = 180000; // 3 minute timeout for webhook
+                const TIMEOUT_MS = 300000; // 5 minute timeout for webhook
                 let resolved = false;
                 let pollIntervalId: ReturnType<typeof setInterval>;
                 let pollDelayId: ReturnType<typeof setTimeout>;

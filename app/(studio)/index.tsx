@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView, Pressable
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { MenuView } from '@react-native-menu/menu';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { 
   useSharedValue, 
@@ -63,7 +64,7 @@ import { Toast } from '@/components/Toast';
 
 // Get screen dimensions
 import { DEFAULT_DESIGNER_TEMPLATES, METALLIC_PAINT_INSTRUCTIONS, SKETCH_STYLE_OPTIONS } from '@/constants';
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Dynamic Grid Calculation
 const HISTORY_GRID_GAP = 8;
@@ -881,38 +882,41 @@ export default function StudioScreen() {
     }
   }, [activePreviewImage, saveImage, showToast]);
 
+  const deleteSingleHistoryItem = useCallback(async (url: string) => {
+    const item = generationHistory.find(i => i.url === url);
+    if (item?.modelName === 'demo') {
+      const newHidden = [...hiddenDemoAssets, url];
+      setHiddenDemoAssets(newHidden);
+      await AsyncStorage.setItem('hidden_demo_assets', JSON.stringify(newHidden));
+    }
+    setGenerationHistory(prev => prev.filter(i => i.url !== url));
+    if (activePreviewImage === url) {
+      setActivePreviewImage(null);
+      setSourceImages([]);
+    }
+  }, [generationHistory, hiddenDemoAssets, activePreviewImage]);
+
+  const confirmAndDeleteSingleItem = useCallback((url: string) => {
+    Alert.alert('Delete Image', 'Are you sure you want to delete this image?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deleteSingleHistoryItem(url) },
+    ]);
+  }, [deleteSingleHistoryItem]);
+
   const handleDeleteActive = useCallback(() => {
     if (!activePreviewImage) return;
     const isHistoryItem = generationHistory.some(item => item.url === activePreviewImage);
     const isSourceImage = sourceImages.some(img => (img.base64 || img.uri) === activePreviewImage);
 
-    Alert.alert(
-      'Delete Image',
-      'Are you sure you want to delete this image?',
-      [
+    if (isHistoryItem) {
+      confirmAndDeleteSingleItem(activePreviewImage);
+    } else if (isSourceImage) {
+      Alert.alert('Delete Image', 'Are you sure you want to delete this image?', [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (isHistoryItem) {
-              const item = generationHistory.find(i => i.url === activePreviewImage);
-              if (item?.modelName === 'demo') {
-                const newHidden = [...hiddenDemoAssets, activePreviewImage];
-                setHiddenDemoAssets(newHidden);
-                await AsyncStorage.setItem('hidden_demo_assets', JSON.stringify(newHidden));
-              }
-              setGenerationHistory(prev => prev.filter(i => i.url !== activePreviewImage));
-            }
-            if (isSourceImage) {
-              setSourceImages([]);
-            }
-            setActivePreviewImage(null);
-          },
-        },
-      ]
-    );
-  }, [activePreviewImage, generationHistory, sourceImages, hiddenDemoAssets]);
+        { text: 'Delete', style: 'destructive', onPress: () => { setSourceImages([]); setActivePreviewImage(null); } },
+      ]);
+    }
+  }, [activePreviewImage, generationHistory, sourceImages, confirmAndDeleteSingleItem]);
 
   const handleShare = useCallback(async () => {
     if (!activePreviewImage) return;
@@ -1549,7 +1553,7 @@ export default function StudioScreen() {
 
                   <View style={[styles.historyContainer, { paddingBottom: 0, marginBottom: 24 }]}>
                     <Text style={styles.historyTitle}>Source</Text>
-                    <SourceContainer 
+                    <SourceContainer
                       sourceImages={sourceImages}
                       activePreviewImage={activePreviewImage}
                       onClearImage={() => { setSourceImages([]); setActivePreviewImage(null); }}
@@ -1560,54 +1564,71 @@ export default function StudioScreen() {
                   <Text style={[styles.historyTitle, { marginBottom: 12 }]}>History</Text>
                 </>
               }
-              renderItem={({ item, index }) => {
+              renderItem={({ item }) => {
                 const isSelected = selectedHistoryItems.has(item.url);
-                return (
-                  <TouchableOpacity
-                    style={[
-                      styles.historyItem, 
-                      activePreviewImage === item.url && !isSelectionMode && styles.historyItemActive,
-                      isSelected && styles.historyItemSelected
-                    ]} 
-                    onPress={() => {
-                      if (isSelectionMode) {
-                        toggleSelection(item.url);
-                      } else {
-                        setActivePreviewImage(item.url);
-                        // Only set as source if there isn't one already
-                        if (sourceImages.length === 0) {
-                          loadHistoryItemAsSource(item.url);
-                        }
-                      }
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Image source={{ uri: item.url }} style={[styles.historyImage, isSelected && { opacity: 0.7 }]} />
-                    
-                    {isSelectionMode && (
+
+                if (isSelectionMode) {
+                  return (
+                    <TouchableOpacity
+                      style={[styles.historyItem, isSelected && styles.historyItemSelected]}
+                      onPress={() => toggleSelection(item.url)}
+                      activeOpacity={0.7}
+                    >
+                      <Image source={{ uri: item.url }} style={[styles.historyImage, isSelected && { opacity: 0.7 }]} />
                       <View style={styles.selectionOverlay}>
                         <View style={[styles.selectionCheck, isSelected ? styles.selectionCheckActive : styles.selectionCheckInactive]}>
                           {isSelected && <CheckIcon size={12} color="#FFF" />}
                         </View>
                       </View>
-                    )}
+                    </TouchableOpacity>
+                  );
+                }
+
+                return (
+                  <TouchableOpacity
+                    style={[styles.historyItem, activePreviewImage === item.url && styles.historyItemActive]}
+                    onPress={() => {
+                      setActivePreviewImage(item.url);
+                      if (sourceImages.length === 0) loadHistoryItemAsSource(item.url);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Image source={{ uri: item.url }} style={styles.historyImage} />
+                    <MenuView
+                      style={StyleSheet.absoluteFillObject}
+                      shouldOpenOnLongPress
+                      onOpenMenu={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
+                      actions={[
+                        { id: 'use-as-source', title: 'Use as Source', image: Platform.select({ ios: 'photo.on.rectangle', android: 'ic_menu_gallery' }), imageColor: '#FFFFFF' },
+                        { id: 'delete', title: 'Delete', attributes: { destructive: true }, image: Platform.select({ ios: 'trash', android: 'ic_menu_delete' }), imageColor: '#FF453A' },
+                      ]}
+                      onPressAction={({ nativeEvent }) => {
+                        if (nativeEvent.event === 'use-as-source') {
+                          loadHistoryItemAsSource(item.url);
+                          setIsResultsDrawerOpen(false);
+                        } else if (nativeEvent.event === 'delete') {
+                          deleteSingleHistoryItem(item.url);
+                        }
+                      }}
+                    >
+                      <View style={StyleSheet.absoluteFillObject} />
+                    </MenuView>
                   </TouchableOpacity>
                 );
               }}
               ListFooterComponent={<View style={{ height: 80 + insets.bottom }} />} // Bottom padding replacement
             />
-             <Toast 
-                visible={toastConfig.visible} 
-                message={toastConfig.message} 
+             <Toast
+                visible={toastConfig.visible}
+                message={toastConfig.message}
                 onDismiss={hideToast}
                 useNativeModal={false}
              />
           </SafeAreaView>
         </Modal>
 
-
         {/* NEW: Generation Tooltip */}
-        <GenerationTooltip 
+        <GenerationTooltip
             visible={showLongGenerationTooltip} 
             onDismiss={() => setShowLongGenerationTooltip(false)} 
         />

@@ -19,7 +19,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "PHPhotoLibraryPreventAutomaticLimitedAccessAlert": true
       },
-      "buildNumber": "24"
+      "buildNumber": "27"
     },
     "android": {
       "adaptiveIcon": {
