@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import Constants from 'expo-constants';
 import * as Application from 'expo-application';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { ImageFile } from '../types';
 
@@ -122,9 +122,14 @@ export function resumePendingGeneration(
                 await clearPendingJob();
 
                 try {
-                    const localUri = `${FileSystem.cacheDirectory}resumed_${Date.now()}.png`;
-                    await FileSystem.downloadAsync(job.result_image_url, localUri);
-                    onComplete(localUri);
+                    if (Platform.OS === 'web') {
+                        // No native cache on web; the remote URL is directly displayable.
+                        onComplete(job.result_image_url);
+                    } else {
+                        const localUri = `${FileSystem.cacheDirectory}resumed_${Date.now()}.png`;
+                        await FileSystem.downloadAsync(job.result_image_url, localUri);
+                        onComplete(localUri);
+                    }
                 } catch (fetchError) {
                     onError(new Error('Failed to fetch generated image'));
                 }
@@ -170,10 +175,16 @@ export async function generatePaintedMiniature(
     prompt: string,
     numberOfImages: number,
     temperature?: number,
-    metadata?: any
+    metadata?: any,
+    userText?: string
 ): Promise<string[]> {
     const imagesToProcess = Array.isArray(baseImages) ? baseImages : (baseImages ? [baseImages] : []);
-    const baseImagePayload = imagesToProcess.length > 0 ? prepareImagePayload(imagesToProcess[0]) : undefined;
+    const firstImage = imagesToProcess.length > 0 ? imagesToProcess[0] : undefined;
+    // A remote-hosted source (e.g. a PoYo CDN result reused as source) is passed
+    // by URL so the backend can consume it directly — avoids a CORS-blocked
+    // client-side fetch on web. Otherwise fall back to the base64 payload.
+    const baseImageUrl = firstImage?.remoteUrl;
+    const baseImagePayload = firstImage && !baseImageUrl ? prepareImagePayload(firstImage) : undefined;
 
     abortController = new AbortController();
 
@@ -211,10 +222,22 @@ export async function generatePaintedMiniature(
     const functionUrl = `${Constants.expoConfig?.extra?.supabaseUrl}/functions/v1/generate-miniature`;
 
     try {
-        // Get device ID for token tracking (iOS ID or Android ID)
-        const deviceId = await Application.getIosIdForVendorAsync() || 
-                         Application.getAndroidId() || 
-                         'unknown';
+        // Get device ID for token tracking (iOS ID or Android ID).
+        // These native APIs are not available on web, so guard by platform.
+        let deviceId = 'unknown';
+        if (Platform.OS === 'ios') {
+            deviceId = (await Application.getIosIdForVendorAsync()) || 'unknown';
+        } else if (Platform.OS === 'android') {
+            deviceId = Application.getAndroidId() || 'unknown';
+        } else {
+            // web (and any other platform): persist a generated id in AsyncStorage
+            let webId = await AsyncStorage.getItem('web_device_id');
+            if (!webId) {
+                webId = `web-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+                await AsyncStorage.setItem('web_device_id', webId);
+            }
+            deviceId = webId;
+        }
 
         const response = await fetch(functionUrl, {
             method: 'POST',
@@ -225,10 +248,12 @@ export async function generatePaintedMiniature(
             body: JSON.stringify({
                 prompt,
                 baseImage: baseImagePayload,
+                baseImageUrl,
                 action: 'generate',
                 temperature,
                 device_id: deviceId,
-                metadata: metadata
+                metadata: metadata,
+                userText: userText ?? ''
             }),
             signal: abortController.signal
         });
@@ -290,6 +315,10 @@ export async function generatePaintedMiniature(
             if (__DEV__) console.log("[AI Proxy] Sync response - image received directly");
             const result = data.output;
             const base64Data = result.startsWith('data:') ? result.split(',')[1] : result;
+            if (Platform.OS === 'web') {
+                // No native cache on web; return a directly displayable data URL.
+                return [result.startsWith('data:') ? result : `data:image/png;base64,${base64Data}`];
+            }
             const localUri = `${FileSystem.cacheDirectory}sync_${Date.now()}.png`;
             await FileSystem.writeAsStringAsync(localUri, base64Data, {
                 encoding: FileSystem.EncodingType.Base64,
@@ -352,9 +381,13 @@ export async function generatePaintedMiniature(
                                     await cleanup();
 
                                     try {
-                                        const localUri = `${FileSystem.cacheDirectory}poll_${Date.now()}.png`;
-                                        await FileSystem.downloadAsync(job.result_image_url, localUri);
-                                        resolve([localUri]);
+                                        if (Platform.OS === 'web') {
+                                            resolve([job.result_image_url]);
+                                        } else {
+                                            const localUri = `${FileSystem.cacheDirectory}poll_${Date.now()}.png`;
+                                            await FileSystem.downloadAsync(job.result_image_url, localUri);
+                                            resolve([localUri]);
+                                        }
                                     } catch (fetchError) {
                                         reject(new Error('Failed to fetch generated image'));
                                     }
@@ -395,9 +428,13 @@ export async function generatePaintedMiniature(
                                 await cleanup();
 
                                 try {
-                                    const localUri = `${FileSystem.cacheDirectory}gen_${Date.now()}.png`;
-                                    await FileSystem.downloadAsync(job.result_image_url, localUri);
-                                    resolve([localUri]);
+                                    if (Platform.OS === 'web') {
+                                        resolve([job.result_image_url]);
+                                    } else {
+                                        const localUri = `${FileSystem.cacheDirectory}gen_${Date.now()}.png`;
+                                        await FileSystem.downloadAsync(job.result_image_url, localUri);
+                                        resolve([localUri]);
+                                    }
                                 } catch (fetchError) {
                                     reject(new Error('Failed to fetch generated image'));
                                 }
@@ -476,7 +513,8 @@ export async function generatePaintedMiniature(
 export async function generateImageFromImage(
     baseImages: ImageFile | ImageFile[],
     prompt: string,
-    temperature?: number
+    temperature?: number,
+    userText?: string
 ): Promise<string[]> {
-    return generatePaintedMiniature(baseImages, prompt, 1, temperature);
+    return generatePaintedMiniature(baseImages, prompt, 1, temperature, undefined, userText);
 }

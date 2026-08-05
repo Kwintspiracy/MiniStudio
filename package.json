@@ -8,7 +8,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build:android": "eas build --platform android",
-    "build:ios": "eas build --platform ios"
+    "build:ios": "eas build --platform ios",
+    "test": "node --experimental-strip-types --import ./tests/alias-loader.mjs --test tests/*.test.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -30,6 +31,7 @@
     "expo-file-system": "~19.0.21",
     "expo-font": "~14.0.10",
     "expo-haptics": "~15.0.8",
+    "expo-image": "~3.0.11",
     "expo-image-manipulator": "~14.0.8",
     "expo-image-picker": "~17.0.10",
     "expo-linear-gradient": "~15.0.8",

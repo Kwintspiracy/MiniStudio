@@ -204,6 +204,11 @@ export function usePrompts() {
         };
     }, [loadRemoteConfig]);
 
-    return { ...state, refetch: loadRemoteConfig };
+    // Wrap so callers using it as an event handler (onPress/onRefresh, which
+    // pass an event object) don't accidentally feed a non-AbortSignal into the
+    // query's .abortSignal() and break the fetch.
+    const refetch = useCallback(() => loadRemoteConfig(), [loadRemoteConfig]);
+
+    return { ...state, refetch };
 }
 

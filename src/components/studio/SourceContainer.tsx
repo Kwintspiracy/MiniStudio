@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { MenuView } from '@react-native-menu/menu';
 import { PhotoCameraIcon, PhotoLibraryIcon } from '@/components/Icons';
 import { colors, fontFamily } from '@/theme';
@@ -35,7 +36,7 @@ export const SourceContainer = ({
           shouldOpenOnLongPress
         >
           <View style={styles.sourceImageWrapper}>
-            <Image source={{ uri: displayImage }} style={styles.sourceImage} />
+            <ExpoImage source={{ uri: displayImage }} style={styles.sourceImage} contentFit="cover" cachePolicy="memory-disk" />
             <TouchableOpacity onPress={onClearImage} style={styles.removeImageOverlay}>
               <Text style={styles.removeImageTextSmall}>×</Text>
             </TouchableOpacity>

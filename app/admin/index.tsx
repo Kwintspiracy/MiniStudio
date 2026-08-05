@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, StyleSheet, Image, Pressable, Alert, Share } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, StyleSheet, Image, Pressable, Alert, Share, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamily, borderRadius, spacing } from '../../src/theme';
 import { useAuth } from '../../src/context/AuthContext';
@@ -33,6 +33,61 @@ import * as Sharing from 'expo-sharing';
 // --- Types & Constants ---
 
 type ViewMode = 'Dashboard' | 'Prompts' | 'Modals' | 'Tools';
+
+// PoYo image-to-image (edit) model catalog. Slugs are the exact `model` values
+// accepted by PoYo's submit API (docs.poyo.ai). Keep in sync with the whitelist
+// in migration 20260628000000_poyo_model_config.sql.
+// AI-003 — Coût fournisseur réel par génération, en dollars.
+// Relevé sur la console PoYo et la grille publique (1 crédit = 0,005 $).
+// Le revenu net par token est de ~0,079 $ sur l'offre annuelle à 30 % de
+// commission : tout modèle au-dessus de ce seuil est vendu à perte.
+export const POYO_MODEL_USD: Record<string, number> = {
+    'z-image': 0.010,
+    'wan-2.7-image': 0.052,          // route vers la variante -pro
+    'nano-banana': 0.025,
+    'nano-banana-edit': 0.025,
+    'nano-banana-2': 0.025,
+    'nano-banana-2-edit': 0.025,
+    'seedream-4': 0.025,
+    'seedream-4-edit': 0.025,
+    'seedream-4.5': 0.025,
+    'seedream-4.5-edit': 0.025,
+    'flux-kontext-pro': 0.040,
+    'flux-kontext-pro-edit': 0.040,
+    'nano-banana-pro': 0.040,
+    'nano-banana-pro-edit': 0.090,   // 18 crédits — vérifié en console
+};
+
+// Seuil de rentabilité : revenu net par token sur l'offre la plus défavorable.
+const BREAKEVEN_USD = 0.079;
+
+/**
+ * AI-003 — Quatre modèles ont été retirés de ce menu car vendus à perte :
+ *   flux-kontext-max / -edit  0,080 $   au-dessus du seuil
+ *   gpt-image-2 / -edit       0,010 à 0,321 $ selon une qualité que
+ *                             l'application ne contrôle pas — donc non bornable
+ * Les rétablir suppose de facturer plus d'un token par génération.
+ */
+const POYO_MODELS: Array<{ slug: string; label: string }> = [
+    // Nano Banana family — normal (text-to-image) and edit (image-to-image) are distinct models.
+    { slug: 'nano-banana-2', label: 'Nano Banana 2' },
+    { slug: 'nano-banana-2-edit', label: 'Nano Banana 2 — Edit (default)' },
+    { slug: 'nano-banana-pro', label: 'Nano Banana Pro' },
+    { slug: 'nano-banana-pro-edit', label: 'Nano Banana Pro — Edit' },
+    { slug: 'nano-banana', label: 'Nano Banana (Gemini 2.5 Flash)' },
+    { slug: 'nano-banana-edit', label: 'Nano Banana (Gemini 2.5 Flash) — Edit' },
+    // Seedream
+    { slug: 'seedream-4.5', label: 'Seedream 4.5' },
+    { slug: 'seedream-4.5-edit', label: 'Seedream 4.5 — Edit' },
+    { slug: 'seedream-4', label: 'Seedream 4' },
+    { slug: 'seedream-4-edit', label: 'Seedream 4 — Edit' },
+    // Flux Kontext — seule la variante Pro reste rentable
+    { slug: 'flux-kontext-pro', label: 'Flux Kontext Pro' },
+    { slug: 'flux-kontext-pro-edit', label: 'Flux Kontext Pro — Edit' },
+    // Auto edit-mode when an image is provided
+    { slug: 'wan-2.7-image', label: 'Wan 2.7 Image (auto edit)' },
+    { slug: 'z-image', label: 'Z-Image (auto edit)' },
+];
 
 export default function AdminDashboard() {
     const { user } = useAuth();
@@ -96,6 +151,7 @@ export default function AdminDashboard() {
     const [topTools, setTopTools] = useState<ToolStats[]>([]);
     const [statsLoading, setStatsLoading] = useState(false);
     const [providerConfig, setProviderConfig] = useState<ProviderConfig | null>(null);
+    const [poyoModelExpanded, setPoyoModelExpanded] = useState(false);
     const [tokenUsage, setTokenUsage] = useState<TokenUsageStats | null>(null);
     const [providerUpdating, setProviderUpdating] = useState(false);
     const [promptHistory, setPromptHistory] = useState<PromptHistoryEntry[]>([]);
@@ -175,10 +231,20 @@ export default function AdminDashboard() {
         total: string;
         lines: Array<{ label: string; value: string }>;
     } => {
-        if (entry.model_used === 'poyo') {
+        // Gemini models use token-based pricing; everything else (PoYo: nano-banana,
+        // seedream, flux-kontext, …, and the legacy 'poyo' literal) is a flat rate.
+        if (!entry.model_used?.startsWith('gemini')) {
+            const cost = POYO_MODEL_USD[entry.model_used] ?? POYO_COST_FALLBACK;
+            const known = entry.model_used in POYO_MODEL_USD;
+            const margin = BREAKEVEN_USD - cost;
             return {
-                total: `$${POYO_COST_PER_GENERATION.toFixed(2)}`,
-                lines: [{ label: 'Flat rate / generation', value: `$${POYO_COST_PER_GENERATION.toFixed(2)}` }],
+                total: `$${cost.toFixed(3)}`,
+                lines: [
+                    { label: known ? `${entry.model_used} — coût réel` : 'coût estimé (modèle hérité)',
+                      value: `$${cost.toFixed(3)}` },
+                    { label: margin >= 0 ? 'Marge / génération (offre annuelle)' : '⚠ VENDU À PERTE (offre annuelle)',
+                      value: `${margin >= 0 ? '+' : '−'}$${Math.abs(margin).toFixed(3)}` },
+                ],
             };
         }
         const pricing = MODEL_PRICING[entry.model_used];
@@ -206,6 +272,19 @@ export default function AdminDashboard() {
             showModal('Error', `Failed to update fallback: ${error?.message || data?.error}`, 'error');
         } else {
             setProviderConfig(prev => prev ? { ...prev, fallback_enabled: newValue as 'true' | 'false' } : prev);
+        }
+        setProviderUpdating(false);
+    };
+
+    const handlePoyoModelSelect = async (slug: string) => {
+        setPoyoModelExpanded(false);
+        if (slug === (providerConfig?.poyo_model || 'nano-banana-2-edit')) return;
+        setProviderUpdating(true);
+        const { data, error } = await adminUpdateProviderConfig('poyo_model', slug);
+        if (error || data?.error) {
+            showModal('Error', `Failed to update PoYo model: ${error?.message || data?.error}`, 'error');
+        } else {
+            setProviderConfig(prev => prev ? { ...prev, poyo_model: slug } : prev);
         }
         setProviderUpdating(false);
     };
@@ -241,6 +320,19 @@ export default function AdminDashboard() {
         );
     };
 
+    // Web has no native filesystem/sharing: build a Blob and click a download link.
+    const downloadCsvOnWeb = (csv: string, filename: string) => {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     const handleExportCSVAll = async () => {
         try {
             const header = 'Key,Name,Version,Template,TemplatePro,NegativeTemplate,NegativeTemplatePro,IsActive,CreatedAt\n';
@@ -249,7 +341,12 @@ export default function AdminDashboard() {
                 return `${escape(p.key)},${escape(p.name)},${escape(p.version_label)},${escape(p.template)},${escape(p.template_pro)},${escape(p.negative_template)},${escape(p.negative_template_pro)},${p.is_active},${p.created_at}`;
             }).join('\n');
             const csv = header + rows;
-            
+
+            if (Platform.OS === 'web') {
+                downloadCsvOnWeb(csv, 'mini_studio_prompts_all.csv');
+                return;
+            }
+
             const fileUri = (FileSystem as any).documentDirectory + 'mini_studio_prompts_all.csv';
             await FileSystem.writeAsStringAsync(fileUri, csv);
             await Sharing.shareAsync(fileUri);
@@ -268,7 +365,12 @@ export default function AdminDashboard() {
                 return `${escape(p.key)},${escape(p.name)},${escape(p.version_label)},${escape(p.template)},${escape(p.template_pro)},${escape(p.negative_template)},${escape(p.negative_template_pro)},${p.is_active},${p.created_at}`;
             }).join('\n');
             const csv = header + rows;
-            
+
+            if (Platform.OS === 'web') {
+                downloadCsvOnWeb(csv, `mini_studio_${selectedKey.replace(/\./g, '_')}.csv`);
+                return;
+            }
+
             const fileUri = (FileSystem as any).documentDirectory + `mini_studio_${selectedKey.replace(/\./g, '_')}.csv`;
             await FileSystem.writeAsStringAsync(fileUri, csv);
             await Sharing.shareAsync(fileUri);
@@ -539,6 +641,47 @@ export default function AdminDashboard() {
                     </View>
                 </View>
 
+                {/* PoYo Image-to-Image Model Selector */}
+                <View style={[styles.ghRow, { flexDirection: 'column', alignItems: 'stretch', gap: 10, paddingVertical: 16 }]}>
+                    <Text style={[styles.ghRowMeta, { fontWeight: '600', letterSpacing: 0.5 }]}>POYO IMAGE-TO-IMAGE MODEL</Text>
+                    <TouchableOpacity
+                        style={[styles.ghSecondaryBtn, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                        onPress={() => setPoyoModelExpanded(v => !v)}
+                        disabled={providerUpdating}
+                    >
+                        <Text style={styles.ghSecondaryBtnText}>
+                            {POYO_MODELS.find(m => m.slug === (providerConfig?.poyo_model || 'nano-banana-2-edit'))?.label
+                                || (providerConfig?.poyo_model || 'nano-banana-2-edit')}
+                        </Text>
+                        <Text style={[styles.ghSecondaryBtnText, { opacity: 0.6 }]}>{poyoModelExpanded ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+
+                    {poyoModelExpanded && (
+                        <View style={{ borderWidth: 1, borderColor: GH_COLORS.border, borderRadius: 6, overflow: 'hidden' }}>
+                            {POYO_MODELS.map((m, idx) => {
+                                const isSelected = m.slug === (providerConfig?.poyo_model || 'nano-banana-2-edit');
+                                return (
+                                    <TouchableOpacity
+                                        key={m.slug}
+                                        style={{
+                                            paddingVertical: 12,
+                                            paddingHorizontal: 14,
+                                            backgroundColor: isSelected ? GH_COLORS.accent : 'transparent',
+                                            borderTopWidth: idx === 0 ? 0 : 1,
+                                            borderTopColor: GH_COLORS.border,
+                                        }}
+                                        onPress={() => handlePoyoModelSelect(m.slug)}
+                                        disabled={providerUpdating}
+                                    >
+                                        <Text style={[styles.ghRowTitle, isSelected && { color: '#fff' }]}>{m.label}</Text>
+                                        <Text style={[styles.ghRowMeta, isSelected && { color: '#fff', opacity: 0.85 }]}>{m.slug}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    )}
+                </View>
+
                 {/* Fallback Enabled Toggle — last row, no bottom border */}
                 <View style={[styles.ghRow, { justifyContent: 'space-between', borderBottomWidth: 0 }]}>
                     <View>
@@ -688,8 +831,11 @@ export default function AdminDashboard() {
                             {promptHistory.map((entry: PromptHistoryEntry, i: number) => {
                                 const isExpanded = expandedPromptId === entry.id;
                                 const isLast = i === promptHistory.length - 1;
-                                const providerLabel = entry.model_used === 'poyo' ? 'PoYo' : 'Gemini';
-                                const providerColor = entry.model_used === 'poyo' ? '#6e40c9' : '#1a7f37';
+                                const isGemini = entry.model_used?.startsWith('gemini');
+                                const providerLabel = isGemini ? 'Gemini' : 'PoYo';
+                                const providerColor = isGemini ? '#1a7f37' : '#6e40c9';
+                                // Legacy PoYo entries logged the literal 'poyo'; show a friendlier label.
+                                const modelLabel = entry.model_used === 'poyo' ? 'model n/a' : entry.model_used;
                                 const cost = calcCostDetails(entry);
                                 return (
                                     <TouchableOpacity key={entry.id} onPress={() => setExpandedPromptId(isExpanded ? null : entry.id)}>
@@ -700,6 +846,9 @@ export default function AdminDashboard() {
                                                     <View style={[styles.ghPublicBadge, { backgroundColor: providerColor, borderColor: providerColor }]}>
                                                         <Text style={[styles.ghPublicBadgeText, { color: '#fff' }]}>{providerLabel}</Text>
                                                     </View>
+                                                    <Text style={[styles.ghRowMeta, { fontWeight: '600', color: GH_COLORS.textPrimary }]} numberOfLines={1}>
+                                                        {modelLabel}
+                                                    </Text>
                                                     <Text style={styles.ghRowMeta}>
                                                         {new Date(entry.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                                     </Text>
@@ -1287,7 +1436,12 @@ const GH_COLORS = {
 const MODEL_PRICING: Record<string, { inputPer1M: number; outputPer1M: number }> = {
     'gemini-3.1-flash-image-preview': { inputPer1M: 0.25, outputPer1M: 60.00 },
 };
-const POYO_COST_PER_GENERATION = 0.05; // $0.05 flat per PoYo generation
+// AI-002 — Remplace l'ancienne constante plate de 0,05 $, qui n'était exacte
+// pour aucun modèle : elle sous-estimait nano-banana-pro-edit de 80 % et
+// surestimait z-image d'un facteur 5. Le coût dérive désormais du modèle
+// réellement soumis. `POYO_COST_FALLBACK` ne sert qu'au littéral hérité 'poyo',
+// dont on ne sait plus quel modèle il désignait.
+const POYO_COST_FALLBACK = 0.09;
 
 const styles = StyleSheet.create({
     outerContainer: { flex: 1, backgroundColor: GH_COLORS.canvas },

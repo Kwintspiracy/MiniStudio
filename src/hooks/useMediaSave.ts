@@ -19,6 +19,17 @@ export function useMediaSave(): UseMediaSaveResult {
     setError(null);
 
     try {
+      // Web: no media library — trigger a browser download instead.
+      if (Platform.OS === 'web') {
+        const link = document.createElement('a');
+        link.href = base64OrUri;
+        link.download = `ministudio-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return true;
+      }
+
       // Check existing permissions first to avoid repetitive prompts
       const permission = await MediaLibrary.getPermissionsAsync(true);
       
@@ -70,6 +81,18 @@ export function useMediaSave(): UseMediaSaveResult {
     setError(null);
 
     try {
+      // Web: can't write to a native cache or share files — trigger a download.
+      // Handled first so we never reach the native FileSystem calls below.
+      if (Platform.OS === 'web') {
+        const link = document.createElement('a');
+        link.href = base64OrUri;
+        link.download = `ministudio-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return true;
+      }
+
       let fileUri: string;
 
       // Check if it's a base64 data URL or a file URI
@@ -85,19 +108,6 @@ export function useMediaSave(): UseMediaSaveResult {
       } else {
         // It's already a file URI
         fileUri = base64OrUri;
-      }
-
-      // Share the image
-      if (Platform.OS === 'web') {
-        // For web, we can't share files directly
-        // Instead, we could trigger a download
-        const link = document.createElement('a');
-        link.href = base64OrUri;
-        link.download = `ministudio-${Date.now()}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        return true;
       }
 
       const result = await Share.share({

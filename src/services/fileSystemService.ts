@@ -1,5 +1,6 @@
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 
 /**
  * Delete a list of temporary file URIs (cache directory only).
@@ -28,6 +29,13 @@ export const cleanupTempFiles = async (uris: string[]): Promise<void> => {
  */
 export const saveBase64ToFile = async (base64Data: string, prefix: string = 'mini_'): Promise<string> => {
     try {
+        // Web: there is no native filesystem. The incoming data:/blob:/http URL
+        // is already directly usable by the UI (display + history), so return it
+        // as-is instead of writing to a (nonexistent) document directory.
+        if (Platform.OS === 'web') {
+            return base64Data;
+        }
+
         const filename = `${prefix}${Date.now()}.png`;
         const fileUri = `${FileSystem.documentDirectory}${filename}`;
 
@@ -61,6 +69,17 @@ export const saveBase64ToFile = async (base64Data: string, prefix: string = 'min
  */
 export const saveImageToGallery = async (uri: string): Promise<boolean> => {
     try {
+        // Web: no media library — trigger a browser download instead.
+        if (Platform.OS === 'web') {
+            const link = document.createElement('a');
+            link.href = uri;
+            link.download = `ministudio_${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            return true;
+        }
+
         const { status } = await MediaLibrary.requestPermissionsAsync();
 
         if (status !== 'granted') {

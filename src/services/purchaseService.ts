@@ -52,9 +52,20 @@ class PurchaseService {
                 if (__DEV__) console.warn('[PurchaseService] Web not supported for RevenueCat. Using Mock Mode.');
                 this.isMock = true;
             } else {
-                await Purchases.configure({ apiKey });
+                // RevenueCat must be configured exactly once per process. RootLayout
+                // already calls Purchases.configure() at startup, so only configure
+                // here if it hasn't happened yet (e.g. service used before layout mount).
+                // Calling configure() twice triggers SDK warnings and can reset the
+                // cached customer/offerings state, causing flaky purchases on device.
+                const alreadyConfigured =
+                    typeof Purchases.isConfigured === 'function'
+                        ? await Purchases.isConfigured()
+                        : false;
+                if (!alreadyConfigured) {
+                    await Purchases.configure({ apiKey });
+                }
                 this.initialized = true;
-                if (__DEV__) console.log('[PurchaseService] Initialized RevenueCat.');
+                if (__DEV__) console.log(`[PurchaseService] RevenueCat ready (configured here: ${!alreadyConfigured}).`);
             }
         } catch (e) {
             console.error('[PurchaseService] Failed to initialize RevenueCat:', e);

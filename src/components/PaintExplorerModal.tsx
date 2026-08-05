@@ -31,7 +31,7 @@ const PaintItem = memo(({
 }: { 
     color: PaletteColor, 
     isSelected: boolean, 
-    onToggle: (name: string, hex: string, finish?: string) => void 
+    onToggle: (name: string, hex: string, finish?: string, productType?: string) => void
 }) => {
     const paintKey = color.id || `${color.brand}-${color.name}`;
     
@@ -39,7 +39,7 @@ const PaintItem = memo(({
         <TouchableOpacity
             key={paintKey}
             style={[styles.paintItem, isSelected && styles.paintItemSelected]}
-            onPress={() => onToggle(color.name, color.hex || '#FFFFFF', color.finish)}
+            onPress={() => onToggle(color.name, color.hex || '#FFFFFF', color.finish, color.product_type ?? undefined)}
             activeOpacity={0.7}
         >
             <View
@@ -65,8 +65,8 @@ interface PaintExplorerModalProps {
     visible: boolean;
     onClose: () => void;
     selectedBrands: string[];
-    selectedColors: { name: string, hex: string, finish?: string }[];
-    onToggleColor: (colorName: string, hexCode: string, finish?: string) => void;
+    selectedColors: { name: string, hex: string, finish?: string, product_type?: string }[];
+    onToggleColor: (colorName: string, hexCode: string, finish?: string, productType?: string) => void;
     onPaintsLoaded?: (paints: PaletteColor[]) => void;
     triggerLoad?: boolean;
 }

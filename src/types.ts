@@ -9,6 +9,10 @@ export interface ImageFile {
   base64: string;
   mimeType: string;
   uri?: string; // For React Native, we often work with URIs
+  // Remote public URL (e.g. a PoYo CDN result reused as a source). When set,
+  // the image is passed to the backend by URL instead of base64 — this avoids
+  // a CORS-blocked client-side fetch on web.
+  remoteUrl?: string;
 }
 
 export interface HistoryItem {

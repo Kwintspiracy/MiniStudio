@@ -48,10 +48,12 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
   const lastFetchTime = useRef<number>(0);
   const isFetching = useRef<boolean>(false);
 
-  const fetchEntitlements = useCallback(async () => {
-    // Debounce: prevent multiple fetches within 500ms
+  const fetchEntitlements = useCallback(async (force = false) => {
+    // Debounce background triggers (mount + AppState) within 500ms.
+    // Explicit refetch() calls (e.g. right after a purchase) pass force=true
+    // so a fresh balance is never dropped by the debounce window.
     const now = Date.now();
-    if (now - lastFetchTime.current < 500) {
+    if (!force && now - lastFetchTime.current < 500) {
       return;
     }
 
@@ -71,10 +73,12 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
     try {
       const { data, error } = await supabase.rpc('get_user_status');
 
-      if (error) {
-        console.warn('[Entitlements] Error:', error);
-        // Mark data as stale and surface the error instead of silently returning
-        setEntitlements(prev => ({ ...prev, isStale: true, fetchError: error.message }));
+      // Guard against both errors and a null/empty RPC result. get_user_status
+      // can return SQL NULL (brand-new account, RLS edge case); destructuring
+      // `data.is_pro` on null would throw and leave the user stuck on defaults.
+      if (error || !data) {
+        console.warn('[Entitlements] Error or empty status:', error);
+        setEntitlements(prev => ({ ...prev, isStale: true, fetchError: error?.message ?? 'No status returned' }));
         return;
       }
 
@@ -118,9 +122,12 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
     };
   }, [fetchEntitlements]);
 
+  // Explicit refetch() forces a fetch, bypassing the background debounce.
+  const refetch = useCallback(() => fetchEntitlements(true), [fetchEntitlements]);
+
   const value = useMemo(
-    () => ({ entitlements, loading, refetch: fetchEntitlements }),
-    [entitlements, loading, fetchEntitlements]
+    () => ({ entitlements, loading, refetch }),
+    [entitlements, loading, refetch]
   );
 
   return (

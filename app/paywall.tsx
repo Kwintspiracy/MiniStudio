@@ -117,15 +117,21 @@ export default function PaywallScreen() {
       refetch();
 
       if (pack.product.productType === 'NON_CONSUMABLE' || pack.packageType === 'ANNUAL' || pack.packageType === 'MONTHLY') {
-          if (typeof customerInfo.entitlements.active['pro_access'] !== "undefined") {
-            showModal("Success", "Welcome to Pro!", 'default',
-                { label: "OK", onPress: () => {
-                    hideModal();
-                    router.back();
-                    setTimeout(() => refetch(), 300);
-                } }
-            );
-          }
+          // purchasePackage resolved without throwing → the purchase succeeded.
+          // The 'pro_access' entitlement may not have propagated yet, so always
+          // give feedback (don't leave the user staring at the paywall after a
+          // successful charge). Adapt the copy to the propagation state.
+          const proActive = typeof customerInfo.entitlements.active['pro_access'] !== "undefined";
+          showModal(
+              "Success",
+              proActive ? "Welcome to Pro!" : "Purchase complete! Your Pro access is activating…",
+              'default',
+              { label: "OK", onPress: () => {
+                  hideModal();
+                  router.back();
+                  setTimeout(() => refetch(), 300);
+              } }
+          );
       } else {
           showModal("Success", "Tokens added!", 'default',
               { label: "OK", onPress: () => { 
@@ -158,15 +164,11 @@ export default function PaywallScreen() {
       const customerInfo = await Purchases.restorePurchases();
       await refetch();
       if (typeof customerInfo.entitlements.active['pro_access'] !== "undefined") {
-        showModal("Success", "Purchases restored!", 'default');
-        router.back(); // Assuming we want to go back? Or just stay? Original code did router.back().
-        // Modal doesn't block execution, so router.back() happens immediately. 
-        // If we want modal to show THEN back, we need callback.
-        // Original: Alert.alert(...) ; router.back(); -> This might be race condition or alert blocks logic?
-        // On React Native, Alert blocks JS thread? No, it's async usually.
-        // Actually Alert.alert doesn't block execution flow unless you use async await which it doesn't support directly like that.
-        // But usually router.back() happening immediately might close the screen before Alert is seen?
-        // Let's defer router.back() to onPress.
+        // Defer router.back() to the modal's onPress, otherwise the screen
+        // unmounts immediately and the success modal is never seen.
+        showModal("Success", "Purchases restored!", 'default',
+          { label: "OK", onPress: () => { hideModal(); router.back(); } }
+        );
       } else {
         showModal("Info", "No active subscriptions found to restore.", 'default');
       }

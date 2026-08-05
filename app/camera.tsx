@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, StatusBar, Pressable, Animated as RNAnimated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, StatusBar, Pressable, Animated as RNAnimated, Dimensions, Platform } from 'react-native';
 import { CameraView, useCameraPermissions, CameraType, FlashMode } from 'expo-camera';
 import { useRouter, Stack } from 'expo-router';
 import { colors } from '../src/theme';
@@ -8,6 +8,8 @@ import { useImageContext } from '../src/context/ImageContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppModal } from '../src/components/AppModal';
 import * as Haptics from 'expo-haptics';
+import * as FileSystem from 'expo-file-system/legacy';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 export default function CameraScreen() {
     const [permission, requestPermission] = useCameraPermissions();
@@ -114,19 +116,43 @@ export default function CameraScreen() {
                     RNAnimated.timing(flashAnim, { toValue: 0, duration: 150, useNativeDriver: true })
                 ]).start();
 
+                // Capture without base64 — we downscale first, then encode the
+                // resized result. Capturing full-res base64 directly produces
+                // 4-7 MB payloads that fail generation requests on cellular.
                 const photo = await cameraRef.current.takePictureAsync({
                     quality: 0.8,
-                    base64: true,
                     skipProcessing: false, // Better quality for "source"
                 });
 
                 if (photo) {
-                    // Use the data URI format if base64 is available, otherwise file URI
-                    const imageUri = photo.base64
-                        ? `data:image/jpeg;base64,${photo.base64}`
-                        : photo.uri;
+                    // Downscale to 1024px wide JPEG (same pipeline as the gallery
+                    // picker) to keep the generation upload small and reliable.
+                    const resized = await ImageManipulator.manipulate(photo.uri)
+                        .resize({ width: 1024 })
+                        .renderAsync();
+                    const result = await resized.saveAsync({ compress: 0.7, format: SaveFormat.JPEG });
 
-                    setSelectedImage(imageUri);
+                    let dataUri: string;
+                    if (Platform.OS === 'web') {
+                        // expo-file-system's native readAsStringAsync is unavailable on
+                        // web; the manipulator returns a blob:/data: URL, so read it
+                        // via fetch + FileReader into a data URL.
+                        const response = await fetch(result.uri);
+                        const blob = await response.blob();
+                        dataUri = await new Promise<string>((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result as string);
+                            reader.onerror = () => reject(reader.error);
+                            reader.readAsDataURL(blob);
+                        });
+                    } else {
+                        const base64 = await FileSystem.readAsStringAsync(result.uri, {
+                            encoding: FileSystem.EncodingType.Base64,
+                        });
+                        dataUri = `data:image/jpeg;base64,${base64}`;
+                    }
+
+                    setSelectedImage(dataUri);
                     router.back();
                 }
             } catch (error) {

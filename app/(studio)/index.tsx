@@ -57,6 +57,9 @@ import { BreathingGradientButton } from '@/components/BreathingGradientButton';
 import { WelcomeOnboarding } from '@/components/WelcomeOnboarding';
 import { colors, spacing, borderRadius, fontFamily, textStyles } from '@/theme';
 import * as FileSystem from 'expo-file-system/legacy';
+// expo-image: disk+memory cache and automatic downsampling. Used for all
+// rendered thumbnails/previews. RN's Image is still imported above for getSize().
+import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { shareAsync, isAvailableAsync } from 'expo-sharing';
@@ -286,31 +289,11 @@ export default function StudioScreen() {
   //   }, [refetch])
   // );
   
-  const handleProToggle = () => {
-      // Allow toggling freely (or add logic to block if !entitlements.is_pro later)
-      // Per user request: "should just do as usual and turn on Pro"
-      if (!isPro && !entitlements.is_pro) {
-          // Optional: Still good UX to show Paywall if they aren't actually Entitled?
-          // User said "It should NOT do that". So we will just toggle it ON (Mocking Pro locally)
-          // OR we interpret "Turn on Pro" as "Try to turn on Pro".
-          
-          // Debugging/Dev Mode: Just toggle.
-          // Production Logic: Should probably be:
-          // if (isPro) setIsPro(false);
-          // else router.push('/paywall');
-          
-          // But strict compliance to request: "just do as usual and turn on Pro"
-          setIsPro(!isPro);
-      } else {
-          setIsPro(!isPro);
-      }
-  };
-
   const [sourceImages, setSourceImages] = useState<ImageFile[]>([]);
   const [activePreviewImage, setActivePreviewImage] = useState<string | null>(null);
   const [previewAspectRatio, setPreviewAspectRatio] = useState(1);
   const [generationHistory, setGenerationHistory] = useState<HistoryItem[]>([]);
-  const [selectedColors, setSelectedColors] = useState<{ name: string, hex: string, finish?: string }[]>([]);
+  const [selectedColors, setSelectedColors] = useState<{ name: string, hex: string, finish?: string, product_type?: string }[]>([]);
   const [loadedPaints, setLoadedPaints] = useState<PaletteColor[]>([]);
 
 
@@ -368,6 +351,13 @@ export default function StudioScreen() {
   const handlePhotoshootToggle = useCallback(() => { toggleHaptic(); setIsPhotoshootEnabled(prev => !prev); }, []);
   const handleNMMToggle = useCallback(() => { toggleHaptic(); setIsNMMEnabled(prev => !prev); }, []);
   const handleOSLToggle = useCallback(() => { toggleHaptic(); setIsOSLEnabled(prev => !prev); }, []);
+
+  // Photoshoot is only toggleable in sculpt mode; reset it on every mode change so a
+  // stale value can't leak into paint/sketch and silently drive other modes.
+  const handleModeChange = useCallback((mode: StudioMode) => {
+    setActiveMode(mode);
+    setIsPhotoshootEnabled(false);
+  }, []);
 
   const [showMyPaintsAlert, setShowMyPaintsAlert] = useState(false);
 
@@ -506,6 +496,14 @@ export default function StudioScreen() {
       }, 100);
     }
   }, [isPaletteEnabled]);
+
+  // Warm the disk cache for remote demo assets so the Gallery opens instantly.
+  useEffect(() => {
+    if (exampleAssets && exampleAssets.length > 0) {
+      const remote = exampleAssets.filter(u => typeof u === 'string' && u.startsWith('http'));
+      if (remote.length > 0) ExpoImage.prefetch(remote, { cachePolicy: 'memory-disk' });
+    }
+  }, [exampleAssets]);
 
   // Load example assets into Gallery history when available
   useEffect(() => {
@@ -703,13 +701,16 @@ export default function StudioScreen() {
         const finalPrompt = generatePaintPrompt({ ...promptParams, skipColorFiltering: false });
 
         if (__DEV__) console.log(`\n--- GENERATION PROMPT ---\n${finalPrompt}\n----------------------------------\n`);
-        
-        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, undefined, metadata);
+
+        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, undefined, metadata, sanitizePrompt(painterPrompt));
       } else if (activeMode === 'sketch' || activeMode === 'sculpt') {
         const characterDesc = sanitizePrompt(designerPrompt).trim() || 'character';
         
         let template: string;
-        if (activeMode === 'sculpt' && isPhotoshootEnabled && designerTemplates['pro-shot']) {
+        // Track whether we've already resolved to the pro-shot template so we don't
+        // ALSO inject effect.photoshoot separately below (avoids double-injection).
+        const usedProShotTemplate = activeMode === 'sculpt' && isPhotoshootEnabled && !!designerTemplates['pro-shot'];
+        if (usedProShotTemplate) {
             // Use pro-shot template when Photoshoot is enabled
             const proShotConfig = designerTemplates['pro-shot'];
             template = isPro ? proShotConfig.pro : proShotConfig.default;
@@ -735,26 +736,39 @@ export default function StudioScreen() {
 
         // Assembly of standardized prompt for Sketch/Sculpt
         const promptParts: string[] = [];
-        
+        // Collect negatives from the effects actually injected into [Effects] below,
+        // so we can append a final [AVOID] section (mirrors the paint path).
+        const negativeParts: string[] = [];
+
         promptParts.push("[Goal]");
         promptParts.push(goalPrompt);
 
-        // [Effects] section for Sketch/Sculpt (Photoshoot if enabled)
-        if (isPhotoshootEnabled) {
+        // [Effects] section for Sketch/Sculpt (Photoshoot if enabled and not already
+        // baked into the pro-shot template — avoids double-injecting the effect).
+        if (isPhotoshootEnabled && !usedProShotTemplate) {
             const photoEffect = effectPrompts['effect.photoshoot'];
             if (photoEffect) {
                 promptParts.push("[Effects]");
                 promptParts.push(isPro ? photoEffect.pro : photoEffect.default);
+
+                const photoNegative = isPro ? photoEffect.negative_pro : photoEffect.negative_default;
+                if (photoNegative) negativeParts.push(photoNegative);
             }
         }
 
         // [Rules]
         const ruleKey = activeMode === 'sketch' ? 'rules.sketch' : 'rules.render';
         const ruleContent = isPro ? stateRules[ruleKey]?.pro : stateRules[ruleKey]?.default;
-        
+
         if (ruleContent) {
             promptParts.push("[Rules]");
             promptParts.push(ruleContent);
+        }
+
+        // [AVOID] — only emitted when there is at least one non-empty negative
+        // collected from the effects actually injected above.
+        if (negativeParts.length > 0) {
+            promptParts.push(`[AVOID]\n${negativeParts.join(', ')}`);
         }
 
         const finalPrompt = promptParts.join('\n\n');
@@ -768,7 +782,7 @@ export default function StudioScreen() {
         };
 
         if (__DEV__) console.log(`\n--- ${activeMode.toUpperCase()} PROMPT (Temp: ${creativityLevel}) ---\n${finalPrompt}\n----------------------------------\n`);
-        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, creativityLevel, metadata);
+        images = await generatePaintedMiniature(preparedSources, finalPrompt, 1, creativityLevel, metadata, characterDesc);
       }
       if (images && images.length > 0) {
         const resultUrl = images[0];
@@ -922,6 +936,17 @@ export default function StudioScreen() {
     if (!activePreviewImage) return;
     const tempFilesToCleanup: string[] = [];
     try {
+      // Web: native sharing/filesystem are unavailable — trigger a download.
+      if (Platform.OS === 'web') {
+        const link = document.createElement('a');
+        link.href = activePreviewImage;
+        link.download = `ministudio_${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
       // Check if sharing is available
       const isAvailable = await isAvailableAsync();
       if (!isAvailable) {
@@ -979,21 +1004,14 @@ export default function StudioScreen() {
       return;
     }
 
-    // If it's a remote URL (not a data URL), fetch and convert to base64
+    // If it's a remote URL, keep it as a remote reference instead of fetching it
+    // client-side. Fetching the CDN image from the browser is blocked by CORS
+    // (the CDN sends no Access-Control-Allow-Origin header), and the image is
+    // already publicly hosted, so the backend can consume it by URL directly.
     if (url.startsWith('http')) {
-      try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const reader = new FileReader();
-        imageData = await new Promise<string>((resolve, reject) => {
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } catch (e) {
-        showModal('Error', 'Failed to load image', 'error');
-        return;
-      }
+      const newImage: ImageFile = { base64: url, mimeType: 'image/png', uri: url, remoteUrl: url };
+      setSourceImages([newImage]);
+      return;
     }
     const newImage: ImageFile = { base64: imageData, mimeType: 'image/png' };
     setSourceImages([newImage]);
@@ -1065,13 +1083,15 @@ export default function StudioScreen() {
   };
 
 
-  const toggleColor = (colorName: string, hexCode?: string, finish?: string) => {
+  // AI-001 : `product_type` accompagne désormais chaque couleur jusqu'au
+  // générateur de prompt. Sans lui, lavis et contrast étaient rendus en aplat.
+  const toggleColor = (colorName: string, hexCode?: string, finish?: string, productType?: string) => {
     setSelectedColors(prev => {
       const exists = prev.find(c => c.name === colorName);
       if (exists) {
         return prev.filter(c => c.name !== colorName);
       } else {
-        return [...prev, { name: colorName, hex: hexCode || '#FFFFFF', finish }];
+        return [...prev, { name: colorName, hex: hexCode || '#FFFFFF', finish, product_type: productType }];
       }
     });
   };
@@ -1149,9 +1169,11 @@ export default function StudioScreen() {
               {isAnonymous || !user ? (
                 <Ionicons name="person" size={24} color={colors.text.secondary} />
               ) : user.user_metadata?.avatar_url ? (
-                <Image
+                <ExpoImage
                   source={{ uri: user.user_metadata.avatar_url }}
                   style={styles.userAvatarImage}
+                  cachePolicy="memory-disk"
+                  contentFit="cover"
                 />
               ) : (
                 <BiSolidUserCircle32Icon size={24} />
@@ -1161,7 +1183,7 @@ export default function StudioScreen() {
         </View>
 
         {/* Main Content Area */}
-        <ModeCardSelector activeMode={activeMode} onModeChange={setActiveMode} />
+        <ModeCardSelector activeMode={activeMode} onModeChange={handleModeChange} />
         <ScrollView 
             ref={scrollViewRef}
             contentContainerStyle={[
@@ -1432,10 +1454,10 @@ export default function StudioScreen() {
                           >
                           {/* Show preview of the first source image if available */}
                           {sourceImages.length > 0 ? (
-                              <Image 
-                                  source={{ uri: sourceImages[0].base64 || sourceImages[0].uri }} 
-                                  style={styles.sourceButtonThumbnail} 
-                                  resizeMode="cover"
+                              <ExpoImage
+                                  source={{ uri: sourceImages[0].base64 || sourceImages[0].uri }}
+                                  style={styles.sourceButtonThumbnail}
+                                  contentFit="cover"
                               />
                           ) : (
                               <GalleryIcon color="#F4F4F4" />
@@ -1534,7 +1556,7 @@ export default function StudioScreen() {
                 <>
                   {activePreviewImage ? (
                     <View style={[styles.resultContainer, { marginBottom: 24 }]}>
-                      <Image source={{ uri: activePreviewImage }} style={[styles.activeResultImage, { aspectRatio: previewAspectRatio }]} resizeMode="cover" />
+                      <ExpoImage source={{ uri: activePreviewImage }} style={[styles.activeResultImage, { aspectRatio: previewAspectRatio }]} contentFit="cover" cachePolicy="memory-disk" transition={150} />
                       <View style={styles.resultActions}>
                         <TouchableOpacity
                             onPress={handleUseAsSource}
@@ -1574,7 +1596,7 @@ export default function StudioScreen() {
                       onPress={() => toggleSelection(item.url)}
                       activeOpacity={0.7}
                     >
-                      <Image source={{ uri: item.url }} style={[styles.historyImage, isSelected && { opacity: 0.7 }]} />
+                      <ExpoImage source={{ uri: item.url }} style={[styles.historyImage, isSelected && { opacity: 0.7 }]} contentFit="cover" cachePolicy="memory-disk" recyclingKey={item.url} />
                       <View style={styles.selectionOverlay}>
                         <View style={[styles.selectionCheck, isSelected ? styles.selectionCheckActive : styles.selectionCheckInactive]}>
                           {isSelected && <CheckIcon size={12} color="#FFF" />}
@@ -1593,7 +1615,7 @@ export default function StudioScreen() {
                     }}
                     activeOpacity={0.7}
                   >
-                    <Image source={{ uri: item.url }} style={styles.historyImage} />
+                    <ExpoImage source={{ uri: item.url }} style={styles.historyImage} contentFit="cover" cachePolicy="memory-disk" recyclingKey={item.url} transition={120} />
                     <MenuView
                       style={StyleSheet.absoluteFillObject}
                       shouldOpenOnLongPress

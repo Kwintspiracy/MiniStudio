@@ -68,8 +68,14 @@ export default function SettingsScreen() {
                     },
                     headerShadowVisible: false,
                     headerLeft: () => (
-                        <TouchableOpacity 
-                            onPress={() => router.back()} 
+                        <TouchableOpacity
+                            onPress={() => {
+                                // On web (page reload / direct link) there may be no
+                                // navigation history, so router.back() is a no-op.
+                                // Fall back to the studio route in that case.
+                                if (router.canGoBack()) router.back();
+                                else router.replace('/(studio)');
+                            }}
                             hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                             style={{ paddingHorizontal: 8 }}
                             accessibilityLabel="Go back"

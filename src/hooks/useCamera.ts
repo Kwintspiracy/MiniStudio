@@ -1,5 +1,6 @@
 // TODO: Remove unused module — identified in audit #17
 import { useState, useCallback, useRef } from 'react';
+import { Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
@@ -56,6 +57,20 @@ export function useCamera(): UseCameraResult {
         .resize({ width: 1024 })
         .renderAsync();
       const resized = await image.saveAsync({ compress: 0.7, format: SaveFormat.JPEG });
+
+      if (Platform.OS === 'web') {
+        // Native readAsStringAsync is unavailable on web; read the blob:/data:
+        // URL via fetch + FileReader into a data URL.
+        const response = await fetch(resized.uri);
+        const blob = await response.blob();
+        const dataUri = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+        return { base64: dataUri, mimeType: 'image/jpeg', uri: resized.uri };
+      }
 
       const base64Raw = await FileSystem.readAsStringAsync(resized.uri, {
         encoding: FileSystem.EncodingType.Base64,

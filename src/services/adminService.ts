@@ -77,6 +77,7 @@ export async function adminDeletePrompt(id: string): Promise<{ error: any }> {
 export interface ProviderConfig {
     primary_provider: 'poyo' | 'google';
     fallback_enabled: 'true' | 'false';
+    poyo_model?: string;
 }
 
 export interface TokenUsageStats {

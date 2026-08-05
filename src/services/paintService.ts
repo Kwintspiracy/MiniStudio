@@ -1,3 +1,13 @@
+/**
+ * Catégorie réelle du produit, telle que stockée en base.
+ * `finish` ne la remplace pas : il est NULL sur 95,5 % du catalogue (2 823 des
+ * 2 956 références) et manque 78 des 205 métalliques. Toute logique de rendu
+ * doit s'appuyer sur `product_type`, jamais sur `finish` seul.
+ */
+export type ProductType =
+  | 'opaque' | 'airbrush' | 'metallic' | 'wash'
+  | 'contrast' | 'technical' | 'primer' | 'fluorescent';
+
 export interface PaletteColor {
   id: string;
   brand: string;
@@ -13,16 +23,22 @@ export interface PaletteColor {
   g: number | null;
   b: number | null;
   finish?: string;
+  product_type?: ProductType | null;
+  opacity?: string | null;
 }
 
 import { supabase } from './supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const PAINTS_CACHE_KEY = 'paints_cache';
-const PAINTS_CACHE_TS_KEY = 'paints_cache_ts';
+// AI-001 : la clé de cache porte une version. Sans ce bump, les clients déjà
+// installés continueraient à servir pendant 24 h un cache dépourvu de
+// `product_type`, et la correction resterait invisible pour eux.
+const PAINTS_CACHE_KEY = 'paints_cache_v2';
+const PAINTS_CACHE_TS_KEY = 'paints_cache_ts_v2';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-const PAINT_COLUMNS = 'id,brand,set,name,hex,hue,saturation,lightness,code,is_discontinued,r,g,b,finish';
+const PAINT_COLUMNS =
+  'id,brand,set,name,hex,hue,saturation,lightness,code,is_discontinued,r,g,b,finish,product_type,opacity';
 
 export async function fetchAllPaints(): Promise<PaletteColor[]> {
   // Return cached data if still fresh

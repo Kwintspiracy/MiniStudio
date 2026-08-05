@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
@@ -27,6 +28,22 @@ export function useImagePicker(): UseImagePickerResult {
 
   const convertToImageFile = useCallback(async (uri: string): Promise<ImageFile> => {
     try {
+      // Web: expo-file-system's native readAsStringAsync is unavailable. The URI
+      // here is a blob:/data: URL from the image manipulator, so read it via
+      // fetch + FileReader, which yields a "data:<mime>;base64,..." string.
+      if (Platform.OS === 'web') {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const mimeType = blob.type || 'image/jpeg';
+        const base64DataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+        return { base64: base64DataUrl, mimeType, uri };
+      }
+
       // Read the file as base64
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
@@ -77,7 +94,9 @@ export function useImagePicker(): UseImagePickerResult {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
-        base64: true,
+        // No base64 here: the asset is downscaled by resizeImage() and the final
+        // base64 is produced from the resized file in convertToImageFile().
+        // Requesting base64 of the full-res original just wastes memory/CPU.
       });
 
       if (result.canceled || !result.assets || result.assets.length === 0) {
@@ -113,7 +132,8 @@ export function useImagePicker(): UseImagePickerResult {
         mediaTypes: ['images'],
         allowsMultipleSelection: false,
         quality: 0.8,
-        base64: true,
+        // base64 omitted on purpose — see pickImage(): resizeImage() +
+        // convertToImageFile() produce the base64 from the downscaled file.
       });
 
       if (result.canceled || !result.assets || result.assets.length === 0) {

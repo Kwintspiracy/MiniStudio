@@ -1,4 +1,4 @@
-import React, { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useEffect, useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -23,10 +23,18 @@ export const UsageTracker = forwardRef<UsageTrackerRef>((_, ref) => {
     const [stats, setStats] = useState<UsageStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const isMounted = useRef(true);
 
     useEffect(() => {
-        if (!user) return;
+        isMounted.current = true;
+        if (!user) {
+            // Reset transient state when the user goes away (e.g. sign-out)
+            setStats(null);
+            setLoading(false);
+            return;
+        }
         fetchStats();
+        return () => { isMounted.current = false; };
     }, [user]);
 
     const fetchStats = async () => {
@@ -34,17 +42,17 @@ export const UsageTracker = forwardRef<UsageTrackerRef>((_, ref) => {
             setErrorMsg(null);
             // Reload entitlements to get fresh balance
             await refetchEntitlements();
-            
+
             const { data, error } = await supabase.rpc('get_usage_stats', {
                 p_user_id: user?.id
             });
             if (error) throw error;
-            setStats(data);
+            if (isMounted.current) setStats(data);
         } catch (error: any) {
             console.error('Failed to fetch usage stats:', error);
-            setErrorMsg(error.message || 'Failed to load usage.');
+            if (isMounted.current) setErrorMsg(error.message || 'Failed to load usage.');
         } finally {
-            setLoading(false);
+            if (isMounted.current) setLoading(false);
         }
     };
 
@@ -83,7 +91,8 @@ export const UsageTracker = forwardRef<UsageTrackerRef>((_, ref) => {
     }
 
     const renderBar = (label: string, used: number, limit: number, color: string) => {
-        const percentage = Math.min((used / limit) * 100, 100);
+        // Guard against limit === 0 → NaN width ('NaN%' is an invalid RN style).
+        const percentage = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
         return (
             <View style={styles.barContainer}>
                 <View style={styles.barHeader}>
@@ -106,7 +115,7 @@ export const UsageTracker = forwardRef<UsageTrackerRef>((_, ref) => {
             )}
             <View style={styles.headerRow}>
                 <Text style={styles.title}>Your Balance</Text>
-                {entitlements.subscription_status === 'active' &&
+                {entitlements.is_pro &&
                     <View style={[styles.badge, { backgroundColor: colors.accent.purple }]}>
                          <Text style={[styles.badgeText, { color: 'white' }]}>PRO</Text>
                     </View>

@@ -19,7 +19,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "PHPhotoLibraryPreventAutomaticLimitedAccessAlert": true
       },
-      "buildNumber": "27"
+      "buildNumber": "29"
     },
     "android": {
       "adaptiveIcon": {
@@ -75,7 +75,7 @@
         "origin": false
       },
       "supabaseUrl": "https://gmbhkvpcebnwnzygcedi.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtYmhrdnBjZWJud256eWdjZWRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzNzE1NjksImV4cCI6MjA4MTk0NzU2OX0.vIokR84ICXfhCY40Hd0OLq4IsTr7HnGZ0ZJnGQjEH08",
+      "supabaseAnonKey": "sb_publishable_U7OfeMgOJ0KQiRqdpnB3Jw_yWGecCo5",
       "eas": {
         "projectId": "5591c1f5-fd27-4bdd-af41-ca04df9ce583"
       },
