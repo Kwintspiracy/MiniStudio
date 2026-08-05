@@ -1671,15 +1671,27 @@ export default function StudioScreen() {
           onClose={() => setShowMyPaintsAlert(false)}
         />
 
-        {/* Global/Standard App Modal */}
+        {/* Global/Standard App Modal
+            AppModal n'appelle jamais onClose lui-même : il exécute seulement
+            l'action reçue. Une action qui ne ferme pas — « Maybe Later » vaut
+            () => {} — laissait donc la modale ouverte, son voile bloquant tous
+            les gestes, ce qui se manifestait comme un gel de l'application.
+            On enveloppe chaque action pour fermer après coup, comme le fait
+            déjà AuthContext. */}
         <AppModal
             visible={modalConfig.visible}
             onClose={hideModal}
             title={modalConfig.title}
             message={modalConfig.message}
             type={modalConfig.type}
-            primaryAction={modalConfig.primaryAction || { label: "OK", onPress: hideModal }}
-            secondaryAction={modalConfig.secondaryAction}
+            primaryAction={modalConfig.primaryAction ? {
+                ...modalConfig.primaryAction,
+                onPress: () => { modalConfig.primaryAction?.onPress(); hideModal(); },
+            } : { label: "OK", onPress: hideModal }}
+            secondaryAction={modalConfig.secondaryAction ? {
+                ...modalConfig.secondaryAction,
+                onPress: () => { modalConfig.secondaryAction?.onPress(); hideModal(); },
+            } : undefined}
         />
         <Toast 
           visible={toastConfig.visible}

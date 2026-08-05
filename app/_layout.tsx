@@ -56,6 +56,14 @@ export default function RootLayout() {
 function RootLayoutNav() {
   useEffect(() => {
     const initPurchases = async () => {
+        // Expo Go n'embarque pas le module natif des magasins : configurer
+        // RevenueCat y échoue toujours, et la bibliothèque journalise l'échec
+        // en erreur rouge même si l'appel est attrapé. On s'abstient plutôt que
+        // de polluer la console à chaque démarrage en développement.
+        if (Constants.appOwnership === 'expo') {
+            if (__DEV__) console.log('[RC] Expo Go détecté — achats désactivés, configuration ignorée.');
+            return;
+        }
         if (Platform.OS !== 'web') {
             try {
                 // Custom Log Handler to silence "Purchase was cancelled" noise
