@@ -1,0 +1,479 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Banc de rendus — MiniStudio</title>
+<style>
+:root{
+  --bg:#EFEDE9;--surf:#fff;--surf2:#F7F6F3;--ink:#231F20;--soft:#5F5A5B;--faint:#8B8583;
+  --rule:#DBD6D0;--accent:#A86E00;--accent-bg:#FFF4DC;--ok:#186B42;--ok-bg:#E4F2EA;
+  --bad:#8E1014;--bad-bg:#FBE7E7;
+  --gold:#B8860B;--silver:#7D7D85;--bronze:#9C5A2D;
+  --shadow:0 1px 2px rgba(35,31,32,.06),0 8px 24px -14px rgba(35,31,32,.2);
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#171514;--surf:#211E1D;--surf2:#282422;--ink:#EDEAE4;--soft:#A7A09B;--faint:#7C7570;
+  --rule:#363130;--accent:#FFB000;--accent-bg:#3A2C08;--ok:#54C88C;--ok-bg:#14301F;
+  --bad:#EC6A6D;--bad-bg:#3A1516;
+  --gold:#F0C244;--silver:#B9B9C2;--bronze:#CF8A55;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -14px rgba(0,0,0,.7);
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font:15px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.num{font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.wrap{max-width:1500px;margin:0 auto;padding:24px 22px 70px}
+header{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;
+ border-bottom:1px solid var(--rule);padding-bottom:14px;margin-bottom:20px}
+h1{font-size:21px;letter-spacing:-.02em;margin:0;font-weight:660;flex:1 1 auto}
+.tabs{display:inline-flex;border:1px solid var(--rule);border-radius:9px;overflow:hidden;background:var(--surf2)}
+.tabs button{font:inherit;font-size:13.5px;font-weight:600;padding:7px 15px;border:0;background:transparent;
+ color:var(--soft);cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--accent);color:var(--bg)}
+.keys{font-size:12.5px;color:var(--soft);flex:none}
+.dot{display:inline-block;width:7px;height:7px;border-radius:99px;margin-right:5px;vertical-align:1px}
+.dot.on{background:var(--ok)} .dot.off{background:var(--bad)}
+.view{display:none} .view.on{display:block}
+.cols{display:grid;gap:22px;align-items:start}
+@media(min-width:1080px){.cols{grid-template-columns:352px 1fr}}
+.panel{background:var(--surf);border:1px solid var(--rule);border-radius:11px;padding:17px;box-shadow:var(--shadow)}
+@media(min-width:1080px){.side{position:sticky;top:18px;max-height:calc(100vh - 40px);overflow-y:auto}}
+h2{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:0 0 9px}
+.blk+.blk{margin-top:20px;padding-top:18px;border-top:1px solid var(--rule)}
+.drop{border:1.5px dashed var(--rule);border-radius:9px;padding:22px 14px;text-align:center;cursor:pointer;
+ background:var(--surf2);transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-bg)}
+.drop p{margin:0;font-size:13px;color:var(--soft)}
+.preview{display:none;gap:12px;align-items:center} .preview.show{display:flex}
+.preview img{width:82px;height:82px;object-fit:cover;border-radius:8px;border:1px solid var(--rule)}
+.preview .meta{font-size:12.5px;color:var(--soft);word-break:break-all}
+.link{background:none;border:0;color:var(--accent);font:inherit;font-size:12.5px;cursor:pointer;padding:0;text-decoration:underline}
+textarea{width:100%;min-height:150px;resize:vertical;font-family:ui-monospace,Menlo,Consolas,monospace;
+ font-size:11.5px;line-height:1.5;padding:10px;border-radius:8px;border:1px solid var(--rule);
+ background:var(--surf2);color:var(--ink)}
+.presets{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.presets button{font:inherit;font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:99px;
+ border:1px solid var(--rule);background:var(--surf2);color:var(--soft);cursor:pointer}
+.presets button:hover{border-color:var(--accent);color:var(--accent)}
+.mlist{display:grid;gap:2px}
+.m{display:flex;align-items:center;gap:9px;padding:6px 7px;border-radius:7px;cursor:pointer;font-size:13px}
+.m:hover{background:var(--surf2)}
+.m input{accent-color:var(--accent);margin:0;flex:none}
+.m .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m .tag{font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--accent);flex:none}
+.m .px{font-size:12px;color:var(--soft);flex:none}
+.m .lim{font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--bad);flex:none;display:none}
+.m.over .lim{display:inline}
+.m.over .nm{opacity:.55;text-decoration:line-through}
+.card.skip{border-style:dashed;opacity:.72}
+.card .skipmsg{font-size:12px;color:var(--soft);padding:10px 12px}
+.row{display:flex;gap:10px}
+.f{flex:1;display:flex;flex-direction:column;gap:4px}
+.f label{font-size:11px;font-weight:660;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}
+.f input{font:inherit;font-size:14px;padding:7px 9px;border-radius:7px;border:1px solid var(--rule);
+ background:var(--surf2);color:var(--ink);width:100%}
+.go{width:100%;margin-top:16px;font:inherit;font-size:15px;font-weight:660;padding:12px;border-radius:9px;
+ border:0;background:var(--accent);color:var(--bg);cursor:pointer}
+.go:disabled{opacity:.45;cursor:not-allowed}
+.est{margin-top:9px;font-size:12.5px;color:var(--soft);text-align:center}
+.bar{display:flex;flex-wrap:wrap;gap:14px;align-items:baseline;margin-bottom:14px}
+.bar .st{font-size:13px;color:var(--soft)} .bar .tot{font-size:13px;color:var(--accent);font-weight:660}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.card{background:var(--surf);border:1px solid var(--rule);border-radius:11px;overflow:hidden;box-shadow:var(--shadow);position:relative}
+.card.p1{border-color:var(--gold);border-width:2px}
+.card.p2{border-color:var(--silver);border-width:2px}
+.card.p3{border-color:var(--bronze);border-width:2px}
+.medal{position:absolute;top:9px;left:9px;z-index:2;font-size:19px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.45))}
+.card .ph{aspect-ratio:1;display:grid;place-items:center;background:var(--surf2)}
+.card .ph img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
+.spin{width:22px;height:22px;border:2.5px solid var(--rule);border-top-color:var(--accent);border-radius:99px;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.spin{animation:none}}
+.card .cap{padding:10px 12px}
+.card .nm{font-size:13px;font-weight:640;word-break:break-all;margin-bottom:5px}
+.card .mt{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--soft)}
+.card .cost{color:var(--accent);font-weight:660}
+.card .drift{color:var(--bad);font-weight:660}
+.card.fail{border-color:var(--bad)}
+.card .err{font-size:12px;color:var(--bad);padding:10px 12px;word-break:break-word}
+.podium{display:flex;gap:5px;padding:0 12px 11px}
+.podium button{flex:1;font:inherit;font-size:12px;font-weight:660;padding:5px 0;border-radius:6px;
+ border:1px solid var(--rule);background:var(--surf2);color:var(--soft);cursor:pointer}
+.podium button:hover{border-color:var(--accent);color:var(--accent)}
+.podium button[aria-pressed=true]{color:var(--bg)}
+.podium button.r1[aria-pressed=true]{background:var(--gold);border-color:var(--gold)}
+.podium button.r2[aria-pressed=true]{background:var(--silver);border-color:var(--silver)}
+.podium button.r3[aria-pressed=true]{background:var(--bronze);border-color:var(--bronze)}
+.state{font-size:11.5px;color:var(--faint);letter-spacing:.05em;text-transform:uppercase;font-weight:660}
+.empty{color:var(--faint);font-size:14px;padding:40px 0;text-align:center}
+/* historique */
+.hlist{display:grid;gap:11px}
+.hrun{display:flex;gap:14px;align-items:center;background:var(--surf);border:1px solid var(--rule);
+ border-radius:11px;padding:12px;box-shadow:var(--shadow);cursor:pointer;text-align:left;width:100%;font:inherit;color:inherit}
+.hrun:hover{border-color:var(--accent)}
+.hrun img{width:62px;height:62px;object-fit:cover;border-radius:8px;border:1px solid var(--rule);flex:none;background:var(--surf2)}
+.hrun .hi{flex:1;min-width:0}
+.hrun .hd{font-size:14px;font-weight:640;margin-bottom:3px}
+.hrun .hm{font-size:12.5px;color:var(--soft);display:flex;flex-wrap:wrap;gap:11px}
+.hrun .hp{font-size:13px;flex:none;text-align:right;color:var(--soft)}
+/* classement */
+.tw{overflow-x:auto;border:1px solid var(--rule);border-radius:11px;background:var(--surf);box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:660px}
+th,td{padding:9px 13px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);background:var(--surf2)}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:first-child td{font-weight:660}
+td.pts{color:var(--accent);font-weight:700}
+dialog{border:0;padding:0;background:transparent;max-width:94vw;max-height:94vh}
+dialog::backdrop{background:rgba(0,0,0,.82)}
+dialog img{max-width:94vw;max-height:88vh;display:block;border-radius:8px}
+dialog .dn{color:#fff;font-size:13px;padding:9px 2px;text-align:center}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style></head><body>
+<div class="wrap">
+
+<header>
+  <h1>Banc de comparaison de rendus</h1>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-v="banc" aria-selected="true">Banc</button>
+    <button role="tab" data-v="histo" aria-selected="false">Historique</button>
+    <button role="tab" data-v="clast" aria-selected="false">Classement</button>
+  </div>
+  <div class="keys" id="keys"></div>
+</header>
+
+<!-- ══ BANC ══════════════════════════════════════════════════ -->
+<div class="view on" id="v-banc"><div class="cols">
+  <div class="panel side">
+    <div class="blk">
+      <h2>Image source</h2>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choisir une image">
+        <p><strong>Cliquez</strong> ou déposez une image<br><span style="font-size:12px">jpg · png · webp</span></p>
+      </div>
+      <div class="preview" id="prev">
+        <img id="prevImg" alt="Aperçu"><div><div class="meta" id="prevMeta"></div><button class="link" id="chg">changer</button></div>
+      </div>
+      <input type="file" id="file" accept="image/*" hidden>
+    </div>
+    <div class="blk">
+      <h2>Prompt</h2>
+      <textarea id="prompt" spellcheck="false" aria-label="Prompt"></textarea>
+      <div style="display:flex;justify-content:space-between;margin-top:6px">
+        <span class="num" style="font-size:12px;color:var(--soft)" id="plen">0 caractères</span>
+        <button class="link" id="reload">recharger prompt.txt</button>
+      </div>
+    </div>
+    <div class="blk">
+      <h2>Modèles</h2>
+      <div class="presets">
+        <button data-p="all">tous</button><button data-p="marge">décision de marge</button>
+        <button data-p="cheap">les moins chers</button><button data-p="none">aucun</button>
+      </div>
+      <div class="mlist" id="models"></div>
+    </div>
+    <div class="blk">
+      <h2>Débit</h2>
+      <div class="row">
+        <div class="f"><label for="conc">De front</label><input type="number" id="conc" value="3" min="1" max="10"></div>
+        <div class="f"><label for="poll">Sondage (s)</label><input type="number" id="poll" value="6" min="2" max="30"></div>
+      </div>
+    </div>
+    <button class="go" id="go" disabled>Lancer</button>
+    <div class="est" id="est">Choisissez une image et au moins un modèle</div>
+  </div>
+
+  <div>
+    <div class="bar">
+      <span class="st" id="status">Prêt</span>
+      <span class="tot" id="total"></span>
+      <span class="st" id="verdictHint" style="color:var(--accent)"></span>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty">Les rendus apparaîtront ici, classés du moins cher au plus cher.</div>
+  </div>
+</div></div>
+
+<!-- ══ HISTORIQUE ════════════════════════════════════════════ -->
+<div class="view" id="v-histo">
+  <p style="color:var(--soft);margin:0 0 16px">Chaque passage est archivé dans <span class="num">resultats/</span>. Cliquez pour le revoir et le juger.</p>
+  <div class="hlist" id="hlist"></div>
+  <div class="empty" id="hempty">Aucun passage archivé pour l'instant.</div>
+</div>
+
+<!-- ══ CLASSEMENT ════════════════════════════════════════════ -->
+<div class="view" id="v-clast">
+  <p style="color:var(--soft);margin:0 0 6px" id="clastSub"></p>
+  <p style="color:var(--faint);font-size:13px;margin:0 0 16px">
+    Points : 3 pour une première place, 2 pour une deuxième, 1 pour une troisième.
+    <strong>Valeur</strong> = points par dollar dépensé — c'est le rapport qualité/coût, et donc l'arbitrage réel.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Modèle</th><th>Passages</th><th>🥇</th><th>🥈</th><th>🥉</th><th>Points</th>
+      <th>Coût moyen</th><th>Durée</th><th>Valeur</th></tr></thead>
+    <tbody id="lb"></tbody>
+  </table></div>
+  <div class="empty" id="lempty">Jugez au moins un passage pour voir un classement.</div>
+</div>
+
+</div>
+
+<dialog id="zoom"><img id="zoomImg" alt=""><div class="dn" id="zoomName"></div></dialog>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const usd = n => n == null ? "—" : "$" + n.toFixed(3);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const post = (u,d) => fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)}).then(r=>r.json());
+const get  = u => fetch(u).then(r=>r.json());
+
+let CFG=null, SOURCE=null, RUN_ID=null, PICKS={};
+const results = new Map();
+
+// ── onglets ─────────────────────────────────────────────────────
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", String(x===b)));
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("on"));
+  $("#v-" + b.dataset.v).classList.add("on");
+  if (b.dataset.v === "histo") loadHistory();
+  if (b.dataset.v === "clast") loadBoard();
+}));
+
+// ── configuration ───────────────────────────────────────────────
+(async function init(){
+  CFG = await get("/api/config");
+  $("#keys").innerHTML = `<span class="dot ${CFG.hasPoyoKey?"on":"off"}"></span>POYO_API_KEY`
+    + `&nbsp;&nbsp;<span class="dot ${CFG.hasGoogleKey?"on":"off"}"></span>GOOGLE_API_KEY`;
+  $("#prompt").value = CFG.defaultPrompt || ""; updateLen();
+  const host = $("#models");
+  const add = (slug,note,price,provider) => {
+    const l = document.createElement("label"); l.className = "m";
+    l.innerHTML = `<input type="checkbox" value="${slug}" data-provider="${provider}">`
+      + `<span class="nm">${slug}</span>` + (note?`<span class="tag">${note}</span>`:"")
+      + `<span class="lim">incompatible</span>`
+      + `<span class="px num">${price!=null?usd(price):"?"}</span>`;
+    l.dataset.slug = slug;
+    host.appendChild(l);
+  };
+  CFG.poyo.forEach(m => add(m.slug,m.note,m.usd,"poyo"));
+  if (CFG.hasGoogleKey) CFG.google.forEach(m => add(m.slug,m.note,null,"google"));
+  host.addEventListener("change", refresh);
+  preset("marge");
+  updateLen();
+})();
+
+// ── image ───────────────────────────────────────────────────────
+const drop=$("#drop"), file=$("#file");
+drop.addEventListener("click",()=>file.click());
+drop.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();file.click();}});
+$("#chg").addEventListener("click",()=>file.click());
+["dragenter","dragover"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadImage(f);});
+file.addEventListener("change",()=>{if(file.files[0])loadImage(file.files[0]);});
+function loadImage(f){
+  const r=new FileReader();
+  r.onload=()=>{
+    SOURCE={dataUrl:r.result,name:f.name,mimeType:f.type||"image/png",
+            base64:String(r.result).slice(String(r.result).indexOf(",")+1)};
+    $("#prevImg").src=r.result;
+    $("#prevMeta").textContent=`${f.name} · ${(f.size/1024).toFixed(0)} Ko`;
+    $("#prev").classList.add("show"); drop.style.display="none"; refresh();
+  };
+  r.readAsDataURL(f);
+}
+
+// ── prompt ──────────────────────────────────────────────────────
+$("#prompt").addEventListener("input", updateLen);
+function updateLen(){
+  const n = $("#prompt").value.length;
+  $("#plen").textContent = n.toLocaleString("fr-FR")+" caractères";
+  refreshConstraints(n);
+}
+/** Marque les modèles dont la limite de prompt est dépassée. Aucun appel réseau. */
+function refreshConstraints(n){
+  if(!CFG) return;
+  document.querySelectorAll("#models .m").forEach(row=>{
+    const cfg = CFG.poyo.find(m=>m.slug===row.dataset.slug);
+    const over = Boolean(cfg && cfg.maxPrompt && n > cfg.maxPrompt);
+    row.classList.toggle("over", over);
+    if(over) row.title = `Ce modèle accepte au maximum ${cfg.maxPrompt} caractères`;
+  });
+}
+$("#reload").addEventListener("click", async()=>{ const c=await get("/api/config"); $("#prompt").value=c.defaultPrompt||""; updateLen(); });
+
+// ── préréglages ─────────────────────────────────────────────────
+document.querySelectorAll(".presets button").forEach(b=>b.addEventListener("click",()=>preset(b.dataset.p)));
+function preset(kind){
+  const MARGE=["nano-banana-2-edit","nano-banana-pro-edit"];
+  const CHEAP=["z-image","wan-2.7-image","nano-banana-2-edit","seedream-4-edit"];
+  document.querySelectorAll("#models input").forEach(b=>{
+    b.checked = kind==="all"?true : kind==="none"?false : kind==="marge"?MARGE.includes(b.value):CHEAP.includes(b.value);
+  });
+  refresh();
+}
+const selected = () => [...document.querySelectorAll("#models input:checked")]
+  .map(b=>({slug:b.value,provider:b.dataset.provider}));
+function refresh(){
+  const sel=selected();
+  const est=sel.reduce((s,m)=>s+(CFG.poyo.find(x=>x.slug===m.slug)?.usd ?? 0.05),0);
+  $("#go").disabled = !(SOURCE && sel.length && CFG.hasPoyoKey);
+  $("#est").textContent = !CFG.hasPoyoKey ? "POYO_API_KEY absente du serveur"
+    : !SOURCE ? "Choisissez une image source" : !sel.length ? "Cochez au moins un modèle"
+    : `${sel.length} modèle${sel.length>1?"s":""} · coût estimé ~${usd(est)}`;
+}
+
+// ── lancement ───────────────────────────────────────────────────
+$("#go").addEventListener("click", run);
+async function run(){
+  const sel=selected(), prompt=$("#prompt").value.trim();
+  if(!prompt) return alert("Le prompt est vide.");
+  $("#go").disabled=true; $("#empty").style.display="none"; $("#grid").innerHTML="";
+  results.clear(); PICKS={}; RUN_ID=null; $("#verdictHint").textContent="";
+  sel.forEach(m=>results.set(m.slug,{...m,state:"attente"})); draw();
+
+  $("#status").textContent="Téléversement de la source…";
+  let up;
+  try{ up=await post("/api/upload",{dataUrl:SOURCE.dataUrl,filename:SOURCE.name}); if(up.error) throw new Error(up.error); }
+  catch(e){ $("#status").textContent="Échec du téléversement : "+e.message; $("#go").disabled=false; return; }
+  RUN_ID = up.runDir;
+
+  const conc=Math.max(1,+$("#conc").value||3), pollMs=Math.max(2,+$("#poll").value||6)*1000;
+  let done=0; const t0=Date.now();
+  const tick=()=>$("#status").textContent=`${done}/${sel.length} terminés · ${((Date.now()-t0)/1000).toFixed(0)}s`;
+  tick();
+  let cursor=0;
+  await Promise.all(Array.from({length:Math.min(conc,sel.length)},async()=>{
+    for(;;){
+      const i=cursor++; if(i>=sel.length) return;
+      const m=sel[i];
+      results.get(m.slug).state="en cours"; draw();
+      try{
+        const r = m.provider==="google"
+          ? await post("/api/google",{model:m.slug,prompt,mimeType:SOURCE.mimeType,base64:SOURCE.base64})
+          : await post("/api/generate",{model:m.slug,prompt,imageUrl:up.fileUrl,pollMs});
+        if(r.incompatible){ results.set(m.slug,{...m,state:"skip",error:r.error}); }
+        else if(r.error) throw new Error(r.error);
+        else results.set(m.slug,{...m,state:"ok",...r});
+      }catch(e){ results.set(m.slug,{...m,state:"fail",error:e.message}); }
+      done++; tick(); draw();
+    }
+  }));
+  $("#status").textContent=`Terminé · ${done}/${sel.length} · ${((Date.now()-t0)/1000).toFixed(0)}s`;
+  $("#verdictHint").textContent="Désignez vos trois meilleurs ↓";
+  $("#go").disabled=false;
+  await post("/api/save",{generatedAt:new Date().toISOString(),prompt,source:SOURCE.name,
+                          sourceFile:up.sourceFile,runs:[...results.values()]});
+}
+
+// ── rendu des cartes ────────────────────────────────────────────
+function draw(readonly){
+  const items=[...results.values()].sort((a,b)=>{
+    const rank=x=>x.state==="ok"?0:x.state==="skip"?2:x.state==="fail"?3:1;
+    if(rank(a)!==rank(b)) return rank(a)-rank(b);
+    return (a.usd??1e9)-(b.usd??1e9);
+  });
+  const medalOf = slug => PICKS["1"]===slug?"🥇":PICKS["2"]===slug?"🥈":PICKS["3"]===slug?"🥉":"";
+  const clsOf   = slug => PICKS["1"]===slug?"p1":PICKS["2"]===slug?"p2":PICKS["3"]===slug?"p3":"";
+
+  $("#grid").innerHTML = items.map(r=>{
+    if(r.state==="skip") return `<div class="card skip"><div class="cap">
+      <div class="nm">${esc(r.slug)}</div><div class="state">non lancé</div></div>
+      <div class="skipmsg">${esc(r.error||"")}<br><span style="color:var(--faint)">Aucun crédit dépensé.</span></div></div>`;
+    if(r.state==="fail") return `<div class="card fail"><div class="cap">
+      <div class="nm">${esc(r.slug)}</div><div class="state">échec</div></div>
+      <div class="err">${esc(r.error||"")}</div></div>`;
+    if(r.state!=="ok") return `<div class="card"><div class="ph"><div class="spin"></div></div>
+      <div class="cap"><div class="nm">${esc(r.slug)}</div><div class="state">${r.state}</div></div></div>`;
+    const md=medalOf(r.slug);
+    return `<div class="card ${clsOf(r.slug)}">
+      ${md?`<div class="medal">${md}</div>`:""}
+      <div class="ph"><img src="/resultats/${esc(r.local)}" alt="Rendu ${esc(r.slug)}" data-zoom="${esc(r.slug)}" loading="lazy"></div>
+      <div class="cap"><div class="nm">${esc(r.slug)}</div>
+        <div class="mt"><span class="cost num">${usd(r.usd)}</span>
+          ${r.credits!=null?`<span class="num">${r.credits} cr</span>`:""}
+          <span class="num">${r.seconds}s</span>
+          ${r.drift?`<span class="drift">≠ grille (${r.expected} cr)</span>`:""}
+        </div></div>
+      <div class="podium">
+        ${[1,2,3].map(n=>`<button class="r${n}" data-rank="${n}" data-slug="${esc(r.slug)}"
+           aria-pressed="${PICKS[String(n)]===r.slug}">${n}${n===1?"ᵉʳ":"ᵉ"}</button>`).join("")}
+      </div></div>`;
+  }).join("");
+
+  const ok=items.filter(r=>r.state==="ok"&&r.usd!=null);
+  $("#total").textContent = ok.length ? `coût réel ${usd(ok.reduce((s,r)=>s+r.usd,0))}` : "";
+
+  document.querySelectorAll("[data-zoom]").forEach(img=>img.addEventListener("click",()=>{
+    $("#zoomImg").src=img.src; $("#zoomName").textContent=img.dataset.zoom; $("#zoom").showModal();
+  }));
+  document.querySelectorAll(".podium button").forEach(b=>b.addEventListener("click",()=>pick(b.dataset.rank,b.dataset.slug)));
+}
+
+// ── podium ──────────────────────────────────────────────────────
+async function pick(rank, slug){
+  if(PICKS[rank]===slug) delete PICKS[rank];
+  else {
+    // un modèle ne peut occuper qu'une place : on libère l'ancienne
+    for(const k of Object.keys(PICKS)) if(PICKS[k]===slug) delete PICKS[k];
+    PICKS[rank]=slug;
+  }
+  draw();
+  if(RUN_ID){
+    await post("/api/verdict",{id:RUN_ID,picks:PICKS});
+    $("#verdictHint").textContent = Object.keys(PICKS).length===3 ? "Podium enregistré ✓" : "Podium enregistré (incomplet)";
+  }
+}
+$("#zoom").addEventListener("click",()=>$("#zoom").close());
+
+// ── historique ──────────────────────────────────────────────────
+async function loadHistory(){
+  const runs = await get("/api/history");
+  $("#hempty").style.display = runs.length ? "none" : "block";
+  $("#hlist").innerHTML = runs.map(r=>{
+    const d = new Date(r.generatedAt);
+    const p = r.picks ? Object.entries(r.picks).sort().map(([k,v])=>`${k==="1"?"🥇":k==="2"?"🥈":"🥉"} ${v}`).join("<br>") : "<span style='color:var(--faint)'>non jugé</span>";
+    return `<button class="hrun" data-id="${esc(r.id)}">
+      ${r.sourceFile?`<img src="/resultats/${esc(r.id)}/${esc(r.sourceFile)}" alt="">`:`<img alt="">`}
+      <div class="hi">
+        <div class="hd">${isNaN(d)?esc(r.id):d.toLocaleString("fr-FR")}</div>
+        <div class="hm"><span>${r.models} rendus${r.failed?` · ${r.failed} échecs`:""}</span>
+          <span class="num">${usd(r.totalUsd)}</span>
+          <span class="num">${r.promptLength} car.</span>
+          <span>${esc(r.source||"")}</span></div>
+      </div>
+      <div class="hp">${p}</div></button>`;
+  }).join("");
+  document.querySelectorAll(".hrun").forEach(b=>b.addEventListener("click",()=>openRun(b.dataset.id)));
+}
+
+async function openRun(id){
+  const data = await get("/api/run?id="+encodeURIComponent(id));
+  if(data.error) return alert(data.error);
+  RUN_ID = data.id || id;
+  PICKS = data.picks || {};
+  results.clear();
+  (data.runs||[]).forEach(r=>results.set(r.slug||r.model,r));
+  $("#prompt").value = data.prompt || ""; updateLen();
+  document.querySelector('.tabs button[data-v="banc"]').click();
+  $("#empty").style.display="none";
+  $("#status").textContent = `Passage du ${new Date(data.generatedAt).toLocaleString("fr-FR")} — ${esc(data.source||"")}`;
+  $("#verdictHint").textContent = "Vous pouvez modifier le podium";
+  draw();
+}
+
+// ── classement ──────────────────────────────────────────────────
+async function loadBoard(){
+  const { rows, totalRuns, judgedRuns } = await get("/api/leaderboard");
+  $("#clastSub").textContent = `${totalRuns} passage${totalRuns>1?"s":""} archivé${totalRuns>1?"s":""}, dont ${judgedRuns} jugé${judgedRuns>1?"s":""}.`;
+  const scored = rows.filter(r=>r.points>0);
+  $("#lempty").style.display = scored.length ? "none" : "block";
+  $("#lb").innerHTML = rows.map(r=>`<tr>
+    <td>${esc(r.slug)}</td>
+    <td class="num">${r.runs}</td>
+    <td class="num">${r.gold||""}</td><td class="num">${r.silver||""}</td><td class="num">${r.bronze||""}</td>
+    <td class="num pts">${r.points||""}</td>
+    <td class="num">${usd(r.avgUsd)}</td>
+    <td class="num">${r.avgSeconds!=null?r.avgSeconds.toFixed(0)+"s":"—"}</td>
+    <td class="num">${r.valeur!=null?r.valeur.toFixed(0):"—"}</td></tr>`).join("");
+}
+</script>
+</body></html>

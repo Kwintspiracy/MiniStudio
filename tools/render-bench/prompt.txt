@@ -1,0 +1,24 @@
+[GOAL]
+
+Colorize this miniature in the style of a master painter, focusing on vibrant and high-contrast effects. Utilize wet blending for seamless, smooth color transitions and abundant glazing layers to achieve rich, saturated colors with deep tonal harmony. Employ a curated, harmonious color palette that features complementary cool shadows (blues, violets, deep greens) on warmer mid-tones (reds, oranges, yellows) to maximize depth and visual interest. Ensure razor-sharp edge highlighting on all hard surfaces and a high overall tonal contrast between the darkest shadows and brightest highlights. The final image must convey a professionally hand-painted, artisanal quality, feeling dynamic, intense, and exquisitely finished with a matt finish. The miniature's base should also be painted to perfectly match and enhance the overall aesthetic and color scheme.
+
+[STRICT PALETTE]
+
+using paints from these brands: All Brands
+
+[EFFECTS]
+
+[TMM OVERRIDE INSTRUCTIONS]
+Use True Metallic Metal (TMM) acrylic hobby paints for all armor, weapons, and trims. The metals must display a uniform, slightly grainy metallic pigment texture containing mica flakes, with a natural, even metallic sheen. Apply dark liquid washes pooling strictly in the recesses, and light metallic drybrushing catching only the raised textures.
+Absolutely no painted, high-contrast matte color gradients, sky-earth reflections, or fake trompe l'oeil light banding on the metal surfaces. The metal must look like standard, single-hue metallic acrylic paint catching a single, realistic light source.
+[NO OSL EFFECT]
+Utilize clean, neutral studio lighting. There are no glowing elements, magical blooms, or Object Source Lighting (OSL) effects on the miniature. Shadows and highlights should be determined strictly by a standard overhead zenithal light source, maintaining consistent local colors without dramatic or vibrant color casts from secondary light sources.
+
+[STRICT RULES]
+
+CRITICAL - GEOMETRY & COMPOSITION PRESERVATION:
+1. Camera Lock: Maintain the exact camera angle, framing, and aspect ratio of the source image. Do not crop or zoom.
+2. Sculpt Integrity: Do not modify the 3D model's design, pose, or silhouette. Apply color/texture only to the existing forms.
+3. Follows strictly the Goal, colors and effects sections.
+4. Maintain 1:1 pixel-perfect silhouette alignment. Do not add change the volume/sculpt in any ways. It is critical that the model structure remains as the original. Only the coloring is allowed.
+5. Task Definition: Your goal is "Texture Overpainting," not "Image Regeneration."
