@@ -49,6 +49,48 @@ jamais. La passe d'autocritique de l'audit signalait l'UX comme sa zone la plus 
 déduction sans lancer l'application. Une demi-heure sur appareil a produit plus que six heures de
 lecture sur ce périmètre.*
 
+## Deuxième vague — appliquée et vérifiée le même jour
+
+| Finding | Preuve |
+|---|---|
+| `ECON-006` **registre append-only** | `token_ledger` écrit par les 4 chemins de solde. Cycle complet testé : `+10 signup_grant` → `−1 generation` → `+50 purchase`. **Réconciliation : solde 59 = somme du registre 59, écart 0.** La requête que l'audit déclarait impossible à écrire s'exécute. |
+| `COST-001` **plafond de dépense** | `daily_spend_cap_usd` = 50 $/jour dans `app_config`, vérifié dans `reserve_generation` avant toute autorisation. Testé : refus `daily_spend_cap_reached` quand le plafond est abaissé sous la dépense du jour. |
+| `AI-002` **coût réel enregistré** | `provider_model_costs` (19 modèles) + colonne `generation_jobs.provider_cost_usd`, estampillée à la réservation. Historique rattrapé : **392 générations, 32,10 $ de coût fournisseur réel**, 0,082 $ en moyenne. |
+| `ADMIN-001` **journal d'audit** | `admin_audit_log`, écrit par `admin_update_provider_config`, lisible par les seuls admins. Testé : `{"key":"daily_spend_cap_usd","from":…,"to":…}` avec son auteur. |
+| `PERF-001` **mesuré et partiellement corrigé** | `expo export` : **974 Ko gzip en un seul bundle**, budget 200 Ko dépassé de 4,9×, portail admin présent (5 chaînes retrouvées). Polices d'icônes 3 981 Ko → 380 Ko en n'important que la famille utilisée. Export total 10,68 → 6,76 Mo. |
+| Conseillers Supabase | `auth_rls_initplan` sur `generation_jobs` corrigé ; clé primaire ajoutée à `processed_webhook_events`. |
+
+### Un trou que l'audit avait signalé sans le refermer
+
+La Phase 0 notait que `reserve_generation` existait en **trois surcharges** et que « lire la plus récente ne prouve rien sur les autres ». Ce n'a jamais été instruit. Les conseillers de sécurité l'ont fait remonter :
+
+```
+reserve_generation(uuid, integer)                verrou ✗  registre ✗  plafond ✗
+reserve_generation(uuid, integer, text)          verrou ✓  registre ✗  plafond ✗
+reserve_generation(uuid, integer, text, jsonb)   verrou ✓  registre ✓  plafond ✓
+```
+
+Les deux anciennes étaient **exécutables par tout compte authentifié** et contournaient l'intégralité des correctifs. Supprimées : les appels retombent sur la version corrigée, dont les paramètres portent des défauts. Même traitement pour les **quatre** surcharges de `confirm_generation`, dont aucune n'écrivait au registre. `handle_new_user` — une fonction de trigger — n'est plus exposée à l'API REST.
+
+### Performance : la base n'est pas en cause
+
+`EXPLAIN ANALYZE` sur les requêtes chaudes : catalogue de peintures **2,8 ms** (index scan), limite de débit anonyme **1,3 ms** (index-only, 0 heap fetch). Les index sont bien posés. Si les temps de chargement sont lents, la cause est côté client et réseau.
+
+### ⚠️ Dérive dépôt ↔ production, à nouveau
+
+Sept migrations ont été appliquées aujourd'hui via MCP. **Une seule a son fichier dans le dépôt** (`20260805133805_econ_hardening`). Les six autres existent en production sans fichier :
+
+```
+20260805144533  perf_rls_initplan_and_pk
+20260805153006  ledger_audit_cost_schema
+20260805153034  ledger_reserve_generation
+20260805153102  ledger_writes_and_admin_audit
+20260805153405  model_costs_allowed_flag
+20260805153621  drop_stale_overloads_and_ledger_confirm
+```
+
+Leur SQL est conservé dans `supabase_migrations.schema_migrations`. Les matérialiser demande `supabase db pull`, qui exige Docker Desktop — absent de ce poste. **C'est exactement `OPS-001`, et je viens d'y contribuer.** À régler dès que Docker est disponible.
+
 ## Reste ouvert
 
 | Finding | Ce qui bloque |
