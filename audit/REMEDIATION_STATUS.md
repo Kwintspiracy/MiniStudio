@@ -23,8 +23,7 @@ où en est chacun.
 | `CROSS-001` (partiel) | les 2 apps portent la clé publishable ; rotation en attente |
 | `OPS-001` (partiel) | travail de juillet commité ; dérive dépôt↔base non réconciliée |
 
-Migration appliquée : `20260805190000_econ_hardening`.
-Commits : `9760dda`, `7930197`, `0aedfba`.
+Migration appliquée : `20260805133805_econ_hardening`.
 
 ## Trouvé pendant les tests sur appareil — hors audit initial
 
@@ -97,11 +96,13 @@ Leur SQL est conservé dans `supabase_migrations.schema_migrations`. Les matéri
 |---|---|
 | **`SEC-001`** webhook PoYo non authentifié | **Une clé.** Le code HMAC est écrit et commité. `GET /api/api-keys/webhook-secret` sur votre compte PoYo, puis déploiement. |
 | **`SAFETY-001`** modération d'entrée | **Risque assumé par le commanditaire, 2026-08-05.** Motif : les modèles Gemini refusent les contenus contraires à leur charte, et l'application est mono-utilisateur — aucun contenu n'est diffusé. Le mécanisme de signalement que ce rapport réclamait ne s'applique donc pas : il visait les plateformes communautaires. Subsiste, non couvert : l'entrée (l'image quitte l'infrastructure avant tout refus), et le fait que le fournisseur réel est PoYo, pas Google en direct. Voir la correction en tête d'`AUDIT_SAFETY.md`. |
-| `ECON-006` aucun registre | Touche toutes les RPC qui écrivent un solde — à relire avant d'appliquer. À poser **avant** d'avoir des utilisateurs. |
-| `COST-001` aucun plafond de dépense | Le montant est une décision commerciale. ~3 240 $/jour au plafond technique actuel. |
-| `ADMIN-001` MFA + journal d'audit | Enrôlement MFA en console. |
-| `PERF-001` bundle non mesuré | `expo export` à exécuter. |
+| `ADMIN-001` MFA | Le journal d'audit est en place ; **l'enrôlement MFA se fait dans votre console** Supabase. |
+| `PERF-001` code splitting | Mesuré et partiellement corrigé. Sortir le portail admin du bundle demande des imports dynamiques et une revue du routage : un vrai chantier. Gain estimé 100 à 150 Ko gzip. |
+| `PERF-002` images d'onboarding | 2 123 Ko pour 4 PNG affichés une fois dans la vie de l'utilisateur, chargés au démarrage. WebP + chargement paresseux récupéreraient ~1,8 Mo. |
+| `COST-001` plafond à ajuster | Le mécanisme est posé et testé, à **50 $/jour** par défaut. Ce montant est un point de départ prudent, pas une décision : ajustez-le depuis `app_config`. |
 | `ECON-003` porte résiduelle | Un compte sans `device_id` exploitable reçoit encore 10 tokens. Fermer suppose de créer l'entitlement dans `handle_new_user`. |
+| `OPS-001` dérive | 6 migrations du jour sans fichier ; `supabase db pull` bloqué par l'absence de Docker. |
+| Rotations de clés | La clé PoYo collée en conversation, puis les clés legacy Supabase après adoption des nouveaux builds. |
 
 ## Actions hors code
 
