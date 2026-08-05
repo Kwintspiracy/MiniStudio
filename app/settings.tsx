@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ScrollView, RefreshControl, Modal, Pressable } from 'react-native';
 import { Stack, useRouter, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { GradientBackground } from '../src/components/GradientBackground';
 import { useAuth } from '../src/context/AuthContext';
 import { colors, fontFamily } from '../src/theme';

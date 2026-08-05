@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert, Modal, StyleSheet, Platform, Dimensions, StatusBar, Share,
   KeyboardAvoidingView, Pressable
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { ContextMenu } from '@/components/ContextMenu';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { 
