@@ -234,7 +234,8 @@ async function submitPoyoWithWebhook(
     prompt: string,
     baseImage?: ImagePayload,
     model?: string,
-    baseImageUrl?: string
+    baseImageUrl?: string,
+    callbackToken?: string
 ): Promise<{ taskId: string }> {
     // Get available API key with rotation
     const { data: keyData, error: keyError } = await supabaseClient.rpc('get_available_poyo_key');
@@ -259,7 +260,12 @@ async function submitPoyoWithWebhook(
 
     // Submit task WITH webhook callback URL
     log.info('POYO', `SUBMIT: Prompt length: ${prompt.length} chars | Unfiltered: ${!prompt.includes('[Flesh Tones]')}`);
-    const taskId = await submitPoyoTask(apiKey, prompt, imageUrl, CONFIG.POYO_WEBHOOK_URL, model);
+    // Le jeton voyage dans l'URL de rappel : PoYo nous le rend tel quel, et le
+    // webhook n'accepte que s'il correspond a un job encore en `reserved`.
+    const callbackUrl = callbackToken
+        ? `${CONFIG.POYO_WEBHOOK_URL}?t=${encodeURIComponent(callbackToken)}`
+        : CONFIG.POYO_WEBHOOK_URL;
+    const taskId = await submitPoyoTask(apiKey, prompt, imageUrl, callbackUrl, model);
 
     // Store task_id + the actual model on the job so the webhook can log the real
     // model name (not just the 'poyo' provider) into generation_logs.
@@ -373,7 +379,7 @@ async function reserveCredits(
     cost: number,
     deviceId?: string,
     metadata?: any
-): Promise<{ success: boolean; jobId?: string; error?: string; balance?: number }> {
+): Promise<{ success: boolean; jobId?: string; callbackToken?: string; error?: string; balance?: number }> {
     const { data, error } = await supabaseClient.rpc('reserve_generation', {
         p_user_id: userId,
         p_cost: cost,
@@ -390,7 +396,9 @@ async function reserveCredits(
     }
 
     log.info('POYO', `CREDITS: Reserved ${cost} token(s) | Unreserved balance: ${data.remaining_balance}`);
-    return { success: true, jobId: data.job_id };
+    // SEC-001 : jeton de callback, propre a cette tache. Il authentifie le
+    // retour de PoYo sans dependre d'un secret partage cote fournisseur.
+    return { success: true, jobId: data.job_id, callbackToken: data.callback_token };
 }
 
 async function countTokensForPrompt(prompt: string, model: string): Promise<number | undefined> {
@@ -766,7 +774,8 @@ Deno.serve(async (req) => {
                     sanitizedPrompt,
                     imagePayload,
                     poyoModel,
-                    baseImageUrl
+                    baseImageUrl,
+                    reservation.callbackToken
                 );
 
                 log.divider('POYO');

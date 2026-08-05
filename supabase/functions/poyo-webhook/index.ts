@@ -1,26 +1,27 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
 // ============================================================================
-// SEC-001 — AUTHENTIFICATION DU CALLBACK POYO
+// SEC-001 — AUTHENTIFICATION DU CALLBACK POYO, PAR JETON DE TÂCHE
 //
-// La version déployée jusqu'ici (v6, 2026-01-30) n'avait AUCUNE authentification :
-// une requête anonyme obtenait 200 et atteignait complete_poyo_job avec les
-// droits service_role. Vérifié par exécution le 2026-08-05.
+// La version déployée jusqu'ici (v6, 2026-01-30) n'avait AUCUNE
+// authentification : une requête anonyme obtenait 200 et atteignait
+// complete_poyo_job avec les droits service_role. Vérifié par exécution le
+// 2026-08-05, avec témoin négatif sur revenuecat-webhook qui répondait 401.
 //
-// La version précédente de ce fichier comparait un en-tête `Authorization` à un
-// Bearer statique. Elle n'a jamais été déployée — et c'est une chance, car elle
-// aurait rejeté 100 % des callbacks légitimes : PoYo n'émet pas cet en-tête.
+// La voie documentée par PoYo — signature HMAC dont la clé s'obtient sur
+// GET /api/api-keys/webhook-secret — est inaccessible : cet endpoint répond
+// 401 avec une clé API pourtant valide (la même clé répond 200 sur
+// /api/generate/status/). PoYo sépare l'authentification de génération de
+// celle de gestion de compte.
 //
-// Mécanisme réel, d'après docs.poyo.ai/api-manual/task-management/webhooks :
-//   X-Webhook-Timestamp : horodatage Unix, rejeté au-delà de 300 s
-//   X-Webhook-Signature : base64(HMAC-SHA256(task_id + "." + timestamp, clé))
-//   clé : GET /api/api-keys/webhook-secret   (rotation : POST .../rotate)
+// On se passe donc du fournisseur. reserve_generation génère un jeton par
+// tâche, transmis dans le callback_url ; le webhook le rend obligatoire au
+// retour. Non devinable, valable pour une seule tâche, et invalidé dès le
+// callback traité (complete_poyo_job remet callback_token à NULL).
 //
-// ⚠️ AVANT DE DÉPLOYER : renseigner le secret POYO_WEBHOOK_HMAC_KEY dans les
-//    secrets de la fonction. Sans lui, cette version répond 500 et bloque toutes
-//    les générations. PoYo réessaie jusqu'à 5 fois avec backoff (60 s → 10 min),
-//    ce qui laisse une marge de correction, mais ne dispense pas de vérifier sur
-//    un callback réel juste après le déploiement.
+// La signature HMAC est vérifiée EN PLUS si POYO_WEBHOOK_HMAC_KEY est
+// configuré : le jour où l'endpoint devient accessible, il suffit de
+// renseigner le secret pour cumuler les deux protections.
 // ============================================================================
 
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filter(Boolean);
@@ -29,8 +30,10 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-timestamp, x-webhook-signature',
 }
 
-const POYO_WEBHOOK_HMAC_KEY = Deno.env.get('POYO_WEBHOOK_HMAC_KEY');
+const POYO_WEBHOOK_HMAC_KEY = Deno.env.get('POYO_WEBHOOK_HMAC_KEY');   // facultatif
 const TIMESTAMP_TOLERANCE_S = 300;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const log = {
     info: (...args: any[]) => console.log('[WEBHOOK]', ...args),
@@ -38,8 +41,7 @@ const log = {
     success: (...args: any[]) => console.log('[WEBHOOK] ✓', ...args),
 };
 
-/** Comparaison à temps constant. Ici elle compte vraiment : l'attaquant contrôle
- *  task_id et timestamp, et peut donc sonder la signature octet par octet. */
+/** Comparaison à temps constant, pour la vérification HMAC optionnelle. */
 function timingSafeEqual(a: string, b: string): boolean {
     if (a.length !== b.length) return false;
     let diff = 0;
@@ -49,22 +51,17 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 async function computeSignature(taskId: string, timestamp: string, key: string): Promise<string> {
     const cryptoKey = await crypto.subtle.importKey(
-        'raw',
-        new TextEncoder().encode(key),
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign'],
+        'raw', new TextEncoder().encode(key),
+        { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
     );
     const mac = await crypto.subtle.sign(
-        'HMAC',
-        cryptoKey,
-        new TextEncoder().encode(`${taskId}.${timestamp}`),
+        'HMAC', cryptoKey, new TextEncoder().encode(`${taskId}.${timestamp}`),
     );
     return btoa(String.fromCharCode(...new Uint8Array(mac)));
 }
 
-/** SEC-002 — L'URL du résultat provient du corps de la requête. Même signée,
- *  elle doit pointer vers un hôte connu : le client la télécharge et l'affiche. */
+/** SEC-002 — l'URL du résultat vient du corps de la requête : elle doit pointer
+ *  vers un hôte connu, car le client la télécharge et l'affiche. */
 const ALLOWED_RESULT_HOSTS = (Deno.env.get('ALLOWED_SOURCE_IMAGE_HOSTS') || 'cdn.doculator.org')
     .split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
 
@@ -85,20 +82,18 @@ Deno.serve(async (req) => {
     log.info('═══════════════════════════════════════════════════════');
     log.info('Received PoYo callback');
 
-    if (!POYO_WEBHOOK_HMAC_KEY) {
-        log.error('POYO_WEBHOOK_HMAC_KEY is not configured — refusing to process');
-        return new Response(JSON.stringify({ error: 'Webhook secret not configured' }), {
-            status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-    }
-
     try {
-        // Le corps est lu en texte : task_id entre dans la signature, mais RIEN
-        // n'en est exploité tant que la signature n'est pas validée.
-        const rawBody = await req.text();
-        let payload: any;
-        try { payload = JSON.parse(rawBody); }
-        catch {
+        // ── 1. Jeton de tâche — la protection principale ─────────────────────
+        const token = new URL(req.url).searchParams.get('t');
+        if (!token || !UUID_RE.test(token)) {
+            log.error('Missing or malformed callback token');
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+        }
+
+        const payload = await req.json().catch(() => null);
+        if (!payload) {
             return new Response(JSON.stringify({ error: 'Malformed JSON' }), {
                 status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
@@ -106,7 +101,6 @@ Deno.serve(async (req) => {
 
         const taskData = payload.data || payload;
         const taskId = taskData?.task_id;
-
         if (!taskId || typeof taskId !== 'string') {
             log.error('No task_id in callback payload');
             return new Response(JSON.stringify({ error: 'Missing task_id' }), {
@@ -114,41 +108,35 @@ Deno.serve(async (req) => {
             });
         }
 
-        // ── 1. Fraîcheur de l'horodatage (anti-rejeu) ────────────────────────
-        const timestamp = req.headers.get('X-Webhook-Timestamp');
-        if (!timestamp) {
-            log.error('Missing X-Webhook-Timestamp');
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-                status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-        }
-        const age = Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp));
-        if (!Number.isFinite(age) || age > TIMESTAMP_TOLERANCE_S) {
-            log.error(`Timestamp outside tolerance (${age}s)`);
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-                status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
+        // ── 2. Signature HMAC — vérifiée seulement si un secret est configuré ─
+        if (POYO_WEBHOOK_HMAC_KEY) {
+            const timestamp = req.headers.get('X-Webhook-Timestamp');
+            const provided = req.headers.get('X-Webhook-Signature');
+            if (!timestamp || !provided) {
+                log.error('HMAC key configured but signature headers are missing');
+                return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                    status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+            }
+            const age = Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp));
+            if (!Number.isFinite(age) || age > TIMESTAMP_TOLERANCE_S) {
+                log.error(`Timestamp outside tolerance (${age}s)`);
+                return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                    status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+            }
+            const expected = await computeSignature(taskId, timestamp, POYO_WEBHOOK_HMAC_KEY);
+            if (!timingSafeEqual(provided, expected)) {
+                log.error('Signature mismatch');
+                return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                    status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+            }
+            log.success('Signature verified');
         }
 
-        // ── 2. Signature ─────────────────────────────────────────────────────
-        const provided = req.headers.get('X-Webhook-Signature');
-        if (!provided) {
-            log.error('Missing X-Webhook-Signature');
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-                status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-        }
-        const expected = await computeSignature(taskId, timestamp, POYO_WEBHOOK_HMAC_KEY);
-        if (!timingSafeEqual(provided, expected)) {
-            log.error('Signature mismatch');
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-                status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-        }
-        log.success('Signature verified');
-
-        // ── 3. Traitement — à partir d'ici seulement, le corps fait autorité ──
-        const status = taskData.status;
+        // ── 3. Traitement ────────────────────────────────────────────────────
+        const status = taskData.status ?? null;
         const files = taskData.files || [];
         const errorMessage = taskData.error_message;
 
@@ -171,11 +159,13 @@ Deno.serve(async (req) => {
             log.success(`Image URL: ${imageUrl}`);
         }
 
+        // Le jeton fait partie de la clause WHERE : un task_id seul ne suffit pas.
         const { data, error } = await supabase.rpc('complete_poyo_job', {
             p_task_id: taskId,
             p_status: status,
             p_image_url: imageUrl,
-            p_error_message: errorMessage,
+            p_error_message: errorMessage ?? null,
+            p_callback_token: token,
         });
 
         if (error) {
@@ -187,7 +177,7 @@ Deno.serve(async (req) => {
 
         log.success(`Job updated: ${JSON.stringify(data)}`);
 
-        // 200 acquitte la réception : PoYo cesse ses reprises.
+        // 200 acquitte la réception : PoYo cesse ses reprises (jusqu'à 5).
         return new Response(JSON.stringify({ received: true, ...data }), {
             status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
