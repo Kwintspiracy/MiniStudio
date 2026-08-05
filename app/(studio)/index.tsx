@@ -554,9 +554,18 @@ export default function StudioScreen() {
   // Show gallery full modal ONLY on app launch (once per session)
   useEffect(() => {
     if (authLoading) return; // Wait for auth to be ready
-    
+
+    // Jamais deux <Modal> React Native présentés en même temps. WelcomeOnboarding
+    // en est un (presentationStyle="fullScreen"), AppModal en est un autre : sur
+    // iOS, les présenter simultanément casse le view controller du premier, qui
+    // reste visible pour React mais n'accepte plus aucun geste — l'application
+    // paraît gelée. L'onboarding ne pouvant alors plus être terminé, il se
+    // réaffichait à chaque lancement et le blocage se répétait.
+    // On attend qu'il soit fermé ; la dépendance ci-dessous relance cet effet.
+    if (showWelcomeOnboarding) return;
+
     const userGeneratedItems = generationHistory.filter(item => item.timestamp !== 0);
-    
+
     // Show modal on app launch if user is anonymous and has reached 10-image limit
     if (isAnonymous && userGeneratedItems.length >= 10 && !hasShownGalleryFullModal.current) {
       hasShownGalleryFullModal.current = true;
@@ -570,7 +579,7 @@ export default function StudioScreen() {
         { label: "Maybe Later", onPress: () => {} }
       );
     }
-  }, [authLoading, generationHistory.length, isAnonymous]); // Only run on mount or when these values change
+  }, [authLoading, generationHistory.length, isAnonymous, showWelcomeOnboarding]);
 
   const handlePickImage = useCallback(async () => {
     const images = await pickMultipleImages();
@@ -624,29 +633,18 @@ export default function StudioScreen() {
       return;
     }
 
-    // Check for token exhaustion
-    if ((entitlements.remaining_total ?? 0) <= 0) {
-       if (entitlements.is_pro) {
-           // Pro user exhausted their tier tokens
-           showModal(
-               "Token limit reached",
-               "You’ve used all 60 tokens for this month. Get a token pack to keep going.",
-               'default',
-               { label: "Get Tokens", onPress: () => setIsPaywallVisible(true) },
-               { label: "Maybe Later", onPress: () => {} }
-           );
-       } else {
-           // Standard/Guest user exhausted all tokens
-           showModal(
-               "Tokens Exhausted",
-               "You've used all your tokens. Subscribe or get a Pack to keep creating!",
-               'default',
-               { label: "Get Tokens", onPress: () => setIsPaywallVisible(true) },
-               { label: "Maybe Later", onPress: () => {} }
-           );
-       }
-       return;
-    }
+    // Pas de refus préventif ici.
+    //
+    // Les 10 tokens offerts sont octroyés par reserve_generation, côté serveur,
+    // à la PREMIÈRE génération. Tant qu'elle n'a pas eu lieu, l'utilisateur n'a
+    // aucune ligne user_entitlements et get_user_status renvoie
+    // remaining_total = 0. Bloquer là-dessus revenait à annoncer « vous avez
+    // utilisé tous vos tokens » à quelqu'un qui vient d'installer l'application,
+    // et à l'empêcher définitivement de recevoir ses tokens : la seule fonction
+    // qui les octroie n'était jamais atteinte.
+    //
+    // Le serveur reste seul juge du solde. Un refus légitime revient sous forme
+    // d'erreur, traitée plus bas avec le même écran d'achat.
 
     setIsLoading(true);
     // setError(null); // No longer needed
@@ -837,12 +835,28 @@ export default function StudioScreen() {
                  { label: "Cancel", onPress: () => {} }
              );
           }
-          // Check for Limit Reached specific formatting if we want custom actions
-          else if (errorMessage.includes("Limit Reached")) {
-              showModal("Limit Reached", errorMessage, 'error', {
-                  label: "Get Tokens",
-                  onPress: () => setIsPaywallVisible(true)
-              });
+          // Refus de solde renvoyés par generate-miniature. Les libellés viennent
+          // de l'edge function (index.ts:696-704) ; la comparaison est
+          // insensible à la casse, l'ancien test cherchait « Limit Reached »
+          // alors que le message par défaut est « Limit reached. ».
+          else if (/insufficient tokens|limit reached/i.test(errorMessage)) {
+              showModal(
+                  "Plus de tokens",
+                  "Vous avez utilisé tous vos tokens. Prenez un pack ou un abonnement pour continuer.",
+                  'default',
+                  { label: "Voir les offres", onPress: () => setIsPaywallVisible(true) },
+                  { label: "Plus tard", onPress: () => {} }
+              );
+          }
+          // Device déjà servi : c'est la connexion qui débloque, pas un achat.
+          else if (/free tokens are not available/i.test(errorMessage)) {
+              showModal(
+                  "Connectez-vous pour continuer",
+                  "Les tokens offerts ont déjà été utilisés sur cet appareil. Connectez-vous pour retrouver vos crédits.",
+                  'default',
+                  { label: "Se connecter", onPress: () => router.push('/signin') },
+                  { label: "Plus tard", onPress: () => {} }
+              );
           } else {
               showModal("Generation Failed", errorMessage, 'error');
           }
@@ -1671,27 +1685,17 @@ export default function StudioScreen() {
           onClose={() => setShowMyPaintsAlert(false)}
         />
 
-        {/* Global/Standard App Modal
-            AppModal n'appelle jamais onClose lui-même : il exécute seulement
-            l'action reçue. Une action qui ne ferme pas — « Maybe Later » vaut
-            () => {} — laissait donc la modale ouverte, son voile bloquant tous
-            les gestes, ce qui se manifestait comme un gel de l'application.
-            On enveloppe chaque action pour fermer après coup, comme le fait
-            déjà AuthContext. */}
+        {/* Global/Standard App Modal.
+            AppModal appelle onClose() lui-même avant de déclencher l'action
+            (AppModal.tsx:61-66) : rien à envelopper ici. */}
         <AppModal
             visible={modalConfig.visible}
             onClose={hideModal}
             title={modalConfig.title}
             message={modalConfig.message}
             type={modalConfig.type}
-            primaryAction={modalConfig.primaryAction ? {
-                ...modalConfig.primaryAction,
-                onPress: () => { modalConfig.primaryAction?.onPress(); hideModal(); },
-            } : { label: "OK", onPress: hideModal }}
-            secondaryAction={modalConfig.secondaryAction ? {
-                ...modalConfig.secondaryAction,
-                onPress: () => { modalConfig.secondaryAction?.onPress(); hideModal(); },
-            } : undefined}
+            primaryAction={modalConfig.primaryAction || { label: "OK", onPress: hideModal }}
+            secondaryAction={modalConfig.secondaryAction}
         />
         <Toast 
           visible={toastConfig.visible}
