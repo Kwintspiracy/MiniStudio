@@ -96,7 +96,7 @@ Leur SQL est conservé dans `supabase_migrations.schema_migrations`. Les matéri
 | Finding | Ce qui bloque |
 |---|---|
 | **`SEC-001`** webhook PoYo non authentifié | **Une clé.** Le code HMAC est écrit et commité. `GET /api/api-keys/webhook-secret` sur votre compte PoYo, puis déploiement. |
-| **`SAFETY-001`** aucune modération | Souscription à un service de détection, procédure de signalement écrite, décision produit sur les photos de personnes. Bloque le lancement public. |
+| **`SAFETY-001`** modération d'entrée | **Risque assumé par le commanditaire, 2026-08-05.** Motif : les modèles Gemini refusent les contenus contraires à leur charte, et l'application est mono-utilisateur — aucun contenu n'est diffusé. Le mécanisme de signalement que ce rapport réclamait ne s'applique donc pas : il visait les plateformes communautaires. Subsiste, non couvert : l'entrée (l'image quitte l'infrastructure avant tout refus), et le fait que le fournisseur réel est PoYo, pas Google en direct. Voir la correction en tête d'`AUDIT_SAFETY.md`. |
 | `ECON-006` aucun registre | Touche toutes les RPC qui écrivent un solde — à relire avant d'appliquer. À poser **avant** d'avoir des utilisateurs. |
 | `COST-001` aucun plafond de dépense | Le montant est une décision commerciale. ~3 240 $/jour au plafond technique actuel. |
 | `ADMIN-001` MFA + journal d'audit | Enrôlement MFA en console. |

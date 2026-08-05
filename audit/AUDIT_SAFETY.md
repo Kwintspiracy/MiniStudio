@@ -1,5 +1,39 @@
 # MiniStudio — Sécurité des contenus et exposition juridique
 
+> ## ⚠️ Correction du 2026-08-05 — deux erreurs de ce document
+>
+> **1. Le mécanisme de signalement ne s'applique pas.** Ce rapport réclamait un
+> bouton « signaler » au titre des règles Apple et Google. Ces règles visent les
+> applications où **un utilisateur voit le contenu d'un autre**. Vérifié depuis :
+> MiniStudio est mono-utilisateur. Aucune galerie publique, aucun flux, aucune
+> colonne de partage ; la galerie vit en `AsyncStorage`, la RLS limite
+> `generation_jobs` à sa propre ligne, et `Share.share()` est la feuille de
+> partage système — vers l'extérieur, pas vers d'autres utilisateurs. Il n'y a
+> personne à signaler. **Exigence retirée.**
+>
+> **2. La modération de sortie est largement assurée par le modèle.** Le
+> commanditaire l'a fait valoir et c'est exact : les modèles Gemini refusent de
+> produire ce qui viole leur charte, et ils sont stricts. Ce document traitait
+> l'absence de filtrage applicatif comme si rien ne filtrait.
+>
+> **Ce qui subsiste, et qui n'est pas couvert par ces deux points :**
+>
+> - **L'entrée, pas la sortie.** Un refus de génération signifie que le modèle
+>   n'a rien fabriqué. Il ne signifie pas que rien n'est entré : l'image a déjà
+>   quitté l'infrastructure vers un tiers. Les obligations en matière de CSAM
+>   portent sur la réception et la transmission, pas sur la production.
+> - **Le fournisseur réel est PoYo, pas Google.** `primary_provider = 'poyo'`,
+>   `fallback_enabled = 'false'` : le chemin Gemini direct, celui qui bénéficie
+>   des filtres par défaut, est désactivé. `submitPoyoTask` n'envoie aucun
+>   paramètre de sécurité. Que les filtres Google s'appliquent à travers
+>   l'agrégateur n'a pas pu être vérifié.
+> - **La classification par âge** dans App Store Connect reste à renseigner.
+>
+> **Décision du commanditaire, enregistrée le 2026-08-05 :** risque assumé sur
+> la modération d'entrée, au motif que le modèle refuse les contenus contraires
+> à sa charte. Ce n'est pas un oubli ; c'est un arbitrage, pris en connaissance
+> des trois points ci-dessus.
+
 Consolidation de `SAFETY-001` (P0) et `SAFETY-002` (P2), et de la Phase 7 dans son ensemble.
 
 ---
