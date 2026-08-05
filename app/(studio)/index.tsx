@@ -5,7 +5,7 @@ import {
   KeyboardAvoidingView, Pressable
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { MenuView } from '@react-native-menu/menu';
+import { ContextMenu } from '@/components/ContextMenu';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { 
   useSharedValue, 
@@ -1630,7 +1630,7 @@ export default function StudioScreen() {
                     activeOpacity={0.7}
                   >
                     <ExpoImage source={{ uri: item.url }} style={styles.historyImage} contentFit="cover" cachePolicy="memory-disk" recyclingKey={item.url} transition={120} />
-                    <MenuView
+                    <ContextMenu
                       style={StyleSheet.absoluteFillObject}
                       shouldOpenOnLongPress
                       onOpenMenu={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
@@ -1648,7 +1648,7 @@ export default function StudioScreen() {
                       }}
                     >
                       <View style={StyleSheet.absoluteFillObject} />
-                    </MenuView>
+                    </ContextMenu>
                   </TouchableOpacity>
                 );
               }}

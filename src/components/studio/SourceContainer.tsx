@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { MenuView } from '@react-native-menu/menu';
+import { ContextMenu } from '@/components/ContextMenu';
 import { PhotoCameraIcon, PhotoLibraryIcon } from '@/components/Icons';
 import { colors, fontFamily } from '@/theme';
 import type { ImageFile } from '@/types';
@@ -28,7 +28,7 @@ export const SourceContainer = ({
   return (
     <View style={[styles.inputContainer, !showCompact && styles.inputContainerEmpty]}>
       {showCompact ? (
-        <MenuView
+        <ContextMenu
           onPressAction={() => onClearImage()}
           actions={[
             { id: 'clear', title: 'Clear Source Image', attributes: { destructive: true }, image: Platform.select({ ios: 'xmark.circle.fill', android: 'ic_menu_close_clear_cancel' }), imageColor: '#FF453A' },
@@ -41,7 +41,7 @@ export const SourceContainer = ({
               <Text style={styles.removeImageTextSmall}>×</Text>
             </TouchableOpacity>
           </View>
-        </MenuView>
+        </ContextMenu>
       ) : (
         <View style={styles.sourceInfo}>
           <Text style={styles.inputLabel}>SOURCE</Text>
