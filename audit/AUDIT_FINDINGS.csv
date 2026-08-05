@@ -1,0 +1,22 @@
+id,category,severity,confidence,effort,money_impact,title,location
+SEC-001,SEC,P0,Confirmed,S,"Direct revenue loss + cost exposure","Le webhook PoYo deploye n'a aucune authentification : requete anonyme -> 200 + RPC service_role","edge function deployee poyo-webhook v6 ; repo supabase/functions/poyo-webhook/index.ts:36-51"
+CROSS-001,SEC,P0,Confirmed,S,"Direct revenue loss + cost exposure","Cle service_role de la base partagee en clair dans l'historique git de MiniPainterDB, toujours valide jusqu'en 2035","MiniPainterDB commit 3e01431 : lib/supabase.ts, REBUILD_INSTRUCTIONS.md"
+SAFETY-001,SAFETY,P0,Confirmed,L,None,"Aucune moderation de contenu d'aucune sorte sur un service acceptant des photos televerses","architectural (pipeline camera -> geminiService.ts:242 -> generate-miniature -> PoYo)"
+ECON-002,ECON,P0,Confirmed,M,"Direct revenue loss + cost exposure","L'autorisation de depense ignore les reservations en cours : la reservation ne reserve rien","RPC live authorize_generation / reserve_generation"
+ECON-003,ECON,P0,Confirmed,S,"Direct revenue loss + cost exposure","Tokens gratuits illimites : le controle device_tokens ne s'applique qu'aux comptes anonymes ; 4 cycles supprimer/recreer = 10 tokens a chaque fois, device jamais enregistre","RPC live reserve_generation, branche ELSE"
+ECON-001,ECON,P0,Likely,M,"Direct revenue loss + cost exposure","Aucun verrou dans le chemin de reservation (NON PROUVE - la course est experimentalement inisolable tant qu'ECON-002 existe ; a corriger dans la meme migration)","RPC live reserve_generation / authorize_generation"
+AI-001,AI,P1,Confirmed,S,None,"MiniStudio ignore product_type : 2826/2956 peintures rendues en aplat, dont 78 metalliques, 140 lavis, 254 contrast","src/services/paintService.ts:25 ; src/utils/promptGenerator.ts:54-60"
+ECON-006,ECON,P1,Confirmed,L,"Direct revenue loss (indetectable)","Aucun registre append-only : le solde est irreconciliable","architectural (schema public)"
+COST-001,AI,P1,Confirmed,M,"Direct cost exposure","Aucun plafond de depense, aucune limitation de debit pour les comptes authentifies","supabase/functions/generate-miniature/index.ts (architectural)"
+AI-002,AI,P1,Confirmed,M,"Direct cost exposure","Prix plat de 1 token pour 18 modeles de couts differents ; telemetrie de cout codee en dur a 0,05 $","generate-miniature/index.ts:56-58 ; app/admin/index.tsx:1402-1405"
+AI-003,AI,P0,Confirmed,S,"Direct cost exposure","La configuration de PRODUCTION (nano-banana-pro-edit, 18 credits = 0,090 $) est a marge NEGATIVE sur 2 des 3 offres a 30 % de commission ; 4 autres modeles du menu le sont davantage","app/admin/index.tsx:40-64 vs generate-miniature/index.ts:56-58"
+ADMIN-001,ADMIN,P1,Confirmed,L,None,"Admin = drapeau de la session utilisateur ordinaire, meme origine, sans MFA ni journal d'audit","app/admin/_layout.tsx:6-12 ; app/admin/index.tsx:68,1040 ; src/services/adminService.ts:39-44"
+OPS-001,CODE,P1,Confirmed,M,None,"Le depot et la production divergent, et rien ne le detecte (24 migrations, 2 correctifs non deployes)",architectural
+ECON-004,ECON,P1,Confirmed,XS,"Direct revenue loss","Aucune contrainte de non-negativite sur les soldes","table live public.user_entitlements"
+TEST-001,CODE,P1,Confirmed,L,None,"Couverture de test nulle sur 22 332 lignes, y compris tous les chemins d'argent",architectural
+AUTHZ-001,AUTHZ,P2,Confirmed,XS,None,"IDOR : trois RPC de consommation appelables pour n'importe quel user_id","RPC live get_monthly_usage / get_monthly_flash_usage / get_usage_stats"
+ECON-005,ECON,P2,Confirmed,XS,None,"Un utilisateur is_unlimited ne peut pas generer : conflit valeur retournee / contrainte CHECK","authorize_generation vs generation_jobs_consumption_source_check"
+DATA-001,DATA,P2,Confirmed,XS,None,"generation_logs inscriptible par le client avec client_ip non contraint (DoS du quota anonyme)","politique RLS live 'Users can insert own logs'"
+SAFETY-002,SAFETY,P2,Confirmed,XS,None,"Deux prereglages nomment des proprietes protegees ('Eavy Metal / D&D)","src/constants.ts:6 et src/constants.ts:17"
+PERF-001,PERF,P2,Likely,M,None,"Le portail admin (1557 lignes) livre dans le bundle de tous les utilisateurs web (NON MESURE)","app/_layout.tsx:126 ; app/admin/index.tsx"
+INFO-001,SEC,P3,Confirmed,XS,None,"get_provider_config() lisible par tout compte authentifie","RPC live public.get_provider_config()"
