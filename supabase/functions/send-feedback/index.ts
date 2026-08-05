@@ -3,11 +3,29 @@ import { serve } from "std/http/server.ts"
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const FEEDBACK_RECIPIENT_EMAIL = Deno.env.get('FEEDBACK_RECIPIENT_EMAIL') || 'quentinbeau@gmail.com'
 
-// SEC-6 + CORS: Restrict CORS to allowed origins
-const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filter(Boolean);
-const corsHeaders = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS[0] : '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// SEC-6 + CORS: Restrict CORS to allowed origins. ALLOWED_ORIGINS = prod origins;
+// EXTRA_ALLOWED_ORIGINS = additive dev origins (e.g. a LAN origin). The
+// Access-Control-Allow-Origin header must match the request origin exactly, so
+// we reflect the request's origin when it is allowlisted.
+const ALLOWED_ORIGINS = [
+  ...(Deno.env.get('ALLOWED_ORIGINS') || '').split(','),
+  ...(Deno.env.get('EXTRA_ALLOWED_ORIGINS') || '').split(','),
+].map((o) => o.trim()).filter(Boolean);
+
+function buildCorsHeaders(origin: string | null): Record<string, string> {
+  let allowOrigin: string;
+  if (ALLOWED_ORIGINS.length === 0) {
+    allowOrigin = '*';
+  } else if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    allowOrigin = origin;
+  } else {
+    allowOrigin = ALLOWED_ORIGINS[0];
+  }
+  return {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Vary': 'Origin',
+  };
 }
 
 // SEC-7: HTML escape helper to prevent XSS in email body
@@ -21,6 +39,7 @@ function escapeHtml(str: string): string {
 }
 
 serve(async (req: Request): Promise<Response> => {
+  const corsHeaders = buildCorsHeaders(req.headers.get('origin'))
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }

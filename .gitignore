@@ -51,3 +51,5 @@ ios/
 
 expo-env.d.ts
 # @end expo-cli
+# Sorties du banc de comparaison de rendus
+tools/render-bench/resultats/

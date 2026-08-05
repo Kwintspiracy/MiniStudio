@@ -16,13 +16,40 @@ const CONFIG = {
         `${Deno.env.get('SUPABASE_URL')}/functions/v1/poyo-webhook`,
     // Anonymous IP rate limit: max generations per IP per hour
     ANON_IP_HOURLY_LIMIT: parseInt(Deno.env.get('ANON_IP_HOURLY_LIMIT') || '5'),
+    // SSRF guard: hostnames a client-supplied baseImageUrl is allowed to point to.
+    // These are the CDN hosts where our own generated results live, so a source
+    // image reused from history can be passed by URL instead of base64.
+    ALLOWED_SOURCE_IMAGE_HOSTS: (Deno.env.get('ALLOWED_SOURCE_IMAGE_HOSTS') || 'cdn.doculator.org')
+        .split(',').map((h) => h.trim().toLowerCase()).filter(Boolean),
 };
 
-// SEC-002: Environment-based CORS origins
-const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") || "").split(",").filter(Boolean);
-const corsHeaders = {
-    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS[0] : '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// SEC-002: Environment-based CORS origins.
+// ALLOWED_ORIGINS = production/primary origins. EXTRA_ALLOWED_ORIGINS is an
+// additive list (e.g. a LAN dev origin like http://192.168.2.202:8081) kept
+// separate so dev origins can be added without touching the prod allowlist.
+const ALLOWED_ORIGINS = [
+    ...(Deno.env.get("ALLOWED_ORIGINS") || "").split(","),
+    ...(Deno.env.get("EXTRA_ALLOWED_ORIGINS") || "").split(","),
+].map((o) => o.trim()).filter(Boolean);
+
+// Build per-request CORS headers. The Access-Control-Allow-Origin header must
+// match the requesting origin exactly (a list is not valid), so we reflect the
+// request's origin when it is allowlisted. Falls back to the first configured
+// origin, or '*' when nothing is configured.
+function buildCorsHeaders(origin: string | null): Record<string, string> {
+    let allowOrigin: string;
+    if (ALLOWED_ORIGINS.length === 0) {
+        allowOrigin = '*';
+    } else if (origin && ALLOWED_ORIGINS.includes(origin)) {
+        allowOrigin = origin;
+    } else {
+        allowOrigin = ALLOWED_ORIGINS[0];
+    }
+    return {
+        'Access-Control-Allow-Origin': allowOrigin,
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Vary': 'Origin',
+    };
 }
 
 // SEC-005: Strict model whitelist with token costs (prevents cost manipulation via unknown models)
@@ -97,15 +124,51 @@ async function uploadToPoyo(apiKey: string, base64Data: string, mimeType: string
 }
 
 /**
+ * SSRF guard: only accept an https source-image URL pointing at a whitelisted
+ * CDN host. Returns the normalized URL, or null if it must be rejected.
+ */
+function validateSourceImageUrl(rawUrl: unknown): string | null {
+    if (typeof rawUrl !== 'string' || rawUrl.length === 0 || rawUrl.length > 2048) return null;
+    let parsed: URL;
+    try {
+        parsed = new URL(rawUrl);
+    } catch {
+        return null;
+    }
+    if (parsed.protocol !== 'https:') return null;
+    if (!CONFIG.ALLOWED_SOURCE_IMAGE_HOSTS.includes(parsed.hostname.toLowerCase())) return null;
+    return parsed.toString();
+}
+
+/**
+ * Fetch a (already-validated) remote image URL into a base64 ImagePayload.
+ * Used for providers that require inline image data (e.g. Google/Gemini).
+ */
+async function fetchUrlToPayload(url: string): Promise<ImagePayload> {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch source image (${response.status})`);
+    }
+    const mimeType = response.headers.get('content-type') || 'image/png';
+    const buffer = new Uint8Array(await response.arrayBuffer());
+    let binary = '';
+    for (let i = 0; i < buffer.length; i++) {
+        binary += String.fromCharCode(buffer[i]);
+    }
+    return { mimeType, data: btoa(binary) };
+}
+
+/**
  * Submit generation task to PoYo
  */
 async function submitPoyoTask(
-    apiKey: string, 
-    prompt: string, 
+    apiKey: string,
+    prompt: string,
     imageUrl?: string,
-    callbackUrl?: string
+    callbackUrl?: string,
+    model: string = 'nano-banana-2-edit'
 ): Promise<string> {
-    const model = imageUrl ? 'nano-banana-2-edit' : 'nano-banana-2';
+    // Use the exact admin-selected model slug (normal vs -edit are distinct models).
     log.info('POYO', `GENERATE: Submitting to PoYo (${model})...`);
     if (callbackUrl) {
         log.info('POYO', `GENERATE: Webhook callback → ${callbackUrl}`);
@@ -169,11 +232,13 @@ async function submitPoyoWithWebhook(
     supabaseClient: any,
     jobId: string,
     prompt: string,
-    baseImage?: ImagePayload
+    baseImage?: ImagePayload,
+    model?: string,
+    baseImageUrl?: string
 ): Promise<{ taskId: string }> {
     // Get available API key with rotation
     const { data: keyData, error: keyError } = await supabaseClient.rpc('get_available_poyo_key');
-    
+
     if (keyError || !keyData?.success) {
         throw new Error(`No PoYo API keys available: ${keyError?.message || keyData?.error}`);
     }
@@ -181,20 +246,26 @@ async function submitPoyoWithWebhook(
     const apiKey = keyData.api_key;
     log.info('POYO', `API KEY: Using key (${keyData.requests_used}/5 requests this minute)`);
 
-    // Upload image if provided
+    // Resolve the source image. A pre-hosted URL (source reused from history) is
+    // passed straight to PoYo — no re-download/re-upload needed. Otherwise upload
+    // the inline base64 payload.
     let imageUrl: string | undefined;
-    if (baseImage) {
+    if (baseImageUrl) {
+        imageUrl = baseImageUrl;
+        log.info('POYO', `SOURCE: Using pre-hosted URL directly (${baseImageUrl})`);
+    } else if (baseImage) {
         imageUrl = await uploadToPoyo(apiKey, baseImage.data, baseImage.mimeType);
     }
 
     // Submit task WITH webhook callback URL
     log.info('POYO', `SUBMIT: Prompt length: ${prompt.length} chars | Unfiltered: ${!prompt.includes('[Flesh Tones]')}`);
-    const taskId = await submitPoyoTask(apiKey, prompt, imageUrl, CONFIG.POYO_WEBHOOK_URL);
+    const taskId = await submitPoyoTask(apiKey, prompt, imageUrl, CONFIG.POYO_WEBHOOK_URL, model);
 
-    // Store task_id in job for webhook to find
+    // Store task_id + the actual model on the job so the webhook can log the real
+    // model name (not just the 'poyo' provider) into generation_logs.
     await supabaseClient
         .from('generation_jobs')
-        .update({ poyo_task_id: taskId, provider_used: 'poyo' })
+        .update({ poyo_task_id: taskId, provider_used: 'poyo', model_used: model || 'nano-banana-2-edit' })
         .eq('id', jobId);
 
     log.success('POYO', `ASYNC: Task submitted, webhook will handle completion`);
@@ -456,7 +527,10 @@ function sanitizeServerSide(text: string): string {
 // ============================================================================
 
 Deno.serve(async (req) => {
-    // Handle CORS
+    // Per-request CORS headers (reflects the request origin when allowlisted).
+    const corsHeaders = buildCorsHeaders(req.headers.get('origin'));
+
+    // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
     }
@@ -482,10 +556,25 @@ Deno.serve(async (req) => {
         );
         let dbPrimaryProvider: string | undefined;
         let dbFallbackEnabled: boolean | undefined;
+        let dbPoyoModel: string | undefined;
+
+        // Kick off the provider-config RPC before awaiting auth below — these are two
+        // independent network round-trips, so start both and only then await each in turn.
+        const providerConfigPromise = supabaseAdminClient.rpc('get_provider_config');
+
+        let isAborted = false;
+        req.signal.addEventListener('abort', () => { isAborted = true; });
+
+        const authHeader = req.headers.get('Authorization');
+        const token = authHeader?.replace('Bearer ', '') ?? '';
+
+        const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+
         try {
-            const { data: provCfg } = await supabaseAdminClient.rpc('get_provider_config');
+            const { data: provCfg } = await providerConfigPromise;
             if (provCfg) {
                 dbPrimaryProvider = provCfg['primary_provider'] || undefined;
+                dbPoyoModel = provCfg['poyo_model'] || undefined;
                 if (provCfg['fallback_enabled'] != null) {
                     dbFallbackEnabled = provCfg['fallback_enabled'] !== 'false';
                 }
@@ -495,14 +584,7 @@ Deno.serve(async (req) => {
         }
         const primaryProvider = dbPrimaryProvider || CONFIG.PRIMARY_PROVIDER;
         const fallbackEnabled = dbFallbackEnabled ?? CONFIG.FALLBACK_ENABLED;
-
-        let isAborted = false;
-        req.signal.addEventListener('abort', () => { isAborted = true; });
-
-        const authHeader = req.headers.get('Authorization');
-        const token = authHeader?.replace('Bearer ', '') ?? '';
-        
-        const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+        const poyoModel = dbPoyoModel || 'nano-banana-2-edit';
 
         if (!user) {
             return new Response(JSON.stringify({ error: `Unauthorized: ${authError?.message}` }), {
@@ -550,7 +632,7 @@ Deno.serve(async (req) => {
         // ================================================================
         // 2. PARSE REQUEST
         // ================================================================
-        const { prompt, baseImage, model, action, temperature, device_id, metadata, userText } = await req.json();
+        const { prompt, baseImage, baseImageUrl: rawBaseImageUrl, model, action, temperature, device_id, metadata, userText } = await req.json();
 
         log.section('POYO');
         log.info('POYO', `REQUEST START | User: ${user.id.substring(0, 8)}...`);
@@ -598,8 +680,15 @@ Deno.serve(async (req) => {
         // ================================================================
         const tokenCost = MODEL_COSTS[targetModel];
 
+        // Kick off the provider health check concurrently with credit reservation.
+        // Both are independent DB round-trips gated by the same auth/rate-limit
+        // checks above, so overlapping them shaves one round-trip off every
+        // generation. isProviderHealthy swallows its own errors (returns a
+        // boolean), so this promise never rejects even if reservation fails first.
+        const primaryHealthyPromise = isProviderHealthy(supabaseAdminClient, primaryProvider);
+
         const reservation = await reserveCredits(supabaseClient, user.id, tokenCost, device_id, metadata);
-        
+
         if (!reservation.success) {
             // Log detailed info server-side only — never expose balance or device tracking details to client
             log.error('CREDITS', `Reservation failed: ${reservation.error}, Balance: ${reservation.balance}`);
@@ -631,10 +720,26 @@ Deno.serve(async (req) => {
             data: baseImage.data,
         } : undefined;
 
+        // A client may pass a source image by URL (a prior result reused as source)
+        // instead of base64. Validate it against the CDN allowlist (SSRF guard).
+        const baseImageUrl: string | undefined = (!imagePayload && rawBaseImageUrl)
+            ? (validateSourceImageUrl(rawBaseImageUrl) ?? undefined)
+            : undefined;
+        if (rawBaseImageUrl && !imagePayload && !baseImageUrl) {
+            log.error('POYO', `Rejected baseImageUrl (not an allowed source host)`);
+            return new Response(JSON.stringify({ error: "Invalid source image URL" }), {
+                status: 400, headers: corsHeaders
+            });
+        }
+
         // ================================================================
         // 4. DETERMINE PROVIDER FLOW
         // ================================================================
-        const primaryHealthy = await isProviderHealthy(supabaseClient, primaryProvider);
+        // Use the service-role admin client: check_provider_health /
+        // record_provider_failure are server-only RPCs (REVOKEd from the
+        // authenticated role in migration 20260608000000).
+        // Started concurrently with reserveCredits above (see primaryHealthyPromise).
+        const primaryHealthy = await primaryHealthyPromise;
 
         // ================================================================
         // 4A. POYO ASYNC FLOW (webhook-based)
@@ -659,7 +764,9 @@ Deno.serve(async (req) => {
                     supabaseAdminClient,
                     jobId!,
                     sanitizedPrompt,
-                    imagePayload
+                    imagePayload,
+                    poyoModel,
+                    baseImageUrl
                 );
 
                 log.divider('POYO');
@@ -689,8 +796,8 @@ Deno.serve(async (req) => {
                 if (isRateLimitExhausted) {
                     log.info('POYO', 'All keys exhausted for this minute, using Gemini...');
                 } else {
-                    // Actual failure - record for circuit breaker
-                    await recordProviderFailure(supabaseClient, 'poyo');
+                    // Actual failure - record for circuit breaker (admin client: server-only RPC)
+                    await recordProviderFailure(supabaseAdminClient, 'poyo');
                 }
                 
                 // Fall through to Gemini fallback if enabled
@@ -712,7 +819,11 @@ Deno.serve(async (req) => {
         try {
             const finalGooglePrompt = sanitizedPrompt;
             log.info('GOOGLE', `SUBMIT: Prompt length: ${finalGooglePrompt.length} chars`);
-            const { imageBase64: generatedImage, inputTokens, outputTokens } = await generateWithGoogle(finalGooglePrompt, imagePayload, targetModel, safeTemperature);
+            // Google needs inline image data. If the source was supplied as a URL,
+            // fetch it server-side (no CORS on the server) into a base64 payload.
+            const googleImagePayload = imagePayload
+                ?? (baseImageUrl ? await fetchUrlToPayload(baseImageUrl) : undefined);
+            const { imageBase64: generatedImage, inputTokens, outputTokens } = await generateWithGoogle(finalGooglePrompt, googleImagePayload, targetModel, safeTemperature);
 
             // Check for cancellation
             if (isAborted || req.signal.aborted) {

@@ -59,6 +59,27 @@ Deno.serve(async (req) => {
        });
     }
 
+    // SEC-005: Global idempotency guard. RevenueCat may deliver the same webhook
+    // more than once (retries on non-2xx, at-least-once delivery). Every branch
+    // below that grants tokens (INITIAL_PURCHASE / RENEWAL subscription tokens AND
+    // NON_RENEWING_PURCHASE packs) is non-idempotent, so a redelivery would credit
+    // tokens again. Reject any event id we've already processed BEFORE any grant.
+    const eventId = event.id;
+    if (eventId) {
+      const { data: existing } = await supabaseClient
+        .from("processed_webhook_events")
+        .select("event_id")
+        .eq("event_id", eventId)
+        .maybeSingle();
+
+      if (existing) {
+        console.log(`[Webhook] Event ${eventId} already processed, skipping.`);
+        return new Response(JSON.stringify({ success: true, skipped: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // 1. Handle Subscriptions (INITIAL_PURCHASE, RENEWAL, EXPIRATION, CANCELLATION)
     if (["INITIAL_PURCHASE", "RENEWAL", "UNCANCELLATION"].includes(type)) {
       const { error } = await supabaseClient
@@ -132,28 +153,8 @@ Deno.serve(async (req) => {
       const tokensToAdd = TOKEN_PACK_MAP[productId] ?? 0;
 
       if (tokensToAdd > 0) {
-        // SEC-005: Idempotency check - prevent double-crediting on webhook retries
-        const eventId = event.id;
-        if (eventId) {
-          const { data: existing } = await supabaseClient
-            .from("processed_webhook_events")
-            .select("event_id")
-            .eq("event_id", eventId)
-            .maybeSingle();
-
-          if (existing) {
-            console.log(`[Webhook] Event ${eventId} already processed, skipping.`);
-            return new Response(JSON.stringify({ success: true, skipped: true }), {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-
-          await supabaseClient
-            .from("processed_webhook_events")
-            .insert({ event_id: eventId, processed_at: new Date().toISOString() });
-        }
-
-        // SEC-003: Use atomic increment via RPC to prevent race conditions
+        // SEC-003: Use atomic increment via RPC to prevent race conditions.
+        // Idempotency is enforced by the global guard at the top of the handler.
         const { data, error } = await supabaseClient.rpc('increment_token_balance', {
           p_user_id: userId,
           p_tokens: tokensToAdd
@@ -166,6 +167,16 @@ Deno.serve(async (req) => {
 
         console.log(`[Webhook] Added ${tokensToAdd} tokens to user ${userId}. New Balance: ${data}`);
       }
+    }
+
+    // Mark the event processed only after all grants succeeded, so a transient
+    // failure above (which throws) leaves the event un-marked and RevenueCat's
+    // retry can re-run it. A unique constraint on event_id makes this safe under
+    // concurrent redelivery (the second insert conflicts and is ignored).
+    if (eventId) {
+      await supabaseClient
+        .from("processed_webhook_events")
+        .upsert({ event_id: eventId, processed_at: new Date().toISOString() }, { onConflict: "event_id" });
     }
 
     return new Response(JSON.stringify({ success: true }), {
