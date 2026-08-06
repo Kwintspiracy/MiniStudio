@@ -18,6 +18,23 @@ import {
 } from "./lib.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Clés lues depuis `.env`, à côté de ce fichier, si présent.
+ *
+ * Une variable posée par `$env:POYO_API_KEY = "..."` meurt avec la fenêtre du
+ * terminal ; le banc envoie alors « Bearer undefined » et PoYo répond
+ * « Invalid API key », ce qui laisse croire à une clé révoquée. Le fichier, lui,
+ * survit. `.env` est ignoré par git (.gitignore, ligne 33).
+ *
+ * Une variable déjà présente dans l'environnement l'emporte sur le fichier.
+ */
+try {
+  process.loadEnvFile(join(HERE, ".env"));
+} catch {
+  /* pas de fichier .env : on se contente de l'environnement */
+}
+
 const PORT = +(process.env.PORT || 5178);
 const OUT = join(HERE, "resultats");
 
