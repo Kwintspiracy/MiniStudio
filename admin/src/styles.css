@@ -58,6 +58,17 @@
 
 * { box-sizing: border-box; }
 
+/**
+ * Indique au navigateur le thème des contrôles qu'il dessine lui-même : listes
+ * déroulantes ouvertes, sélecteurs de fichier, ascenseurs. Sans cette
+ * déclaration, le menu d'un `select` s'affiche sur fond clair en thème sombre,
+ * avec le texte clair qu'il hérite — donc illisible.
+ */
+:root { color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { color-scheme: dark; } }
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
+
 html, body, #root { height: 100%; }
 
 body {
@@ -290,6 +301,28 @@ td.mono { font-family: var(--mono); font-size: 12.2px; }
 
 .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .spacer { flex: 1; }
+
+/**
+ * Bascule segmentée.
+ *
+ * Ces règles manquaient : la classe était employée dans deux écrans sans avoir
+ * jamais été portée depuis la maquette. Les boutons retombaient donc sur
+ * l'apparence par défaut du navigateur — fond gris clair — pendant que le reset
+ * plus haut leur donnait `color: inherit`, clair en thème sombre. Texte clair
+ * sur fond clair : les libellés étaient invisibles.
+ */
+.seg { display: flex; gap: 3px; }
+.seg button {
+  flex: 1; white-space: nowrap;
+  padding: 6px 12px; border-radius: var(--r);
+  border: 1px solid var(--hair-2); background: var(--panel);
+  color: var(--ink-2); cursor: pointer; font-size: 12.8px;
+}
+.seg button:hover:not([aria-pressed="true"]) { background: var(--surface); color: var(--ink); }
+.seg button[aria-pressed="true"] {
+  border-color: var(--accent); background: var(--accent-soft);
+  color: var(--accent); font-weight: 600;
+}
 
 input[type="text"], input[type="password"], input[type="email"], input[type="number"], select, textarea {
   width: 100%; padding: 7px 10px;
@@ -863,7 +896,10 @@ code.inline {
   font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); white-space: nowrap;
 }
 .comp-mini select {
-  width: auto; border: none; background: none; padding: 0 2px;
+  width: auto; border: none; padding: 0 2px;
   font-size: 11.5px; font-family: var(--mono);
+  /* Fond explicite plutôt que `none` : le menu déroulant natif reprend la
+     couleur de fond du `select`, et `none` le laissait transparent. */
+  background: var(--panel);
 }
 .comp-mini select:focus { box-shadow: none; }
