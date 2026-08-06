@@ -7,7 +7,8 @@ import {
 } from '../lib/api';
 import { resoudre } from '../lib/blocs';
 import { chargerEchantillon, assembler, OPTIONS_PAR_DEFAUT, type EchantillonPeintures } from '../lib/apercu';
-import { Squelette, Vide, useMessage, useConfirmation, usd, dateCourte } from '../components/ui';
+import { Vide, useMessage, useConfirmation, usd, dateCourte } from '../components/ui';
+import { ZoneImage, type ImageChoisie } from '../components/ZoneImage';
 
 const MODELES = Object.keys(CREDITS_ATTENDUS);
 
@@ -30,7 +31,7 @@ export function PageBanc() {
 
   const [prompt, setPrompt] = useState('');
   const [origine, setOrigine] = useState<{ key: string; version: string } | null>(null);
-  const [image, setImage] = useState<{ apercu: string; base64: string; mime: string } | null>(null);
+  const [image, setImage] = useState<ImageChoisie | null>(null);
 
   const [runId, setRunId] = useState<string | null>(null);
   const [resultats, setResultats] = useState<ResultatBanc[]>([]);
@@ -141,16 +142,6 @@ export function PageBanc() {
     }
   };
 
-  const choisirImage = (f: File | null) => {
-    if (!f) return;
-    const l = new FileReader();
-    l.onload = () => {
-      const url = String(l.result);
-      setImage({ apercu: url, base64: url.split(',')[1] ?? '', mime: f.type || 'image/jpeg' });
-    };
-    l.readAsDataURL(f);
-  };
-
   const ouvrirPassage = async (p: PassageBanc) => {
     try {
       const r = await chargerResultats(p.id);
@@ -229,9 +220,7 @@ export function PageBanc() {
 
             <div>
               <h2 className="sec">Figurine</h2>
-              <input type="file" accept="image/*"
-                     onChange={(e) => choisirImage(e.target.files?.[0] ?? null)} />
-              {image && <img className="banc-source" src={image.apercu} alt="Figurine source" />}
+              <ZoneImage valeur={image} onChange={setImage} />
             </div>
           </div>
 

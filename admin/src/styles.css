@@ -703,3 +703,49 @@ code.inline {
 
 .banc-podium { display: flex; gap: 4px; padding: 0 11px 10px; }
 .banc-podium .btn { flex: 1; justify-content: center; }
+
+/* ==========================================================================
+   Zone de dépôt d'image
+   ========================================================================== */
+
+.zi {
+  width: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 5px;
+  padding: 30px 18px; min-height: 168px;
+  border: 1.5px dashed var(--hair-2); border-radius: var(--r);
+  background: var(--surface); color: var(--ink-2);
+  cursor: pointer; text-align: center; font: inherit;
+  transition: border-color .15s ease, background .15s ease;
+}
+.zi:hover { border-color: var(--accent); background: var(--panel); }
+.zi.survol {
+  border-color: var(--accent); border-style: solid;
+  background: var(--accent-soft); color: var(--accent);
+}
+.zi-icone { font-size: 24px; line-height: 1; opacity: .6; margin-bottom: 3px; }
+.zi.survol .zi-icone { opacity: 1; }
+.zi-titre { font-size: 13.8px; font-weight: 600; }
+.zi-aide { font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+.zi.survol .zi-aide { color: var(--accent); }
+.zi-aide kbd { margin: 0 1px; }
+
+.zi-remplie {
+  border: 1px solid var(--hair); border-radius: var(--r);
+  background: var(--panel); overflow: hidden;
+}
+.zi-remplie img {
+  width: 100%; max-height: 230px; object-fit: contain;
+  display: block; background: var(--surface);
+}
+.zi-pied {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-top: 1px solid var(--hair); font-size: 12px;
+}
+.zi-nom {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 40%; color: var(--ink-2);
+}
+.zi-poids {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums; margin-right: auto;
+}

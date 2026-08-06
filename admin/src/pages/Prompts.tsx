@@ -12,6 +12,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { Squelette, Vide, useMessage, useConfirmation, dateCourte } from '../components/ui';
 import type { Commande } from '../components/CommandPalette';
+import { ZoneImage, type ImageChoisie } from '../components/ZoneImage';
 
 type Mode = 'editer' | 'comparer' | 'apercu' | 'tester';
 type Champ = 'template' | 'template_pro' | 'negative_template' | 'negative_template_pro';
@@ -668,7 +669,7 @@ function Test({
   const { confirmer, dialogue } = useConfirmation();
 
   const [echantillon, setEchantillon] = useState<EchantillonPeintures | null>(null);
-  const [image, setImage] = useState<{ apercu: string; base64: string; mime: string } | null>(null);
+  const [image, setImage] = useState<ImageChoisie | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [resultat, setResultat] = useState<{ url?: string; erreur?: string } | null>(null);
   const [options] = useState<OptionsApercu>(OPTIONS_PAR_DEFAUT);
@@ -698,17 +699,6 @@ function Test({
       return { prompt: '', souci: (e as Error).message };
     }
   }, [brouillon, blocs, effets, echantillon, options]);
-
-  const choisirImage = (f: File | null) => {
-    if (!f) return;
-    const lecteur = new FileReader();
-    lecteur.onload = () => {
-      const url = String(lecteur.result);
-      setImage({ apercu: url, base64: url.split(',')[1] ?? '', mime: f.type || 'image/jpeg' });
-      setResultat(null);
-    };
-    lecteur.readAsDataURL(f);
-  };
 
   const lancer = async () => {
     if (!image || !prompt) return;
@@ -771,12 +761,7 @@ function Test({
 
       <div className="test-grille">
         <div>
-          <label className="field">
-            <span>Figurine source</span>
-            <input type="file" accept="image/*"
-                   onChange={(e) => choisirImage(e.target.files?.[0] ?? null)} />
-          </label>
-          {image && <img className="test-vignette" src={image.apercu} alt="Source choisie" />}
+          <ZoneImage valeur={image} onChange={(i) => { setImage(i); setResultat(null); }} />
           <button className="btn primary" onClick={() => void lancer()}
                   disabled={!image || enCours || !prompt}
                   style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}>
