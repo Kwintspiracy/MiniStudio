@@ -1,0 +1,10 @@
+-- Vue de synthèse économique pour le poste d'administration.
+--
+-- Aucune RPC existante n'exposait la dépense fournisseur : get_admin_token_usage
+-- ne compte que des tokens de prompt, get_admin_dashboard_stats que des volumes.
+-- Or c'est la dépense qui décide du plafond et de la marge. Agréger côté client
+-- supposerait de lire generation_jobs ligne à ligne, que les politiques RLS
+-- réservent à leur propriétaire — à raison.
+--
+-- Appliquée en production le 2026-08-06 sous le nom `admin_cost_overview`.
+-- Le corps exact figure dans supabase_migrations.schema_migrations.

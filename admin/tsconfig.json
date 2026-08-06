@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    /* Desactive volontairement : promptGenerator.ts, importe depuis ../src pour
+       que l apercu passe par le code de production lui-meme, destructure
+       isPaletteEnabled et loadedPaints sans les lire. TypeScript n offre pas de
+       reglage par chemin, et durcir ici ferait echouer la compilation sur un
+       fichier qui n appartient pas a ce projet. */
+    "noUnusedLocals": false,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": { "@/*": ["../src/*"] }
+  },
+  "include": ["src", "vite.config.ts"]
+}
