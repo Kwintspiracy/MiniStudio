@@ -13,6 +13,17 @@
   "name": "ministudio-admin",
   "compatibility_date": "2026-08-06",
 
+  // Une seule adresse publique, celle de production.
+  "workers_dev": true,
+
+  // Les URL d'aperçu sont activées par défaut : chaque build de branche non
+  // production obtiendrait sa propre adresse publique. Pour un site vitrine
+  // c'est commode ; pour un poste d'administration, cela multiplie les portes
+  // sans rien apporter — et les builds de branches sont activés sur ce projet.
+  // L'autorisation reste tenue par is_admin(), mais une porte de moins reste
+  // une porte de moins.
+  "preview_urls": false,
+
   "assets": {
     "directory": "./dist",
 
