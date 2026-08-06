@@ -71,6 +71,30 @@ export function Composition({
     [versions],
   );
 
+  /**
+   * Ingrédients retenus dont le champ `template_pro` diffère réellement du
+   * champ `template`. Sur les 28 versions actives, 4 seulement sont dans ce
+   * cas, et aucune n'appartient au mode peinture — d'où une liste presque
+   * toujours vide, ce qui est l'information utile.
+   */
+  const ecartsPro = useMemo(() => {
+    const retenus = [
+      versions.find((v) => v.id === ingredients.styleId),
+      versions.find((v) => v.id === ingredients.reglesId),
+      ...Object.values(ingredients.effets).map((id) => versions.find((v) => v.id === id)),
+    ].filter(Boolean) as VersionPrompt[];
+
+    return retenus
+      .filter((v) => (v.template_pro ?? '') !== (v.template ?? '') && (v.template_pro ?? '') !== '')
+      .map((v) => v.key);
+  }, [versions, ingredients]);
+
+  // Une composition sans écart doit partir en standard : laisser `pro` à vrai
+  // après avoir masqué le bouton produirait un état invisible et non modifiable.
+  useEffect(() => {
+    if (!ecartsPro.length && ingredients.pro) onChange({ ...ingredients, pro: false });
+  }, [ecartsPro.length, ingredients, onChange]);
+
   // Sélection initiale sur les versions en production : c'est l'état de
   // référence, celui contre lequel on veut comparer une variante.
   useEffect(() => {
@@ -156,15 +180,40 @@ export function Composition({
       {selecteur('Règles', regles, ingredients.reglesId,
         (id) => onChange({ ...ingredients, reglesId: id }))}
 
-      <label className="comp-ligne">
-        <span>Mode</span>
-        <div className="seg">
-          <button type="button" aria-pressed={!ingredients.pro}
-                  onClick={() => onChange({ ...ingredients, pro: false })}>Standard</button>
-          <button type="button" aria-pressed={ingredients.pro}
-                  onClick={() => onChange({ ...ingredients, pro: true })}>Pro</button>
-        </div>
-      </label>
+      {/*
+        Ce contrôle n'apparaît que s'il change réellement le texte envoyé.
+
+        `generatePaintPrompt` exige un booléen `isPro` : il fait lire le champ
+        `template_pro` plutôt que `template`, et le studio le tire du statut
+        d'abonnement de l'utilisateur. Rien à voir avec la gamme du fournisseur,
+        malgré le mot commun — les modèles « pro » se choisissent par les cases
+        à cocher, plus bas.
+
+        Or sur les clés du mode peinture, `template_pro` est aujourd'hui
+        identique à `template` partout. Un bouton qui ne change rien apprend
+        seulement à se méfier de l'interface ; il ne se montre donc que sur une
+        composition où les deux champs diffèrent.
+      */}
+      {ecartsPro.length > 0 && (
+        <label className="comp-ligne">
+          <span title="Champ template_pro au lieu de template">Gabarit</span>
+          <div className="seg">
+            <button type="button" aria-pressed={!ingredients.pro}
+                    onClick={() => onChange({ ...ingredients, pro: false })}>
+              standard
+            </button>
+            <button type="button" aria-pressed={ingredients.pro}
+                    onClick={() => onChange({ ...ingredients, pro: true })}>
+              abonné
+            </button>
+          </div>
+        </label>
+      )}
+      {ecartsPro.length > 0 && (
+        <p className="aide" style={{ margin: '-3px 0 9px 72px' }}>
+          Diffère sur {ecartsPro.join(', ')} — ailleurs les deux champs sont identiques.
+        </p>
+      )}
 
       <div className="comp-titre">Effets</div>
 
