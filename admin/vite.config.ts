@@ -15,6 +15,23 @@ export default defineConfig({
     // l'aperçu assemble un prompt. Les tests dorés la posent de la même façon.
     __DEV__: 'false',
   },
+  esbuild: {
+    // Pour chaque fichier transformé, esbuild remonte l'arborescence à la
+    // recherche d'un tsconfig.json. Sur ../src/utils/promptGenerator.ts il
+    // trouve celui de la racine, qui étend « expo/tsconfig.base ». En local ce
+    // paquet existe ; sur Cloudflare, où seul admin/ est installé, la
+    // résolution échoue et le build s'arrête.
+    //
+    // La configuration doit être passée en CHAÎNE, pas en objet : Vite ne
+    // saute la recherche que dans ce cas précis. Son code en fait la condition
+    // explicite — `if (typeof tsconfigRaw !== "string")`, puis il charge le
+    // fichier pour en extraire une liste de champs et les fusionner. Avec un
+    // objet, la lecture a donc lieu quand même et l'échec persiste.
+    //
+    // Les valeurs reprennent celles d'admin/tsconfig.json, qui reste la
+    // référence pour `npm run typecheck`.
+    tsconfigRaw: '{"compilerOptions":{"target":"es2022","useDefineForClassFields":true,"jsx":"react-jsx"}}',
+  },
   resolve: {
     alias: {
       // L'aperçu du prompt final doit passer par le MÊME code que la
