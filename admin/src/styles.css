@@ -822,3 +822,48 @@ code.inline {
   display: flex; align-items: center; justify-content: center;
   min-height: 90px; color: var(--ink-3); font-family: var(--mono); font-size: 12px;
 }
+
+/* ==========================================================================
+   Composition d'un prompt par ingrédients
+   ========================================================================== */
+
+.comp {
+  border: 1px solid var(--hair); border-radius: var(--r);
+  background: var(--surface); padding: 13px 15px; margin-bottom: 4px;
+}
+.comp-ligne {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+}
+.comp-ligne > span {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-3);
+  width: 62px; flex-shrink: 0;
+}
+.comp-ligne select { flex: 1; font-size: 12.5px; padding: 4px 8px; }
+.comp-ligne .seg { flex: 1; }
+
+.comp-titre {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-3);
+  margin: 14px 0 7px; padding-top: 11px; border-top: 1px solid var(--hair);
+}
+
+.comp-effet {
+  display: flex; align-items: flex-start; gap: 10px; margin-bottom: 7px; flex-wrap: wrap;
+}
+.comp-effet > .bascule { width: 118px; flex-shrink: 0; justify-content: flex-start; }
+.comp-effet-cles { display: flex; flex-wrap: wrap; gap: 5px; flex: 1; min-width: 0; }
+
+.comp-mini {
+  display: flex; align-items: center; gap: 5px;
+  padding: 2px 7px; border: 1px solid var(--hair); border-radius: var(--r);
+  background: var(--panel); font-size: 11.5px;
+}
+.comp-mini code {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); white-space: nowrap;
+}
+.comp-mini select {
+  width: auto; border: none; background: none; padding: 0 2px;
+  font-size: 11.5px; font-family: var(--mono);
+}
+.comp-mini select:focus { box-shadow: none; }

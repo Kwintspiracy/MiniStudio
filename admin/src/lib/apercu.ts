@@ -95,6 +95,11 @@ export function assembler(
   effets: VersionPrompt[],
   echantillon: EchantillonPeintures,
   options: OptionsApercu,
+  /**
+   * Règles critiques. En production c'est `rules.paint` — sa variante `pro`
+   * quand le mode Pro est actif, sinon la standard. Voir l'appel du studio.
+   */
+  reglesCritiques?: string,
 ): string {
   const effectPrompts: Record<string, PromptEffect> = {};
   for (const e of effets) {
@@ -123,8 +128,32 @@ export function assembler(
     isPhotoshootEnabled: options.photoshoot,
     effectPrompts,
     painterPrompt: options.texteUtilisateur,
+    criticalRules: reglesCritiques,
   });
 }
+
+/**
+ * Familles de clés et ce qu'elles deviennent dans le prompt final.
+ *
+ * `style.*`, `effect.*` et `rules.paint` sont les trois ingrédients que
+ * `generatePaintPrompt` sait combiner — c'est le mode peinture, celui de
+ * l'écran principal.
+ *
+ * `template.*` n'y figure pas, et ce n'est pas un oubli : les modes croquis et
+ * rendu assemblent leur prompt **en ligne dans app/(studio)/index.tsx**, sans
+ * passer par une fonction partagée. Les proposer ici comme ingrédients laisserait
+ * croire à une composition qui n'existe pas ; ils sont donc offerts en
+ * insertion de texte, ce qu'ils sont réellement de ce point de vue.
+ */
+export const EFFETS_COMPOSABLES = [
+  { cle: 'effect.nmm', libelle: 'NMM', option: 'nmm' as const },
+  { cle: 'effect.nmm.mixed', libelle: 'NMM mixte', option: 'nmm' as const },
+  { cle: 'effect.tmm', libelle: 'TMM', option: 'nmm' as const },
+  { cle: 'effect.osl', libelle: 'OSL', option: 'osl' as const },
+  { cle: 'effect.no-osl', libelle: 'OSL éteint', option: 'osl' as const },
+  { cle: 'effect.photoshoot', libelle: 'Photoshoot', option: 'photoshoot' as const },
+  { cle: 'effect.no-photoshoot', libelle: 'Photoshoot éteint', option: 'photoshoot' as const },
+];
 
 /** Blocs entre crochets présents dans le texte assemblé — la structure en un coup d'œil. */
 export function blocsDetectes(prompt: string): string[] {

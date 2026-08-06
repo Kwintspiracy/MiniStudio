@@ -7,7 +7,8 @@ import {
   type VersionPrompt, type Bloc, type CoutModele,
 } from '../lib/api';
 import { resoudre, insererReference } from '../lib/blocs';
-import { chargerEchantillon, assembler, OPTIONS_PAR_DEFAUT, type EchantillonPeintures } from '../lib/apercu';
+import { chargerEchantillon, type EchantillonPeintures } from '../lib/apercu';
+import { Composition, InsertionCle, INGREDIENTS_VIDES, type Ingredients } from '../components/Composition';
 import { Vide, useMessage, useConfirmation, usd, dateCourte } from '../components/ui';
 import { ZoneImage, type ImageChoisie } from '../components/ZoneImage';
 
@@ -27,6 +28,9 @@ interface Brouillon {
   prompt: string;
   negative: string;
   origine: { key: string; version: string } | null;
+  /** Composition par ingrédients ; `null` quand la variante est écrite à la main. */
+  ingredients: Ingredients | null;
+  souci: string | null;
 }
 
 const vierge = (n: number): Brouillon => ({
@@ -35,6 +39,8 @@ const vierge = (n: number): Brouillon => ({
   prompt: '',
   negative: '',
   origine: null,
+  ingredients: { ...INGREDIENTS_VIDES },
+  souci: null,
 });
 
 type Onglet = 'banc' | 'historique';
@@ -238,7 +244,6 @@ export function PageBanc() {
                   b={brouillons[actif]}
                   maj={(patch) => majBrouillon(actif, patch)}
                   versions={versions} blocs={blocs} echantillon={echantillon}
-                  signaler={signaler}
                 />
               )}
             </div>
@@ -316,60 +321,33 @@ export function PageBanc() {
    ========================================================================== */
 
 function EditeurVariante({
-  b, maj, versions, blocs, echantillon, signaler,
+  b, maj, versions, blocs, echantillon,
 }: {
   b: Brouillon;
   maj: (p: Partial<Brouillon>) => void;
   versions: VersionPrompt[];
   blocs: Bloc[];
   echantillon: EchantillonPeintures | null;
-  signaler: (t: string, d?: string, ton?: 'good' | 'bad' | 'neutre') => void;
 }) {
-  const [cleChoisie, setCleChoisie] = useState('');
-  const [versionChoisie, setVersionChoisie] = useState('');
   const champPrincipal = useRef<HTMLTextAreaElement>(null);
   const champNegatif = useRef<HTMLTextAreaElement>(null);
   const [cible, setCible] = useState<'prompt' | 'negative'>('prompt');
 
-  const clesStyle = useMemo(
-    () => [...new Set(versions.filter((v) => v.key.startsWith('style.')).map((v) => v.key))].sort(),
-    [versions],
-  );
-  const versionsDeLaCle = useMemo(
-    () => versions.filter((v) => v.key === cleChoisie),
-    [versions, cleChoisie],
-  );
+  const compose = b.ingredients !== null;
 
-  const importer = () => {
-    const v = versionsDeLaCle.find((x) => x.id === versionChoisie);
-    if (!v || !echantillon) return;
-    try {
-      const effets = versions.filter((x) => x.is_active && x.key.startsWith('effect.'));
-      const texte = assembler(
-        {
-          key: v.key, name: v.name,
-          template: resoudre(v.template ?? '', blocs).texte,
-          template_pro: resoudre(v.template_pro ?? '', blocs).texte,
-        },
-        effets, echantillon, OPTIONS_PAR_DEFAUT,
-      );
-      maj({
-        prompt: texte,
-        negative: v.negative_template ?? '',
-        origine: { key: v.key, version: v.version_label },
-        label: `${v.key.replace('style.', '')} ${v.version_label}`,
-      });
-      signaler('Version importée', `${texte.length} caractères`, 'good');
-    } catch (e) {
-      signaler('Assemblage impossible', (e as Error).message, 'bad');
-    }
+  const insererTexte = (texte: string) => {
+    const champ = cible === 'prompt' ? champPrincipal.current : champNegatif.current;
+    const valeur = cible === 'prompt' ? b.prompt : b.negative;
+    const pos = champ?.selectionStart ?? valeur.length;
+    const nouvelle = valeur.slice(0, pos) + (pos ? '\n\n' : '') + texte + valeur.slice(pos);
+    maj({ [cible]: nouvelle, ingredients: null } as Partial<Brouillon>);
   };
 
   const insererBloc = (slug: string) => {
     const champ = cible === 'prompt' ? champPrincipal.current : champNegatif.current;
     const valeur = cible === 'prompt' ? b.prompt : b.negative;
     const { valeur: nv, curseur } = insererReference(champ, valeur, slug);
-    maj({ [cible]: nv } as Partial<Brouillon>);
+    maj({ [cible]: nv, ingredients: null } as Partial<Brouillon>);
     requestAnimationFrame(() => {
       champ?.focus();
       champ?.setSelectionRange(curseur, curseur);
@@ -378,36 +356,47 @@ function EditeurVariante({
 
   return (
     <div className="banc-editeur">
-      <div className="row" style={{ marginBottom: 10 }}>
-        <input type="text" value={b.label} style={{ maxWidth: 180 }}
+      <div className="row" style={{ marginBottom: 12 }}>
+        <input type="text" value={b.label} style={{ maxWidth: 190 }}
                aria-label="Nom de la version"
                onChange={(e) => maj({ label: e.target.value })} />
         <span className="spacer" />
-        <select value={cleChoisie} style={{ width: 'auto', minWidth: 130 }}
-                onChange={(e) => { setCleChoisie(e.target.value); setVersionChoisie(''); }}>
-          <option value="">— depuis l'atelier —</option>
-          {clesStyle.map((k) => <option key={k} value={k}>{k}</option>)}
-        </select>
-        <select value={versionChoisie} disabled={!cleChoisie} style={{ width: 'auto' }}
-                onChange={(e) => setVersionChoisie(e.target.value)}>
-          <option value="">version…</option>
-          {versionsDeLaCle.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.version_label}{v.is_active ? ' (production)' : ''}
-            </option>
-          ))}
-        </select>
-        <button className="btn sm" disabled={!versionChoisie || !echantillon} onClick={importer}>
-          Importer
-        </button>
+        <div className="seg" style={{ width: 'auto' }}>
+          <button type="button" aria-pressed={compose}
+                  onClick={() => maj({ ingredients: { ...INGREDIENTS_VIDES } })}>
+            Composer
+          </button>
+          <button type="button" aria-pressed={!compose}
+                  onClick={() => maj({ ingredients: null })}>
+            Texte libre
+          </button>
+        </div>
       </div>
 
-      <label className="field">
-        <span>Prompt</span>
-        <textarea ref={champPrincipal} rows={9} value={b.prompt} spellCheck={false}
-                  placeholder="Collez un prompt, ou importez une version de l'atelier."
+      {compose ? (
+        <Composition
+          versions={versions} blocs={blocs} echantillon={echantillon}
+          ingredients={b.ingredients!}
+          onChange={(i) => maj({ ingredients: i })}
+          onAssemble={(texte, souci) => {
+            if (texte !== b.prompt || souci !== b.souci) maj({ prompt: texte, souci });
+          }}
+        />
+      ) : (
+        <InsertionCle versions={versions} onInserer={insererTexte} />
+      )}
+
+      {b.souci && <div className="note bad">{b.souci}</div>}
+
+      <label className="field" style={{ marginTop: 14 }}>
+        <span>
+          Prompt assemblé
+          {compose && ' — modifier détache la variante de sa composition'}
+        </span>
+        <textarea ref={champPrincipal} rows={compose ? 7 : 10} value={b.prompt} spellCheck={false}
+                  placeholder="Composez ci-dessus, ou écrivez directement."
                   onFocus={() => setCible('prompt')}
-                  onChange={(e) => maj({ prompt: e.target.value, origine: null })} />
+                  onChange={(e) => maj({ prompt: e.target.value, ingredients: null })} />
       </label>
 
       <label className="field">
@@ -430,7 +419,7 @@ function EditeurVariante({
             </button>
           ))}
           <span style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
-            insérés dans le champ {cible === 'prompt' ? 'principal' : 'négatif'}
+            dans le champ {cible === 'prompt' ? 'principal' : 'négatif'}
           </span>
         </div>
       )}
@@ -439,7 +428,7 @@ function EditeurVariante({
         <span>
           {(b.prompt.length + (b.negative ? b.negative.length + 10 : 0)).toLocaleString('fr-FR')} caractères au total
         </span>
-        {b.origine && <span className="pill accent">{b.origine.key} {b.origine.version}</span>}
+        {compose && <span className="pill good">composé</span>}
       </div>
     </div>
   );
