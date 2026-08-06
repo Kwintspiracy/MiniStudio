@@ -279,6 +279,9 @@ export const CREDITS_ATTENDUS: Record<string, number | null> = {
   'seedream-4-edit': 5,
   'seedream-4.5-edit': 5,
   'flux-kontext-pro-edit': 8,
+  // Grok : 8 crédits en 1K, 11 en 2K. La fonction serveur fixe 1024×1024,
+  // donc c'est bien 8 qui sera facturé.
+  'grok-imagine-image-quality': 8,
   'flux-kontext-max-edit': 16,
   'nano-banana-pro-edit': 18,
   'gpt-image-2-edit': null,

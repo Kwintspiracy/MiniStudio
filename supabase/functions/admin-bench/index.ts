@@ -30,6 +30,10 @@ const MODELES: Record<string, { maxPrompt?: number; size?: string }> = {
     'flux-kontext-pro-edit': {},
     'flux-kontext-max-edit': {},
     'gpt-image-2-edit': {},
+    // Taille fixée explicitement : chez Grok le tarif dépend de la définition
+    // — 8 crédits en 1K, 11 en 2K. Sans la poser, le coût annoncé avant
+    // lancement pourrait ne pas être celui facturé.
+    'grok-imagine-image-quality': { size: '1024x1024' },
 };
 
 const cors = {
