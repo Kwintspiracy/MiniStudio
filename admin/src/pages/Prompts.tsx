@@ -84,10 +84,13 @@ export function PagePrompts({
     return m;
   }, [cles]);
 
-  // Première clé sélectionnée d'office : un écran vide au chargement oblige à
-  // deviner qu'il faut cliquer à gauche.
+  // Une clé est sélectionnée d'office — un écran vide au chargement oblige à
+  // deviner qu'il faut cliquer à gauche. On préfère un `style.*` : par ordre
+  // alphabétique la première serait `assets.examples`, dont le gabarit est une
+  // liste d'URL en JSON, ni éditable comme un prompt ni testable.
   useEffect(() => {
-    if (!cle && cles.length) setCle(cles[0]);
+    if (cle || !cles.length) return;
+    setCle(cles.find((k) => k.startsWith('style.')) ?? cles[0]);
   }, [cles, cle]);
 
   const versionsDeLaCle = useMemo(
@@ -677,14 +680,23 @@ function Test({
     [versions],
   );
 
-  const prompt = useMemo(() => {
-    if (!echantillon) return '';
-    const std = resoudre(brouillon.template ?? '', blocs).texte;
-    const pro = resoudre(brouillon.template_pro ?? '', blocs).texte;
-    return assembler(
-      { key: brouillon.key, name: brouillon.name, template: std, template_pro: pro },
-      effets, echantillon, options,
-    );
+  // Même précaution que dans l'aperçu : une exception levée ici démonterait
+  // tout l'arbre React et laisserait un écran blanc, sans rien indiquer.
+  const { prompt, souci } = useMemo(() => {
+    if (!echantillon) return { prompt: '', souci: null as string | null };
+    try {
+      const std = resoudre(brouillon.template ?? '', blocs).texte;
+      const pro = resoudre(brouillon.template_pro ?? '', blocs).texte;
+      return {
+        prompt: assembler(
+          { key: brouillon.key, name: brouillon.name, template: std, template_pro: pro },
+          effets, echantillon, options,
+        ),
+        souci: null,
+      };
+    } catch (e) {
+      return { prompt: '', souci: (e as Error).message };
+    }
   }, [brouillon, blocs, effets, echantillon, options]);
 
   const choisirImage = (f: File | null) => {
@@ -741,6 +753,21 @@ function Test({
         prompt de la version <b>{brouillon.version_label}</b> — active ou non. Il débite donc
         un token de votre compte et engage un coût fournisseur réel.
       </div>
+
+      {souci && (
+        <div className="note bad">
+          <b>Le prompt n'a pas pu être assemblé.</b> {souci}
+        </div>
+      )}
+
+      {!souci && !prompt && echantillon && (
+        <div className="note">
+          Cette clé produit un prompt vide. Les clés <code className="inline">assets.*</code> et
+          <code className="inline">rules.*</code> ne sont pas des prompts de style : elles portent
+          des données ou des fragments, et ne se testent pas seules. Choisissez une clé
+          <code className="inline">style.*</code> à gauche.
+        </div>
+      )}
 
       <div className="test-grille">
         <div>

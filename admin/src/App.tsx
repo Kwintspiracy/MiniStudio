@@ -4,6 +4,7 @@ import { supabase, estAdministrateur, configManquante } from './lib/supabase';
 import { NAVIGATION, groupeDe, vueDepuisUrl, vueParId, type IdVue } from './lib/nav';
 import { CommandPalette, type Commande } from './components/CommandPalette';
 import { FournisseurMessages } from './components/ui';
+import { Garde } from './components/Garde';
 
 import { PagePilotage } from './pages/Pilotage';
 import { PageCouts } from './pages/Couts';
@@ -186,13 +187,15 @@ function Coquille({ session }: { session: Session }) {
         </header>
 
         <div className="body">
-          {vue === 'pilotage'    && <PagePilotage aller={aller} />}
-          {vue === 'couts'       && <PageCouts />}
-          {vue === 'comptes'     && <PageComptes />}
-          {vue === 'prompts'     && <PagePrompts {...contexte} />}
-          {vue === 'blocs'       && <PageBlocs />}
-          {vue === 'fournisseur' && <PageFournisseur />}
-          {vue === 'journal'     && <PageJournal />}
+          <Garde cle={vue}>
+            {vue === 'pilotage'    && <PagePilotage aller={aller} />}
+            {vue === 'couts'       && <PageCouts />}
+            {vue === 'comptes'     && <PageComptes />}
+            {vue === 'prompts'     && <PagePrompts {...contexte} />}
+            {vue === 'blocs'       && <PageBlocs />}
+            {vue === 'fournisseur' && <PageFournisseur />}
+            {vue === 'journal'     && <PageJournal />}
+          </Garde>
         </div>
       </div>
 

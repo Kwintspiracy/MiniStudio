@@ -7,6 +7,14 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    // promptGenerator.ts appelle `if (__DEV__) console.log(...)` à neuf
+    // endroits. C'est une globale fournie par React Native et par Metro ;
+    // le navigateur ne la connaît pas, et la branche OSL s'exécute même
+    // toutes options éteintes — d'où un ReferenceError systématique dès que
+    // l'aperçu assemble un prompt. Les tests dorés la posent de la même façon.
+    __DEV__: 'false',
+  },
   resolve: {
     alias: {
       // L'aperçu du prompt final doit passer par le MÊME code que la
