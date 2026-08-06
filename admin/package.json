@@ -6,7 +6,8 @@
   "description": "Poste d'administration MiniStudio — hors du paquet mobile.",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
