@@ -749,3 +749,76 @@ code.inline {
   font-family: var(--mono); font-size: 11px; color: var(--ink-3);
   font-variant-numeric: tabular-nums; margin-right: auto;
 }
+
+/* ==========================================================================
+   Banc — onglets de variantes et matrice
+   ========================================================================== */
+
+.banc-variantes { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+.banc-variante {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 11px; border: 1px solid var(--hair); border-radius: var(--r);
+  background: var(--panel); color: var(--ink-2); cursor: pointer; font-size: 12.8px;
+}
+.banc-variante:hover { border-color: var(--hair-2); color: var(--ink); }
+.banc-variante[aria-current="page"] {
+  border-color: var(--accent); background: var(--accent-soft);
+  color: var(--accent); font-weight: 600;
+}
+.banc-variante .n {
+  font-family: var(--mono); font-size: 10.5px; opacity: .7;
+  font-variant-numeric: tabular-nums;
+}
+.banc-variante .x { opacity: .45; font-size: 15px; line-height: 1; padding: 0 1px; }
+.banc-variante .x:hover { opacity: 1; color: var(--bad); }
+.banc-variante.ajout { border-style: dashed; color: var(--ink-3); }
+.banc-variante.ajout:hover { border-color: var(--accent); color: var(--accent); }
+
+.banc-editeur {
+  border: 1px solid var(--hair); border-radius: var(--r);
+  background: var(--panel); padding: 15px 16px;
+}
+.banc-editeur .field:last-of-type { margin-bottom: 10px; }
+
+/* --- matrice ----------------------------------------------------------- */
+
+.matrice-cadre {
+  overflow-x: auto; border: 1px solid var(--hair);
+  border-radius: var(--r); background: var(--panel);
+}
+.matrice { display: grid; gap: 1px; background: var(--hair); min-width: min-content; }
+
+.matrice-coin, .matrice-entete, .matrice-modele, .matrice-case { background: var(--panel); }
+
+.matrice-coin { position: sticky; left: 0; z-index: 3; }
+
+.matrice-entete {
+  padding: 9px 12px; background: var(--surface);
+  font-size: 12.5px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  position: sticky; top: 0; z-index: 2;
+}
+
+.matrice-modele {
+  display: flex; flex-direction: column; gap: 2px; justify-content: center;
+  padding: 10px 12px; background: var(--surface);
+  position: sticky; left: 0; z-index: 1;
+  border-right: 1px solid var(--hair);
+}
+.matrice-modele code {
+  font-family: var(--mono); font-size: 11px; word-break: break-all; line-height: 1.35;
+}
+.matrice-modele span {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.matrice-case { padding: 8px; }
+.matrice-case .banc-carte { border: none; }
+.matrice-case .banc-carte.rang-1,
+.matrice-case .banc-carte.rang-2,
+.matrice-case .banc-carte.rang-3 { border-radius: var(--r); }
+.matrice-vide {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 90px; color: var(--ink-3); font-family: var(--mono); font-size: 12px;
+}

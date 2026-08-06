@@ -1,0 +1,13 @@
+-- Le banc comparait des modèles sur un prompt. Il doit aussi comparer des
+-- prompts sur des modèles — c'est même la question la plus fréquente : « ma
+-- version 2 rend-elle mieux que la version 1, et sur quel modèle ? »
+--
+-- Un passage porte donc N variantes et produit une matrice variantes × modèles.
+-- Une seule variante redonne exactement le comportement précédent : la liste
+-- est le cas particulier de la matrice, pas un second mode.
+--
+-- Table bench_variants, colonne bench_results.variant_id, contrainte d'unicité
+-- déplacée sur (run_id, model, variant_id) avec NULLS NOT DISTINCT pour que les
+-- passages antérieurs gardent leur garantie.
+--
+-- Appliquée en production le 2026-08-06 sous le nom `bench_variants`.

@@ -235,6 +235,7 @@ export async function chargerUtilisateurs(limite = 100) {
 export interface PassageBanc {
   id: string;
   created_at: string;
+  variant_count: number;
   prompt: string;
   prompt_key: string | null;
   prompt_version: string | null;
@@ -242,9 +243,21 @@ export interface PassageBanc {
   note: string | null;
 }
 
+export interface VarianteBanc {
+  id: string;
+  run_id: string;
+  label: string;
+  prompt: string;
+  negative: string | null;
+  prompt_key: string | null;
+  prompt_version: string | null;
+  position: number;
+}
+
 export interface ResultatBanc {
   id: string;
   run_id: string;
+  variant_id: string | null;
   model: string;
   task_id: string | null;
   status: 'pending' | 'running' | 'done' | 'failed' | 'skipped';
@@ -272,29 +285,35 @@ export const CREDITS_ATTENDUS: Record<string, number | null> = {
 };
 export const CREDIT_USD = 0.005;
 
-export async function lancerBanc(charge: {
+export interface VarianteDemandee {
+  label: string;
   prompt: string;
-  image: { mimeType: string; data: string };
-  models: string[];
+  negative?: string;
   prompt_key?: string;
   prompt_version?: string;
+}
+
+export async function lancerBanc(charge: {
+  variants: VarianteDemandee[];
+  image: { mimeType: string; data: string };
+  models: string[];
   note?: string;
-}): Promise<{ run_id: string; submitted: number; total: number }> {
+}): Promise<{ run_id: string; submitted: number; total: number; variants: VarianteBanc[] }> {
   const { data, error } = await supabase.functions.invoke('admin-bench', {
     body: { action: 'start', ...charge },
   });
   if (error) throw error;
   if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
-  return data as { run_id: string; submitted: number; total: number };
+  return data as { run_id: string; submitted: number; total: number; variants: VarianteBanc[] };
 }
 
-export async function releverBanc(runId: string): Promise<{ results: ResultatBanc[]; pending: number }> {
+export async function releverBanc(runId: string): Promise<{ results: ResultatBanc[]; variants: VarianteBanc[]; pending: number }> {
   const { data, error } = await supabase.functions.invoke('admin-bench', {
     body: { action: 'poll', run_id: runId },
   });
   if (error) throw error;
   if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
-  return data as { results: ResultatBanc[]; pending: number };
+  return data as { results: ResultatBanc[]; variants: VarianteBanc[]; pending: number };
 }
 
 export async function chargerPassages(limite = 40): Promise<PassageBanc[]> {
@@ -304,11 +323,16 @@ export async function chargerPassages(limite = 40): Promise<PassageBanc[]> {
   return (data ?? []) as PassageBanc[];
 }
 
-export async function chargerResultats(runId: string): Promise<ResultatBanc[]> {
-  const { data, error } = await supabase
-    .from('bench_results').select('*').eq('run_id', runId).order('model');
-  if (error) throw error;
-  return (data ?? []) as ResultatBanc[];
+export async function chargerResultats(
+  runId: string,
+): Promise<{ results: ResultatBanc[]; variants: VarianteBanc[] }> {
+  const [r, v] = await Promise.all([
+    supabase.from('bench_results').select('*').eq('run_id', runId).order('model'),
+    supabase.from('bench_variants').select('*').eq('run_id', runId).order('position'),
+  ]);
+  if (r.error) throw r.error;
+  if (v.error) throw v.error;
+  return { results: (r.data ?? []) as ResultatBanc[], variants: (v.data ?? []) as VarianteBanc[] };
 }
 
 /**

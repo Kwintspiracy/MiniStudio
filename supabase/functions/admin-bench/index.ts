@@ -125,24 +125,52 @@ Deno.serve(async (req) => {
         /* start — téléverse la source, soumet chaque modèle                  */
         /* ================================================================== */
         if (corps.action === 'start') {
-            const { prompt, image, models, prompt_key, prompt_version, note } = corps;
+            const { image, models, note } = corps;
 
-            if (typeof prompt !== 'string' || prompt.length < 10) {
-                return json({ error: 'prompt absent ou trop court' }, 400);
+            // Une variante unique reste acceptée sous sa forme ancienne : la
+            // liste est le cas particulier de la matrice, pas un autre mode.
+            const variantes: { label: string; prompt: string; negative?: string;
+                               prompt_key?: string; prompt_version?: string }[] =
+                Array.isArray(corps.variants) && corps.variants.length
+                    ? corps.variants
+                    : [{
+                        label: 'unique',
+                        prompt: corps.prompt,
+                        prompt_key: corps.prompt_key,
+                        prompt_version: corps.prompt_version,
+                    }];
+
+            if (variantes.length > 4) return json({ error: 'quatre variantes au maximum' }, 400);
+            for (const v of variantes) {
+                if (typeof v.prompt !== 'string' || v.prompt.length < 10) {
+                    return json({ error: `variante « ${v.label} » : prompt absent ou trop court` }, 400);
+                }
+                if (typeof v.label !== 'string' || !v.label.trim()) {
+                    return json({ error: 'chaque variante doit porter un nom' }, 400);
+                }
             }
             if (!Array.isArray(models) || models.length === 0) {
                 return json({ error: 'aucun modèle demandé' }, 400);
             }
             if (models.length > 10) return json({ error: 'dix modèles au maximum' }, 400);
+            if (variantes.length * models.length > 24) {
+                return json({ error: 'vingt-quatre générations au maximum par passage' }, 400);
+            }
             if (!image?.data || !image?.mimeType) {
                 return json({ error: 'image source absente' }, 400);
             }
+
+            /** Le négatif est fondu en bloc [AVOID] final, comme le fait la production. */
+            const assembler = (v: { prompt: string; negative?: string }) =>
+                v.negative?.trim()
+                    ? `${v.prompt}\n\n[AVOID]\n${v.negative.trim()}`
+                    : v.prompt;
 
             const dataUrl = String(image.data).startsWith('data:')
                 ? String(image.data)
                 : `data:${image.mimeType};base64,${image.data}`;
 
-            log.info(`démarrage — ${models.length} modèle(s), prompt de ${prompt.length} caractères`);
+            log.info(`démarrage — ${variantes.length} variante(s) × ${models.length} modèle(s)`);
 
             const televerse = await poyo('/api/common/upload/base64', {
                 method: 'POST',
@@ -163,35 +191,58 @@ Deno.serve(async (req) => {
             const { error: errRun } = await admin.from('bench_runs').insert({
                 id: runId,
                 created_by: user?.id ?? null,
-                prompt,
-                prompt_key: prompt_key ?? null,
-                prompt_version: prompt_version ?? null,
+                // Le prompt de la première variante reste sur le passage : il
+                // sert d'aperçu dans l'historique, sans avoir à joindre.
+                prompt: assembler(variantes[0]),
+                prompt_key: variantes[0].prompt_key ?? null,
+                prompt_version: variantes[0].prompt_version ?? null,
                 source_path: cheminSource,
+                variant_count: variantes.length,
                 note: note ?? null,
             });
             if (errRun) throw new Error(`création du passage : ${errRun.message}`);
 
-            // Soumissions en parallèle : chacune obtient sa propre clé par
-            // rotation, ce qui répartit la charge au lieu de saturer la première.
-            const lignes = await Promise.all(models.map(async (modele: string) => {
-                const refus = refusPrealable(modele, prompt);
-                if (refus) {
-                    return { run_id: runId, model: modele, status: 'skipped', error: refus };
-                }
+            const { data: variantesCreees, error: errVar } = await admin
+                .from('bench_variants')
+                .insert(variantes.map((v, i) => ({
+                    run_id: runId,
+                    label: v.label.trim(),
+                    prompt: v.prompt,
+                    negative: v.negative?.trim() || null,
+                    prompt_key: v.prompt_key ?? null,
+                    prompt_version: v.prompt_version ?? null,
+                    position: i,
+                })))
+                .select();
+            if (errVar) throw new Error(`création des variantes : ${errVar.message}`);
+
+            // Produit croisé variantes × modèles. Les soumissions partent en
+            // parallèle : chacune obtient sa propre clé par rotation, ce qui
+            // répartit la charge au lieu de saturer la première.
+            const paires = (variantesCreees ?? []).flatMap((v: any) =>
+                models.map((modele: string) => ({ v, modele })));
+
+            const lignes = await Promise.all(paires.map(async ({ v, modele }: any) => {
+                const texte = assembler({ prompt: v.prompt, negative: v.negative ?? undefined });
+                const base = { run_id: runId, model: modele, variant_id: v.id };
+
+                const refus = refusPrealable(modele, texte);
+                if (refus) return { ...base, status: 'skipped', error: refus };
+
                 try {
                     const cfg = MODELES[modele] ?? {};
                     const r = await poyo('/api/generate/submit', {
                         method: 'POST',
                         body: JSON.stringify({
                             model: modele,
-                            input: { prompt, size: cfg.size ?? '1:1', image_urls: [urlSource] },
+                            input: { prompt: texte, size: cfg.size ?? '1:1', image_urls: [urlSource] },
                         }),
                     });
                     const taskId = r?.data?.task_id ?? r?.task_id;
                     if (!taskId) throw new Error('aucun task_id renvoyé');
-                    return { run_id: runId, model: modele, task_id: taskId, status: 'running' };
+                    return { ...base, task_id: taskId, status: 'running' };
                 } catch (e) {
-                    return { run_id: runId, model: modele, status: 'failed', error: String((e as Error).message).slice(0, 400) };
+                    return { ...base, status: 'failed', error: String((e as Error).message).slice(0, 400) };
                 }
             }));
 
@@ -199,9 +250,13 @@ Deno.serve(async (req) => {
             if (errLignes) throw new Error(`enregistrement des résultats : ${errLignes.message}`);
 
             const soumis = lignes.filter((l) => l.status === 'running').length;
-            log.info(`passage ${runId} — ${soumis} soumission(s) sur ${models.length}`);
+            log.info(`passage ${runId} — ${soumis} soumission(s) sur ${paires.length}`);
 
-            return json({ success: true, run_id: runId, submitted: soumis, total: models.length });
+            return json({
+                success: true, run_id: runId,
+                submitted: soumis, total: paires.length,
+                variants: variantesCreees,
+            });
         }
 
         /* ================================================================== */
@@ -232,7 +287,10 @@ Deno.serve(async (req) => {
                             // la politique de purge du fournisseur.
                             const img = await fetch(urlFichier);
                             const blob = new Uint8Array(await img.arrayBuffer());
-                            chemin = `${runId}/${ligne.model}.png`;
+                            // La variante entre dans le chemin : sans elle, deux
+                            // versions du même modèle s'écraseraient l'une l'autre.
+                            const dossier = ligne.variant_id ? `${runId}/${ligne.variant_id}` : runId;
+                            chemin = `${dossier}/${ligne.model}.png`;
                             await admin.storage.from('bench').upload(chemin, blob, {
                                 contentType: img.headers.get('content-type') ?? 'image/png',
                                 upsert: true,
@@ -265,11 +323,13 @@ Deno.serve(async (req) => {
                 }
             }));
 
-            const { data: etat } = await admin
-                .from('bench_results').select('*').eq('run_id', runId).order('model');
+            const [{ data: etat }, { data: variantes }] = await Promise.all([
+                admin.from('bench_results').select('*').eq('run_id', runId).order('model'),
+                admin.from('bench_variants').select('*').eq('run_id', runId).order('position'),
+            ]);
 
             const reste = (etat ?? []).filter((l: any) => l.status === 'pending' || l.status === 'running').length;
-            return json({ success: true, results: etat ?? [], pending: reste });
+            return json({ success: true, results: etat ?? [], variants: variantes ?? [], pending: reste });
         }
 
         return json({ error: `action inconnue : ${corps.action}` }, 400);
