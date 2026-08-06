@@ -629,3 +629,12 @@ code.inline {
   font-family: var(--mono); font-size: 9.5px; color: var(--ink-3);
   padding-bottom: 7px; font-variant-numeric: tabular-nums;
 }
+
+/* --- séparateur « ou » de l'écran de connexion -------------------------- */
+.separateur {
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 0 18px; color: var(--ink-3); font-size: 12px;
+}
+.separateur::before, .separateur::after {
+  content: ''; flex: 1; height: 1px; background: var(--hair);
+}

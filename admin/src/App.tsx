@@ -23,39 +23,76 @@ type Etat =
   | { phase: 'refuse'; email: string }
   | { phase: 'admin'; session: Session };
 
+/**
+ * Le compte titulaire n'a pas de mot de passe : il est adossé à Google, et
+ * `encrypted_password` est vide en base. Un formulaire mot de passe n'aurait
+ * donc jamais pu l'authentifier. Deux voies sont offertes :
+ *
+ *  — Google, celle qu'il emploie déjà dans l'application ;
+ *  — un lien par courriel, qui ne dépend d'aucun fournisseur tiers et reste
+ *    disponible si l'URL de redirection n'est pas encore déclarée côté Supabase.
+ */
 function Connexion({ onErreur }: { onErreur: (m: string) => void }) {
   const [email, setEmail] = useState('');
-  const [mdp, setMdp] = useState('');
-  const [enCours, setEnCours] = useState(false);
+  const [enCours, setEnCours] = useState<'google' | 'lien' | null>(null);
+  const [lienEnvoye, setLienEnvoye] = useState(false);
 
-  const soumettre = async (e: React.FormEvent) => {
+  const parGoogle = async () => {
+    setEnCours('google');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) { onErreur(error.message); setEnCours(null); }
+    // En cas de succès le navigateur part sur Google : rien à faire ici.
+  };
+
+  const parLien = async (e: React.FormEvent) => {
     e.preventDefault();
-    setEnCours(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password: mdp });
+    setEnCours('lien');
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
     if (error) onErreur(error.message);
-    setEnCours(false);
+    else setLienEnvoye(true);
+    setEnCours(null);
   };
 
   return (
     <div className="gate">
-      <form className="gate-box" onSubmit={soumettre}>
+      <div className="gate-box">
         <h1>MiniStudio — Administration</h1>
         <p>Réservé aux comptes administrateurs.</p>
-        <label className="field">
-          <span>Adresse</span>
-          <input type="email" value={email} autoComplete="username"
-                 onChange={(e) => setEmail(e.target.value)} required autoFocus />
-        </label>
-        <label className="field">
-          <span>Mot de passe</span>
-          <input type="password" value={mdp} autoComplete="current-password"
-                 onChange={(e) => setMdp(e.target.value)} required />
-        </label>
-        <button className="btn primary" style={{ width: '100%', justifyContent: 'center' }}
-                disabled={enCours || !email || !mdp}>
-          {enCours ? 'Vérification…' : 'Entrer'}
+
+        <button className="btn primary" onClick={() => void parGoogle()}
+                disabled={enCours !== null}
+                style={{ width: '100%', justifyContent: 'center', marginBottom: 18 }}>
+          {enCours === 'google' ? 'Redirection…' : 'Continuer avec Google'}
         </button>
-      </form>
+
+        <div className="separateur"><span>ou</span></div>
+
+        {lienEnvoye ? (
+          <div className="note good" style={{ margin: 0 }}>
+            Lien envoyé à <b>{email}</b>. Ouvrez-le depuis ce navigateur ;
+            il vous ramènera ici, connecté.
+          </div>
+        ) : (
+          <form onSubmit={parLien}>
+            <label className="field">
+              <span>Recevoir un lien de connexion</span>
+              <input type="email" value={email} autoComplete="username"
+                     placeholder="quentinbeau@gmail.com"
+                     onChange={(e) => setEmail(e.target.value)} required />
+            </label>
+            <button className="btn" style={{ width: '100%', justifyContent: 'center' }}
+                    disabled={enCours !== null || !email}>
+              {enCours === 'lien' ? 'Envoi…' : 'Envoyer le lien'}
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }
