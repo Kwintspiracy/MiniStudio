@@ -11,6 +11,7 @@ import { PageCouts } from './pages/Couts';
 import { PageComptes } from './pages/Comptes';
 import { PagePrompts } from './pages/Prompts';
 import { PageBlocs } from './pages/Blocs';
+import { PageBanc } from './pages/Banc';
 import { PageFournisseur } from './pages/Fournisseur';
 import { PageJournal } from './pages/Journal';
 
@@ -193,6 +194,7 @@ function Coquille({ session }: { session: Session }) {
             {vue === 'comptes'     && <PageComptes />}
             {vue === 'prompts'     && <PagePrompts {...contexte} />}
             {vue === 'blocs'       && <PageBlocs />}
+            {vue === 'banc'        && <PageBanc />}
             {vue === 'fournisseur' && <PageFournisseur />}
             {vue === 'journal'     && <PageJournal />}
           </Garde>

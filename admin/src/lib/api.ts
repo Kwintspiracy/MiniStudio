@@ -227,3 +227,113 @@ export async function chargerUtilisateurs(limite = 100) {
   if (error) throw error;
   return (data ?? []) as Record<string, unknown>[];
 }
+
+/* ==========================================================================
+   Banc d'essais
+   ========================================================================== */
+
+export interface PassageBanc {
+  id: string;
+  created_at: string;
+  prompt: string;
+  prompt_key: string | null;
+  prompt_version: string | null;
+  source_path: string | null;
+  note: string | null;
+}
+
+export interface ResultatBanc {
+  id: string;
+  run_id: string;
+  model: string;
+  task_id: string | null;
+  status: 'pending' | 'running' | 'done' | 'failed' | 'skipped';
+  image_path: string | null;
+  credits: number | null;
+  cost_usd: number | null;
+  seconds: number | null;
+  error: string | null;
+  rank: number | null;
+  created_at: string;
+}
+
+/** Coûts attendus, en crédits PoYo à 0,005 $ — sert à annoncer la dépense avant de lancer. */
+export const CREDITS_ATTENDUS: Record<string, number | null> = {
+  'z-image': 2,
+  'wan-2.7-image': 4.2,
+  'nano-banana-edit': 5,
+  'nano-banana-2-edit': 5,
+  'seedream-4-edit': 5,
+  'seedream-4.5-edit': 5,
+  'flux-kontext-pro-edit': 8,
+  'flux-kontext-max-edit': 16,
+  'nano-banana-pro-edit': 18,
+  'gpt-image-2-edit': null,
+};
+export const CREDIT_USD = 0.005;
+
+export async function lancerBanc(charge: {
+  prompt: string;
+  image: { mimeType: string; data: string };
+  models: string[];
+  prompt_key?: string;
+  prompt_version?: string;
+  note?: string;
+}): Promise<{ run_id: string; submitted: number; total: number }> {
+  const { data, error } = await supabase.functions.invoke('admin-bench', {
+    body: { action: 'start', ...charge },
+  });
+  if (error) throw error;
+  if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+  return data as { run_id: string; submitted: number; total: number };
+}
+
+export async function releverBanc(runId: string): Promise<{ results: ResultatBanc[]; pending: number }> {
+  const { data, error } = await supabase.functions.invoke('admin-bench', {
+    body: { action: 'poll', run_id: runId },
+  });
+  if (error) throw error;
+  if ((data as { error?: string })?.error) throw new Error((data as { error: string }).error);
+  return data as { results: ResultatBanc[]; pending: number };
+}
+
+export async function chargerPassages(limite = 40): Promise<PassageBanc[]> {
+  const { data, error } = await supabase
+    .from('bench_runs').select('*').order('created_at', { ascending: false }).limit(limite);
+  if (error) throw error;
+  return (data ?? []) as PassageBanc[];
+}
+
+export async function chargerResultats(runId: string): Promise<ResultatBanc[]> {
+  const { data, error } = await supabase
+    .from('bench_results').select('*').eq('run_id', runId).order('model');
+  if (error) throw error;
+  return (data ?? []) as ResultatBanc[];
+}
+
+/**
+ * Le compartiment est privé : chaque image demande une URL signée. Une heure
+ * suffit largement à une séance de comparaison.
+ */
+export async function urlSignee(chemin: string): Promise<string | null> {
+  const { data, error } = await supabase.storage.from('bench').createSignedUrl(chemin, 3600);
+  if (error) return null;
+  return data.signedUrl;
+}
+
+/** Podium : une seule place par rang, garantie par un index unique côté base. */
+export async function classer(resultatId: string, runId: string, rang: number | null) {
+  if (rang !== null) {
+    // Libère la place si elle est déjà prise, sinon l'index la refuse.
+    await supabase.from('bench_results')
+      .update({ rank: null }).eq('run_id', runId).eq('rank', rang);
+  }
+  const { error } = await supabase.from('bench_results')
+    .update({ rank: rang }).eq('id', resultatId);
+  if (error) throw error;
+}
+
+export async function supprimerPassage(runId: string) {
+  const { error } = await supabase.from('bench_runs').delete().eq('id', runId);
+  if (error) throw error;
+}

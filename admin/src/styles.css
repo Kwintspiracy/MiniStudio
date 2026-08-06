@@ -638,3 +638,68 @@ code.inline {
 .separateur::before, .separateur::after {
   content: ''; flex: 1; height: 1px; background: var(--hair);
 }
+
+/* ==========================================================================
+   Banc d'essais
+   ========================================================================== */
+
+.banc-reglages { display: grid; grid-template-columns: 1fr 260px; gap: 24px; align-items: start; }
+@media (max-width: 900px) { .banc-reglages { grid-template-columns: 1fr; } }
+
+.banc-source {
+  width: 100%; margin-top: 10px; border-radius: var(--r);
+  border: 1px solid var(--hair); max-height: 220px; object-fit: contain;
+  background: var(--surface); display: block;
+}
+
+.banc-modeles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px; }
+.banc-modele {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 11px; border: 1px solid var(--hair); border-radius: var(--r);
+  background: var(--panel); cursor: pointer; font-size: 12.8px;
+}
+.banc-modele:hover { border-color: var(--hair-2); }
+.banc-modele.actif { border-color: var(--accent); background: var(--accent-soft); }
+.banc-modele input { accent-color: var(--accent); }
+.banc-modele code { font-family: var(--mono); font-size: 12px; }
+.banc-modele .num {
+  margin-left: auto; font-family: var(--mono); font-size: 11.5px;
+  font-variant-numeric: tabular-nums; color: var(--ink-3);
+}
+.banc-modele.actif .num { color: var(--accent); }
+
+.banc-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+
+.banc-carte {
+  border: 1px solid var(--hair); border-radius: var(--r);
+  background: var(--panel); overflow: hidden;
+}
+.banc-carte.rang-1 { border-color: #C9A227; box-shadow: 0 0 0 1px #C9A227; }
+.banc-carte.rang-2 { border-color: #9BA3AC; box-shadow: 0 0 0 1px #9BA3AC; }
+.banc-carte.rang-3 { border-color: #B07A47; box-shadow: 0 0 0 1px #B07A47; }
+
+.banc-carte-visuel {
+  position: relative; aspect-ratio: 1; background: var(--surface);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.banc-carte-visuel img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.banc-medaille { position: absolute; top: 7px; left: 7px; font-size: 20px; line-height: 1; }
+
+.banc-echec {
+  padding: 16px; font-size: 11.8px; color: var(--bad); text-align: center;
+  font-family: var(--mono); line-height: 1.5; overflow-y: auto; max-height: 100%;
+}
+.banc-echec.mute { color: var(--ink-3); }
+
+.banc-carte-pied {
+  display: flex; align-items: baseline; gap: 8px; padding: 8px 11px;
+  border-top: 1px solid var(--hair); font-size: 12px;
+}
+.banc-carte-pied code { font-family: var(--mono); font-size: 11.5px; }
+.banc-carte-pied .num {
+  margin-left: auto; font-family: var(--mono); font-size: 11px;
+  color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+.banc-podium { display: flex; gap: 4px; padding: 0 11px 10px; }
+.banc-podium .btn { flex: 1; justify-content: center; }

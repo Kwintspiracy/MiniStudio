@@ -9,7 +9,7 @@
 
 export type IdVue =
   | 'pilotage' | 'couts' | 'comptes'
-  | 'prompts' | 'blocs'
+  | 'prompts' | 'blocs' | 'banc'
   | 'fournisseur' | 'journal';
 
 export interface Vue {
@@ -41,6 +41,8 @@ export const NAVIGATION: GroupeVues[] = [
         intention: "Écrire, comparer, tester et activer les versions de prompts." },
       { id: 'blocs', titre: 'Bibliothèque de blocs', icone: '❐',
         intention: "Fragments réutilisables partagés entre plusieurs prompts." },
+      { id: 'banc', titre: "Banc d'essais", icone: '⚖',
+        intention: "Comparer un même prompt sur plusieurs modèles, et classer les rendus." },
     ],
   },
   {

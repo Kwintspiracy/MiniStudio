@@ -1,0 +1,13 @@
+-- Banc d'essais multi-modèles, côté serveur.
+--
+-- Le banc local (tools/render-bench) gardait ses résultats dans des dossiers
+-- sur une seule machine et détenait la clé PoYo en clair dans un .env. Déplacé
+-- ici, il devient consultable de partout, la clé reste dans la base derrière
+-- get_available_poyo_key, et l'historique survit au poste de travail.
+--
+-- Tables bench_runs et bench_results, compartiment de stockage privé « bench »,
+-- toutes politiques réservées à is_admin(). Un index unique partiel garantit
+-- qu'un passage n'a qu'un seul premier, un seul deuxième, un seul troisième.
+--
+-- Appliquée en production le 2026-08-06 sous le nom `bench_runs`.
+-- Le corps exact figure dans supabase_migrations.schema_migrations.
