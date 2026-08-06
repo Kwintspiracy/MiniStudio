@@ -1,0 +1,31 @@
+{
+  // Poste d'administration MiniStudio — Worker servant des fichiers statiques.
+  //
+  // Sans ce fichier, Cloudflare tente une « configuration automatique » et
+  // devine la nature du projet. Le dépôt contenant à la fois une application
+  // Expo à la racine et cette application Vite dans admin/, la devinette part
+  // volontiers sur la mauvaise. Ici tout est explicite.
+  //
+  // Aucun code ne s'exécute côté serveur : le Worker ne fait que servir le
+  // contenu de dist/. Toute l'autorisation reste côté Supabase, dans les
+  // politiques RLS et is_admin().
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ministudio-admin",
+  "compatibility_date": "2026-08-06",
+
+  "assets": {
+    "directory": "./dist",
+
+    // L'application route par fragment (#/prompts), donc le serveur ne voit
+    // jamais ces chemins. Le repli reste correct pour un lien collé à la main
+    // ou un retour d'authentification sur une sous-route.
+    "not_found_handling": "single-page-application"
+  },
+
+  // Repères pour la console. Les variables VITE_* ne figurent pas ici : Vite
+  // les inscrit dans le bundle à la compilation, elles doivent donc être
+  // définies comme variables de build, pas comme variables d'exécution.
+  "observability": {
+    "enabled": true
+  }
+}
