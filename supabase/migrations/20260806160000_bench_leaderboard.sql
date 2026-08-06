@@ -1,0 +1,12 @@
+-- Classement cumulé du banc d'essais.
+--
+-- Le podium d'un passage répond « lequel a gagné cette fois ». Sur une douzaine
+-- de passages, la question devient « lequel gagne le plus souvent, et à quel
+-- prix » — et c'est cette seconde question qui tranche un arbitrage de
+-- production.
+--
+-- Barème : 3 points pour une première place, 2 pour une deuxième, 1 pour une
+-- troisième. Deux classements distincts, par modèle et par version de prompt,
+-- parce que ce sont deux décisions distinctes.
+--
+-- Appliquée en production le 2026-08-06 sous le nom `bench_leaderboard`.

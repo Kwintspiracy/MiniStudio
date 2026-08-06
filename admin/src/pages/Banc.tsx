@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   lancerBanc, releverBanc, chargerPassages, chargerResultats, urlSignee, classer,
-  supprimerPassage, chargerPrompts, chargerBlocs, chargerCoutsModeles,
+  supprimerPassage, chargerPrompts, chargerBlocs, chargerCoutsModeles, chargerClassement,
   CREDITS_ATTENDUS, CREDIT_USD,
   type PassageBanc, type ResultatBanc, type VarianteBanc, type VarianteDemandee,
-  type VersionPrompt, type Bloc, type CoutModele,
+  type VersionPrompt, type Bloc, type CoutModele, type Classement,
 } from '../lib/api';
 import { resoudre, insererReference } from '../lib/blocs';
 import { chargerEchantillon, type EchantillonPeintures } from '../lib/apercu';
 import { Composition, InsertionCle, INGREDIENTS_VIDES, type Ingredients } from '../components/Composition';
-import { Vide, useMessage, useConfirmation, usd, dateCourte } from '../components/ui';
+import { Squelette, Vide, Indicateur, useMessage, useConfirmation, usd, nombre, dateCourte } from '../components/ui';
 import { ZoneImage, type ImageChoisie } from '../components/ZoneImage';
 
 const MODELES = Object.keys(CREDITS_ATTENDUS);
@@ -43,7 +43,7 @@ const vierge = (n: number): Brouillon => ({
   souci: null,
 });
 
-type Onglet = 'banc' | 'historique';
+type Onglet = 'banc' | 'historique' | 'classement';
 
 export function PageBanc() {
   const signaler = useMessage();
@@ -62,6 +62,7 @@ export function PageBanc() {
   const [variantes, setVariantes] = useState<VarianteBanc[]>([]);
   const [enCours, setEnCours] = useState(false);
   const [passages, setPassages] = useState<PassageBanc[]>([]);
+  const [classement, setClassement] = useState<Classement | null>(null);
 
   const [versions, setVersions] = useState<VersionPrompt[]>([]);
   const [blocs, setBlocs] = useState<Bloc[]>([]);
@@ -184,15 +185,25 @@ export function PageBanc() {
       </p>
 
       <div className="onglets" style={{ padding: 0, marginBottom: 20 }}>
-        {(['banc', 'historique'] as Onglet[]).map((o) => (
+        {(['banc', 'historique', 'classement'] as Onglet[]).map((o) => (
           <button key={o} className="onglet" aria-current={o === onglet ? 'page' : undefined}
-                  onClick={() => setOnglet(o)}>
-            {o === 'banc' ? 'Banc' : `Historique (${passages.length})`}
+                  onClick={() => {
+                    setOnglet(o);
+                    if (o === 'classement') {
+                      chargerClassement().then(setClassement)
+                        .catch((e) => signaler('Classement indisponible', (e as Error).message, 'bad'));
+                    }
+                  }}>
+            {o === 'banc' ? 'Banc'
+              : o === 'historique' ? `Historique (${passages.length})`
+              : 'Classement'}
           </button>
         ))}
       </div>
 
-      {onglet === 'historique' ? (
+      {onglet === 'classement' ? (
+        <Tableau c={classement} />
+      ) : onglet === 'historique' ? (
         <Historique passages={passages} ouvrir={ouvrirPassage}
                     supprimer={async (p) => {
                       const ok = await confirmer('Supprimer ce passage ?', 'Supprimer',
@@ -557,6 +568,121 @@ function Cellule({
         </div>
       )}
     </div>
+  );
+}
+
+/* ==========================================================================
+   Classement cumulé
+   ========================================================================== */
+
+const PODIUM = ['🥇', '🥈', '🥉'];
+
+function Tableau({ c }: { c: Classement | null }) {
+  if (!c) return <div className="pad" style={{ padding: 0 }}><Squelette lignes={6} /></div>;
+
+  if (!c.totals.ranked) {
+    return (
+      <Vide>
+        Aucune image classée pour l'instant. Désignez un podium sous les rendus d'un
+        passage — les points s'accumulent ici.
+      </Vide>
+    );
+  }
+
+  return (
+    <>
+      <div className="cards" style={{ marginBottom: 22 }}>
+        <Indicateur libelle="Passages" valeur={nombre(c.totals.runs)} />
+        <Indicateur libelle="Rendus produits" valeur={nombre(c.totals.rendered)} />
+        <Indicateur libelle="Rendus classés" valeur={nombre(c.totals.ranked)} accent />
+        <Indicateur libelle="Dépense du banc" valeur={usd(c.totals.spend_usd)} />
+      </div>
+
+      <div className="note">
+        Barème : <b>3 points</b> pour une première place, <b>2</b> pour une deuxième,
+        <b> 1</b> pour une troisième. La colonne à regarder est <b>points par dollar</b> —
+        un modèle qui gagne souvent en coûtant trois fois plus cher ne gagne pas vraiment.
+      </div>
+
+      <h2 className="sec">Par modèle</h2>
+      <div className="tw">
+        <table>
+          <thead>
+            <tr>
+              <th />
+              <th>Modèle</th>
+              <th className="num">🥇</th><th className="num">🥈</th><th className="num">🥉</th>
+              <th className="num">Points</th>
+              <th className="num">Rendus</th>
+              <th className="num">Dépense</th>
+              <th className="num">Points / $</th>
+              <th className="num">Durée</th>
+            </tr>
+          </thead>
+          <tbody>
+            {c.by_model.map((m, i) => {
+              const parDollar = m.spend_usd > 0 ? m.points / m.spend_usd : null;
+              return (
+                <tr key={m.model}>
+                  <td className="num" style={{ width: 28, fontSize: 15 }}>
+                    {m.points > 0 && i < 3 ? PODIUM[i] : ''}
+                  </td>
+                  <td className="mono">{m.model}</td>
+                  <td className="num">{m.first || '—'}</td>
+                  <td className="num">{m.second || '—'}</td>
+                  <td className="num">{m.third || '—'}</td>
+                  <td className="num"><b>{m.points}</b></td>
+                  <td className="num">{nombre(m.rendered)}</td>
+                  <td className="num">{usd(m.spend_usd, 3)}</td>
+                  <td className="num">
+                    {parDollar == null
+                      ? <span className="pill mute">—</span>
+                      : <span className="pill accent">{parDollar.toFixed(1)}</span>}
+                  </td>
+                  <td className="num">{m.avg_seconds ? `${m.avg_seconds.toFixed(0)} s` : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 className="sec">Par version de prompt</h2>
+      {!c.by_variant.length ? (
+        <Vide>Aucune variante classée. Les passages antérieurs à la matrice n'en portent pas.</Vide>
+      ) : (
+        <div className="tw">
+          <table>
+            <thead>
+              <tr>
+                <th />
+                <th>Version</th>
+                <th className="num">🥇</th><th className="num">🥈</th><th className="num">🥉</th>
+                <th className="num">Points</th>
+                <th className="num">Passages</th>
+                <th className="num">Rendus</th>
+              </tr>
+            </thead>
+            <tbody>
+              {c.by_variant.map((v, i) => (
+                <tr key={v.label}>
+                  <td className="num" style={{ width: 28, fontSize: 15 }}>
+                    {v.points > 0 && i < 3 ? PODIUM[i] : ''}
+                  </td>
+                  <td className="mono">{v.label}</td>
+                  <td className="num">{v.first || '—'}</td>
+                  <td className="num">{v.second || '—'}</td>
+                  <td className="num">{v.third || '—'}</td>
+                  <td className="num"><b>{v.points}</b></td>
+                  <td className="num">{nombre(v.runs)}</td>
+                  <td className="num">{nombre(v.rendered)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   );
 }
 

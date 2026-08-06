@@ -361,3 +361,37 @@ export async function supprimerPassage(runId: string) {
   const { error } = await supabase.from('bench_runs').delete().eq('id', runId);
   if (error) throw error;
 }
+
+/* ==========================================================================
+   Classement cumulé
+   ========================================================================== */
+
+export interface RangModele {
+  model: string;
+  first: number; second: number; third: number;
+  points: number;
+  rendered: number;
+  spend_usd: number;
+  avg_seconds: number | null;
+}
+
+export interface RangVariante {
+  label: string;
+  runs: number;
+  first: number; second: number; third: number;
+  points: number;
+  rendered: number;
+}
+
+export interface Classement {
+  success: boolean;
+  by_model: RangModele[];
+  by_variant: RangVariante[];
+  totals: { runs: number; rendered: number; ranked: number; spend_usd: number };
+}
+
+export async function chargerClassement(): Promise<Classement> {
+  const { data, error } = await supabase.rpc('get_bench_leaderboard');
+  if (error) throw error;
+  return data as Classement;
+}
