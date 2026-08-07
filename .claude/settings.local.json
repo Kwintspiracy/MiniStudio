@@ -21,7 +21,16 @@
       "WebFetch(domain:github.com)",
       "Bash(gh api:*)",
       "Bash(gh auth:*)",
-      "Bash(npx supabase:*)"
+      "Bash(npx supabase:*)",
+      "mcp__claude_ai_Figma__get_metadata",
+      "WebFetch(domain:www.figma.com)",
+      "mcp__claude_ai_Figma__whoami",
+      "Bash(claude mcp:*)",
+      "Bash(dir design-tokens *)",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "mcp__claude_ai_Supabase__list_edge_functions",
+      "mcp__claude_ai_Supabase__deploy_edge_function",
+      "Bash(node *)"
     ]
   }
 }

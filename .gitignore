@@ -56,3 +56,6 @@ tools/render-bench/resultats/
 
 # Exports temporaires d analyse de bundle
 .perf-export*/
+
+# Worktrees temporaires créés par les agents Claude Code
+.claude/worktrees/
