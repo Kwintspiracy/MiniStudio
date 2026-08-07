@@ -174,7 +174,7 @@ async function submitPoyoTask(
     imageUrl?: string,
     callbackUrl?: string,
     model: string = 'nano-banana-2-edit'
-): Promise<string> {
+): Promise<{ taskId: string; raw: any }> {
     // Use the exact admin-selected model slug (normal vs -edit are distinct models).
     log.info('POYO', `GENERATE: Submitting to PoYo (${model})...`);
     if (callbackUrl) {
@@ -228,7 +228,10 @@ async function submitPoyoTask(
     }
 
     log.info('POYO', `GENERATE: Task created → task_id=${taskId}`);
-    return taskId;
+    // La reponse brute remonte : elle porte credits_amount, seule preuve tierce
+    // du modele reellement facture. Elle etait journalisee puis jetee, et les
+    // journaux d'edge function accessibles ne rendent pas la sortie console.
+    return { taskId, raw: result };
 }
 
 /**
@@ -272,16 +275,19 @@ async function submitPoyoWithWebhook(
     const callbackUrl = callbackToken
         ? `${CONFIG.POYO_WEBHOOK_URL}?t=${encodeURIComponent(callbackToken)}`
         : CONFIG.POYO_WEBHOOK_URL;
-    const taskId = await submitPoyoTask(apiKey, prompt, imageUrl, callbackUrl, model);
+    const { taskId, raw } = await submitPoyoTask(apiKey, prompt, imageUrl, callbackUrl, model);
 
-    // Seul le task_id est ecrit ici. model_used est pose par reserve_generation,
-    // en meme temps que le prix en tokens : les reecrire depuis le code
-    // rouvrirait la possibilite d'une divergence entre modele facture et modele
-    // soumis, qui est precisement ce que la migration ferme.
+    // model_used est pose par reserve_generation, en meme temps que le prix en
+    // tokens : le reecrire ici rouvrirait la possibilite d'une divergence entre
+    // modele facture et modele soumis. On ajoute seulement ce que le
+    // fournisseur nous repond, qui n'existe qu'ici — credits_amount y dit
+    // combien PoYo a debite, donc quel modele a reellement tourne.
     await supabaseClient
         .from('generation_jobs')
-        .update({ poyo_task_id: taskId, provider_used: 'poyo' })
+        .update({ poyo_task_id: taskId, provider_used: 'poyo', provider_response: raw ?? null })
         .eq('id', jobId);
+
+    log.info('POYO', `BILLED: ${JSON.stringify(raw?.data?.credits_amount ?? raw?.credits_amount ?? 'inconnu')} credit(s) pour ${model}`);
 
     log.success('POYO', `ASYNC: Task submitted, webhook will handle completion`);
     return { taskId };

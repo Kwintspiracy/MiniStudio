@@ -86,6 +86,7 @@ export function PageGenerations() {
                 <th>Modèle</th>
                 <th className="num">Tokens</th>
                 <th className="num">Coût</th>
+                <th className="num">Facturé</th>
                 <th className="num">Durée</th>
                 <th>Compte</th>
               </tr>
@@ -117,12 +118,20 @@ export function PageGenerations() {
                       <td className="mono" style={{ fontSize: 12 }}>{l.model_used ?? '—'}</td>
                       <td className="num">{l.cost_units}</td>
                       <td className="num">{l.provider_cost_usd == null ? '—' : usd(l.provider_cost_usd, 3)}</td>
+                      {/* Ce que PoYo dit avoir débité. Seule preuve tierce que la
+                          qualité choisie atteint bien deux modèles distincts —
+                          18 crédits en Pro, 5 en Standard. */}
+                      <td className="num">
+                        {l.provider_credits == null
+                          ? <span style={{ color: 'var(--ink-3)' }}>—</span>
+                          : <span className="mono">{l.provider_credits} cr.</span>}
+                      </td>
                       <td className="num">{l.duration_s == null ? '—' : `${l.duration_s} s`}</td>
                       <td className="mono" style={{ color: 'var(--ink-3)' }}>{l.user_short}</td>
                     </tr>
                     {estOuverte && (
                       <tr>
-                        <td colSpan={8} style={{ background: 'var(--surface)' }}>
+                        <td colSpan={9} style={{ background: 'var(--surface)' }}>
                           <Detail g={l} />
                         </td>
                       </tr>
