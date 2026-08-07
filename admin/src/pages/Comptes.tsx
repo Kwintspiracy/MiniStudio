@@ -79,6 +79,12 @@ export function PageComptes() {
                     <td className="num">{nombre(Number(lire(u, 'generations', 'generation_count', 'total_generations') ?? 0))}</td>
                     <td className="num">
                       {nombre(Number(lire(u, 'remaining_total', 'balance', 'purchased_balance') ?? 0))}
+                      {/* Réconciliation avec le registre, annoncée par le sous-titre
+                          de cette page et jusqu'ici jamais faite. On compare à la
+                          DERNIÈRE position inscrite, pas au cumul des deltas : le
+                          registre n'a pas d'écriture d'ouverture pour les comptes
+                          antérieurs au 5 août, et sommer signalerait tout le monde. */}
+                      <Ecart ligne={u} />
                     </td>
                     <td>
                       {pro
@@ -96,5 +102,22 @@ export function PageComptes() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Signale un solde qui a bougé sans passer par le registre. Muet le reste du temps. */
+function Ecart({ ligne }: { ligne: Record<string, unknown> }) {
+  const registre = ligne.ledger_balance;
+  const entrees = Number(ligne.ledger_entries ?? 0);
+  if (registre == null || entrees === 0) return null;
+
+  const solde = Number(lire(ligne, 'remaining_total', 'balance', 'purchased_balance') ?? 0);
+  if (Number(registre) === solde) return null;
+
+  return (
+    <span className="pill bad" style={{ marginLeft: 6 }}
+          title={`Registre : ${registre}. Le solde a changé sans écriture correspondante.`}>
+      ≠ {String(registre)}
+    </span>
   );
 }
