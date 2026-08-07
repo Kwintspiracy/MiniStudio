@@ -903,3 +903,76 @@ code.inline {
   background: var(--panel);
 }
 .comp-mini select:focus { box-shadow: none; }
+
+/* ==========================================================================
+   Banc — sélection pour comparaison et comparateur
+   ========================================================================== */
+
+/* Pastille de sélection posée sur la vignette. Discrète tant qu'on ne s'en
+   sert pas : la matrice reste lisible quand on ne compare rien. */
+.banc-choix {
+  position: absolute; top: 6px; right: 6px; z-index: 2;
+  width: 22px; height: 22px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--hair-2); border-radius: var(--r);
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+  color: var(--accent-ink); font-size: 13px; line-height: 1; cursor: pointer;
+}
+.banc-choix:hover { border-color: var(--accent); }
+.banc-choix.actif { background: var(--accent); border-color: var(--accent); }
+.banc-carte.compare { box-shadow: 0 0 0 2px var(--accent); border-radius: var(--r); }
+
+/* --- comparateur ------------------------------------------------------- */
+
+.comparateur {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; flex-direction: column;
+  background: var(--ground);
+}
+
+.comparateur-barre {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 10px 14px; border-bottom: 1px solid var(--hair);
+  background: var(--panel);
+}
+
+/* `ajusté` contient tout à l'écran ; `100 %` laisse défiler au pixel réel,
+   seul moyen de juger une netteté entre deux définitions. */
+.comparateur-scene {
+  flex: 1; min-height: 0; overflow: auto;
+  display: flex; gap: 14px; padding: 14px; align-items: flex-start;
+}
+.comparateur-volet {
+  margin: 0; flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.comparateur-volet.seul { flex: 1 1 100%; }
+
+.comparateur-cadre {
+  position: relative; background: var(--surface);
+  border: 1px solid var(--hair); border-radius: var(--r);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.comparateur-cadre img {
+  display: block; max-width: 100%; height: auto;
+  transition: opacity .08s linear;
+}
+/* Superposition : toutes les images occupent la même case, seule l'opacité
+   change. Rien ne se déplace au basculement. */
+.comparateur-volet.seul .comparateur-cadre img { grid-area: 1 / 1; }
+.comparateur-volet.seul .comparateur-cadre { display: grid; }
+
+.comparateur-scene.reel { align-items: flex-start; }
+.comparateur-scene.reel .comparateur-cadre { overflow: visible; }
+.comparateur-scene.reel .comparateur-cadre img { max-width: none; width: auto; }
+
+.comparateur-legende {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 12px;
+}
+.comparateur-legende code { font-family: var(--mono); font-size: 12px; }
+.comparateur-legende .num {
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}

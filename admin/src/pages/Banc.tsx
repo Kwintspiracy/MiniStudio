@@ -489,12 +489,24 @@ function Matrice({
     [resultats],
   );
 
+  const [taille, setTaille] = useState<number>(210);
+  const [selection, setSelection] = useState<string[]>([]);
+  const [comparateurOuvert, setComparateurOuvert] = useState(false);
+
+  // Deux au maximum : au-delà, « comparer » ne veut plus rien dire. Le plus
+  // ancien cède la place, ce qui évite d'avoir à décocher avant de recocher.
+  const basculerSelection = (id: string) =>
+    setSelection((l) => l.includes(id) ? l.filter((x) => x !== id)
+                                       : [...l, id].slice(-2));
+
   const onClasser = async (id: string, rang: number | null) => {
     try { await classer(id, runId, rang); await rafraichir(); }
     catch (e) { signaler('Classement refusé', (e as Error).message, 'bad'); }
   };
 
   if (!modelesPresents.length) return null;
+
+  const compares = resultats.filter((r) => selection.includes(r.id));
 
   return (
     <>
@@ -503,8 +515,37 @@ function Matrice({
         <span className="pill mute">{usd(total, 3)} dépensés</span>
       </h2>
 
+      {/* Les colonnes valaient `minmax(190px, 1fr)` : avec une seule variante,
+          la case s'étirait sur toute la largeur et donnait une image géante,
+          impossible à mettre en regard des autres. La largeur est maintenant
+          fixe et choisie — comparer et détailler ne demandent pas la même. */}
+      <div className="row" style={{ gap: 6, marginBottom: 10, alignItems: 'center' }}>
+        <span className="aide">Vignettes</span>
+        {([['Petites', 140], ['Moyennes', 210], ['Grandes', 320]] as const).map(([nom, px]) => (
+          <button key={px} className={`btn sm${taille === px ? '' : ' ghost'}`}
+                  onClick={() => setTaille(px)}>{nom}</button>
+        ))}
+        <span className="spacer" />
+        <span className="aide">
+          {selection.length === 0
+            ? 'Cochez deux rendus pour les comparer'
+            : selection.length === 1
+              ? 'Un rendu sélectionné — il en faut deux'
+              : 'Deux rendus sélectionnés'}
+        </span>
+        <button className="btn sm" disabled={compares.length !== 2}
+                onClick={() => setComparateurOuvert(true)}>Comparer</button>
+        {selection.length > 0 && (
+          <button className="btn sm ghost" onClick={() => setSelection([])}>Vider</button>
+        )}
+      </div>
+
+      {comparateurOuvert && compares.length === 2 && (
+        <Comparateur a={compares[0]} b={compares[1]} onFermer={() => setComparateurOuvert(false)} />
+      )}
+
       <div className="matrice-cadre">
-        <div className="matrice" style={{ gridTemplateColumns: `120px repeat(${colonnes.length}, minmax(190px, 1fr))` }}>
+        <div className="matrice" style={{ gridTemplateColumns: `120px repeat(${colonnes.length}, ${taille}px)` }}>
           <div className="matrice-coin" />
           {colonnes.map((v) => (
             <div key={v.id} className="matrice-entete" title={v.label}>{v.label}</div>
@@ -520,7 +561,11 @@ function Matrice({
                 const r = cellule(m, v.id);
                 return (
                   <div key={v.id} className="matrice-case">
-                    {r ? <Cellule r={r} onClasser={onClasser} /> : <div className="matrice-vide">—</div>}
+                    {r ? (
+                      <Cellule r={r} onClasser={onClasser}
+                               choisi={selection.includes(r.id)}
+                               onChoisir={() => basculerSelection(r.id)} />
+                    ) : <div className="matrice-vide">—</div>}
                   </div>
                 );
               })}
@@ -533,8 +578,13 @@ function Matrice({
 }
 
 function Cellule({
-  r, onClasser,
-}: { r: ResultatBanc; onClasser: (id: string, rang: number | null) => void }) {
+  r, onClasser, choisi, onChoisir,
+}: {
+  r: ResultatBanc;
+  onClasser: (id: string, rang: number | null) => void;
+  choisi: boolean;
+  onChoisir: () => void;
+}) {
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -542,9 +592,16 @@ function Cellule({
   }, [r.image_path]);
 
   return (
-    <div className={`banc-carte${r.rank ? ` rang-${r.rank}` : ''}`}>
+    <div className={`banc-carte${r.rank ? ` rang-${r.rank}` : ''}${choisi ? ' compare' : ''}`}>
       <div className="banc-carte-visuel">
         {r.status === 'done' && url && <img src={url} alt={`Rendu ${r.model}`} />}
+        {r.status === 'done' && (
+          <button className={`banc-choix${choisi ? ' actif' : ''}`} onClick={onChoisir}
+                  title="Sélectionner pour comparer"
+                  aria-pressed={choisi} aria-label="Sélectionner pour comparer">
+            {choisi ? '✓' : ''}
+          </button>
+        )}
         {(r.status === 'running' || r.status === 'pending') && (
           <div className="skel" style={{ position: 'absolute', inset: 0 }} />
         )}
@@ -570,6 +627,130 @@ function Cellule({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ==========================================================================
+   Comparateur — deux rendus, côte à côte ou superposés
+   ========================================================================== */
+
+/**
+ * Comparer deux rendus.
+ *
+ * Trois choses manquaient pour juger, et chacune répond à une limite précise
+ * de la grille :
+ *
+ *  - **Côte à côte à taille égale.** Dans la matrice, deux images de
+ *    définitions différentes s'affichent à la même taille de case : un 2048 et
+ *    un 1024 paraissent identiques.
+ *  - **Superposition A/B.** Deux images côte à côte se comparent mal ; l'œil
+ *    ne voit une différence fine que si elle apparaît au même endroit de
+ *    l'écran. On bascule de l'une à l'autre sans que rien ne bouge.
+ *  - **Zoom 100 %.** À l'échelle, un 1024 étiré et un 2048 réduit se
+ *    ressemblent. Au pixel réel, la question de la netteté se tranche.
+ *
+ * Les dimensions natives sont affichées : c'est le chiffre qui a manqué le plus
+ * longtemps dans cette affaire.
+ */
+function Comparateur({
+  a, b, onFermer,
+}: { a: ResultatBanc; b: ResultatBanc; onFermer: () => void }) {
+  const [urls, setUrls] = useState<Record<string, string | null>>({});
+  const [dims, setDims] = useState<Record<string, string>>({});
+  const [mode, setMode] = useState<'cote' | 'superpose'>('cote');
+  const [zoom, setZoom] = useState<'ajuste' | 'reel'>('ajuste');
+  const [actif, setActif] = useState<0 | 1>(0);
+
+  const paire = [a, b];
+
+  useEffect(() => {
+    let vivant = true;
+    Promise.all(paire.map((r) => r.image_path ? urlSignee(r.image_path) : Promise.resolve(null)))
+      .then((res) => { if (vivant) setUrls({ [a.id]: res[0], [b.id]: res[1] }); });
+    return () => { vivant = false; };
+  }, [a.id, b.id]);
+
+  // Échap ferme, et la barre d'espace bascule en mode superposé — on garde une
+  // main sur le clavier pendant qu'on regarde.
+  useEffect(() => {
+    const onTouche = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onFermer();
+      if (e.key === ' ') { e.preventDefault(); setActif((n) => (n === 0 ? 1 : 0)); }
+    };
+    window.addEventListener('keydown', onTouche);
+    return () => window.removeEventListener('keydown', onTouche);
+  }, [onFermer]);
+
+  const mesurer = (id: string) => (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const el = e.currentTarget;
+    setDims((d) => ({ ...d, [id]: `${el.naturalWidth}×${el.naturalHeight}` }));
+  };
+
+  const legende = (r: ResultatBanc) => (
+    <div className="comparateur-legende">
+      <code>{r.model}</code>
+      <span className="pill mute">{dims[r.id] ?? '…'}</span>
+      {r.cost_usd != null && <span className="num">{usd(r.cost_usd, 3)}</span>}
+      {r.seconds != null && <span className="num">{r.seconds.toFixed(0)} s</span>}
+    </div>
+  );
+
+  return (
+    <div className="comparateur" role="dialog" aria-label="Comparaison de deux rendus">
+      <div className="comparateur-barre">
+        {(['cote', 'superpose'] as const).map((m) => (
+          <button key={m} className={`btn sm${mode === m ? '' : ' ghost'}`} onClick={() => setMode(m)}>
+            {m === 'cote' ? 'Côte à côte' : 'Superposés'}
+          </button>
+        ))}
+        <span style={{ width: 12 }} />
+        {(['ajuste', 'reel'] as const).map((z) => (
+          <button key={z} className={`btn sm${zoom === z ? '' : ' ghost'}`} onClick={() => setZoom(z)}>
+            {z === 'ajuste' ? 'Ajusté' : '100 %'}
+          </button>
+        ))}
+        {mode === 'superpose' && (
+          <>
+            <span style={{ width: 12 }} />
+            <button className="btn sm" onClick={() => setActif((n) => (n === 0 ? 1 : 0))}>
+              Basculer (espace)
+            </button>
+            <span className="aide" style={{ marginLeft: 8 }}>
+              affiché : <code>{paire[actif].model}</code>
+            </span>
+          </>
+        )}
+        <span className="spacer" />
+        <button className="btn sm ghost" onClick={onFermer}>Fermer (échap)</button>
+      </div>
+
+      <div className={`comparateur-scene${zoom === 'reel' ? ' reel' : ''}`}>
+        {mode === 'cote' ? (
+          paire.map((r) => (
+            <figure key={r.id} className="comparateur-volet">
+              <div className="comparateur-cadre">
+                {urls[r.id]
+                  ? <img src={urls[r.id]!} alt={r.model} onLoad={mesurer(r.id)} />
+                  : <div className="skel" style={{ width: '100%', height: 240 }} />}
+              </div>
+              <figcaption>{legende(r)}</figcaption>
+            </figure>
+          ))
+        ) : (
+          <figure className="comparateur-volet seul">
+            <div className="comparateur-cadre">
+              {/* Les deux restent montées et superposées : basculer ne provoque
+                  ni rechargement ni saut de cadrage, ce qui est tout l'intérêt. */}
+              {paire.map((r, i) => urls[r.id] && (
+                <img key={r.id} src={urls[r.id]!} alt={r.model} onLoad={mesurer(r.id)}
+                     style={{ opacity: actif === i ? 1 : 0 }} />
+              ))}
+            </div>
+            <figcaption>{legende(paire[actif])}</figcaption>
+          </figure>
+        )}
+      </div>
     </div>
   );
 }
