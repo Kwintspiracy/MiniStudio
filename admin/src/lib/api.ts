@@ -340,20 +340,29 @@ export interface ResultatBanc {
 }
 
 /** Coûts attendus, en crédits PoYo à 0,005 $ — sert à annoncer la dépense avant de lancer. */
+/**
+ * Crédits attendus par génération. Sert à annoncer le coût AVANT de lancer un
+ * passage — donc un chiffre faux ici fait dépenser plus que prévu.
+ *
+ * Les valeurs marquées « mesuré » viennent de `credits_amount`, que PoYo
+ * renvoie sur /api/generate/status et que le banc enregistre. Trois d'entre
+ * elles contredisaient la grille publique et l'estimation était sous-évaluée.
+ * `null` affiche « variable » : c'est plus honnête qu'une supposition.
+ */
 export const CREDITS_ATTENDUS: Record<string, number | null> = {
   'z-image': 2,
   'wan-2.7-image': 4.2,
-  'nano-banana-edit': 5,
-  'nano-banana-2-edit': 5,
+  'nano-banana-edit': 5,              // mesuré, n=3
+  'nano-banana-2-edit': 8,            // mesuré, n=9 — la grille annonçait 5
   'seedream-4-edit': 5,
   'seedream-4.5-edit': 5,
   'flux-kontext-pro-edit': 8,
-  // Grok : 8 crédits en 1K, 11 en 2K. La fonction serveur fixe 1024×1024,
-  // donc c'est bien 8 qui sera facturé.
-  'grok-imagine-image-quality': 8,
+  'grok-imagine-image-quality': 10,   // mesuré, n=4 — la grille annonçait 8
   'flux-kontext-max-edit': 16,
-  'nano-banana-pro-edit': 18,
-  'gpt-image-2-edit': null,
+  'nano-banana-pro-edit': 18,         // mesuré, n=9
+  'gpt-image-2-edit': 2,              // mesuré, n=4 — annoncé « variable »
+  // Jamais lancé : le coût se relèvera au premier passage.
+  'nano-banana-2-new-edit': null,
 };
 export const CREDIT_USD = 0.005;
 

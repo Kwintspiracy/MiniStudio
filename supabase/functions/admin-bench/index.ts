@@ -39,6 +39,13 @@ const MODELES: Record<string, { maxPrompt?: number; size?: string; resolution?: 
     // A confirmer sur credits_amount : s'il bouge, la grille change avec lui.
     'nano-banana-2-edit': { size: '1:1', resolution: '2K' },
     'nano-banana-pro-edit': { size: '1:1', resolution: '2K' },
+    // Variante adossee a Gemini 3.1 Flash Image Preview : jusqu'a 14 images de
+    // reference, 2K/4K natif. A noter que `nano-banana-2-edit`, que nous
+    // utilisons en production, ne figure PAS dans la liste de slugs documentee
+    // par PoYo (new / new-edit / official / official-edit) — c'est
+    // vraisemblablement un alias herite. Cout non mesure : il sera releve au
+    // premier passage via credits_amount.
+    'nano-banana-2-new-edit': { size: '1:1', resolution: '2K' },
     'seedream-4-edit': {},
     'seedream-4.5-edit': {},
     'flux-kontext-pro-edit': {},

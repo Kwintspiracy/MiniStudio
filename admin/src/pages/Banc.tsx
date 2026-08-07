@@ -17,6 +17,9 @@ const MODELES = Object.keys(CREDITS_ATTENDUS);
 const PRESELECTIONS: Record<string, string[]> = {
   'décision de marge': ['nano-banana-2-edit', 'nano-banana-pro-edit'],
   'les moins chers': ['z-image', 'nano-banana-2-edit', 'seedream-4-edit'],
+  // Le slug que nous utilisons en production contre les variantes documentées
+  // par PoYo, pour savoir si `nano-banana-2-edit` est bien le meilleur des trois.
+  'variantes banana 2': ['nano-banana-2-edit', 'nano-banana-2-new-edit', 'nano-banana-pro-edit'],
   'tous': MODELES,
   'aucun': [],
 };
