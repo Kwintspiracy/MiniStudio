@@ -8,7 +8,7 @@
  */
 
 export type IdVue =
-  | 'pilotage' | 'couts' | 'comptes'
+  | 'pilotage' | 'couts' | 'generations' | 'comptes'
   | 'prompts' | 'blocs' | 'banc'
   | 'fournisseur' | 'journal';
 
@@ -30,6 +30,8 @@ export const NAVIGATION: GroupeVues[] = [
         intention: "Usage, dépense du jour, marge et état du service en un écran." },
       { id: 'couts', titre: 'Coûts et marges', icone: '⌗',
         intention: "Dépense réelle par modèle, durée moyenne, marge par génération." },
+      { id: 'generations', titre: 'Générations', icone: '❖',
+        intention: "Chaque rendu produit : image, prompt, modèle, qualité, durée et échecs." },
       { id: 'comptes', titre: 'Comptes', icone: '⌸',
         intention: "Utilisateurs, soldes, générations et comptes anonymes." },
     ],

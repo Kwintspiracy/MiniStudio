@@ -8,6 +8,7 @@ import { Garde } from './components/Garde';
 
 import { PagePilotage } from './pages/Pilotage';
 import { PageCouts } from './pages/Couts';
+import { PageGenerations } from './pages/Generations';
 import { PageComptes } from './pages/Comptes';
 import { PagePrompts } from './pages/Prompts';
 import { PageBlocs } from './pages/Blocs';
@@ -191,6 +192,7 @@ function Coquille({ session }: { session: Session }) {
           <Garde cle={vue}>
             {vue === 'pilotage'    && <PagePilotage aller={aller} />}
             {vue === 'couts'       && <PageCouts />}
+            {vue === 'generations' && <PageGenerations />}
             {vue === 'comptes'     && <PageComptes />}
             {vue === 'prompts'     && <PagePrompts {...contexte} />}
             {vue === 'blocs'       && <PageBlocs />}
