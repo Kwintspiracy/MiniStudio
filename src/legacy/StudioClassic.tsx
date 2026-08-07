@@ -1,3 +1,15 @@
+/**
+ * SAUVEGARDE — écran studio tel qu'il était au 2026-08-07, avant la refonte.
+ *
+ * Copie conforme de `app/(studio)/index.tsx` à cette date, à deux détails près :
+ * le composant est renommé `StudioClassic`, et le fichier vit hors de `app/`
+ * pour qu'expo-router n'en fasse pas une route par accident. Il reste atteignable
+ * par `/legacy` (voir `app/(studio)/legacy.tsx`) afin de pouvoir comparer les deux
+ * expériences côte à côte sur un même appareil.
+ *
+ * Ne rien corriger ici : ce fichier n'a de valeur que s'il reste fidèle. Les
+ * correctifs vont dans l'écran actif.
+ */
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, Image, TextInput, FlatList,
@@ -25,7 +37,7 @@ import {
   XMarkIcon, RefreshIcon, ArrowsPointingOutIcon, DownloadIcon, CheckIcon,
   AppTitleIcon, BiSolidUserCircleIcon, BiSolidUserCircle32Icon,
   BuildIcon, DrawIcon, PaintIcon, MagicWandIcon, SculptIcon, ColorPaletteIcon, AiFillFireIcon, RiPaintFillIcon,
-  CameraLensIcon, CloseIcon, SparklesIcon,
+  CameraLensIcon, CloseIcon,
   FileDownloadIcon as MdFileDownloadIcon, SpinnerIcon, TbProgressCheckIcon, ShareIcon, GalleryIcon, TrashIcon
 } from '@/components/Icons';
 import AppTitleSvg from '../../assets/icons/react-icons/apptitle.svg';
@@ -51,13 +63,6 @@ import { supabase } from '@/services/supabase';
 import { ToggleButton } from '@/components/ToggleButton';
 import { SectionHeader } from '@/components/SectionHeader';
 import { ModeCardSelector } from '@/components/studio/ModeCardSelector';
-import { CollapsibleSection } from '@/components/studio/CollapsibleSection';
-import { studio } from '@/components/studio/patterns';
-import { SceneComposer } from '@/components/studio/SceneComposer';
-import {
-  EMPTY_SCENE, KEEP_PAINT_STYLE_ID, SCENE_PRESETS,
-  sceneIsActive, type SceneState,
-} from '@/constants/scenes';
 import { SourceContainer } from '@/components/studio/SourceContainer';
 import { GenerationTooltip } from '@/components/GenerationTooltip';
 import { BreathingGradientButton } from '@/components/BreathingGradientButton';
@@ -204,7 +209,7 @@ const INITIAL_INPUT_HEIGHT = 40;
 const MAX_INPUT_LINES = 4;
 const INPUT_VERTICAL_PADDING = 10; // (18 * 4) + (10 * 2) = 92px max
 
-export default function StudioScreen() {
+export default function StudioClassic() {
   const { user, loading: authLoading, isAnonymous } = useAuth();
   const { selectedImage, setSelectedImage } = useImageContext();
   const insets = useSafeAreaInsets();
@@ -244,50 +249,18 @@ export default function StudioScreen() {
 
   const [activeMode, setActiveMode] = useState<StudioMode>('paint');
   const [selectedStyleId, setSelectedStyleId] = useState<string | null>(null);
-
-  /**
-   * « Garder ma peinture » est proposé comme un style, en tête de liste.
-   *
-   * C'est la pièce qui permet de servir le décor sans seconde génération : un
-   * utilisateur qui a déjà sa figurine peinte le choisit, décrit une scène, et
-   * obtient son décor en un seul appel. Le style n'existe pas en base — il ne
-   * porte aucun prompt, il commute le générateur vers le bloc de préservation.
-   */
-  const styleOptions = useMemo(() => ([
-    { id: KEEP_PAINT_STYLE_ID, name: 'Keep my paint', prompt: '' },
-    ...paintStylesList,
-  ]), [paintStylesList]);
-
+  
   // Create derived selectedStyle based on the ID and the latest list
   const selectedStyle = useMemo(() => {
-     return styleOptions.find(s => s.id === selectedStyleId) || paintStylesList[0];
-  }, [selectedStyleId, styleOptions, paintStylesList]);
+     return paintStylesList.find(s => s.id === selectedStyleId) || paintStylesList[0];
+  }, [selectedStyleId, paintStylesList]);
 
-  const keepExistingPaint = selectedStyleId === KEEP_PAINT_STYLE_ID;
-
-  // Set initial selection once list loads — jamais sur « Garder ma peinture »,
-  // qui ne produirait rien tant qu'aucune scène n'est décrite.
+  // Set initial selection once list loads
   useEffect(() => {
     if (paintStylesList.length > 0 && !selectedStyleId) {
       setSelectedStyleId(paintStylesList[0].id);
     }
   }, [paintStylesList]);
-
-  // ---- Scène : décor et peinture dans la même génération ----
-  const [scene, setScene] = useState<SceneState>(EMPTY_SCENE);
-  const patchScene = useCallback((patch: Partial<SceneState>) => {
-    setScene(prev => ({ ...prev, ...patch }));
-  }, []);
-  const toggleScene = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    setScene(prev => ({ ...prev, enabled: !prev.enabled }));
-  }, []);
-
-  // Sections repliables. Style ouvert par défaut : c'est le premier choix.
-  const [openSection, setOpenSection] = useState<'style' | 'effects' | 'palette' | 'scene' | null>('style');
-  const toggleSection = useCallback((s: 'style' | 'effects' | 'palette' | 'scene') => {
-    setOpenSection(prev => (prev === s ? null : s));
-  }, []);
 
   const [isNMMEnabled, setIsNMMEnabled] = useState(false);
   const [isOSLEnabled, setIsOSLEnabled] = useState(false);
@@ -350,13 +323,6 @@ export default function StudioScreen() {
     || (entitlements.remaining_total ?? 0) > 0;
   const canAffordRender = !hasEverGenerated
     || (entitlements.remaining_total ?? 0) >= renderCost;
-
-  /**
-   * « Garder ma peinture » sans scène ne demande rien au modèle : il n'y a ni
-   * peinture à refaire ni décor à inventer. Laisser générer facturerait un
-   * token pour rendre l'image d'entrée à l'identique.
-   */
-  const rienADemander = activeMode === 'paint' && keepExistingPaint && !sceneIsActive(scene);
 
   // Refetch entitlements when screen comes into focus (e.g. returning from Paywall)
   // Note: Prompts are fetched only on mount to avoid performance issues
@@ -750,9 +716,6 @@ export default function StudioScreen() {
 
       let images: string[] = [];
       if (activeMode === 'paint' && preparedSources.length >= 1) {
-        // Une seule génération, quoi que l'utilisateur ait demandé : peinture,
-        // décor, ou les deux. `scene` et `keepExistingPaint` ne déclenchent pas
-        // d'appel supplémentaire, ils changent le prompt assemblé.
         const promptParams = {
           isPro,
           selectedStyle,
@@ -765,25 +728,17 @@ export default function StudioScreen() {
           isPhotoshootEnabled,
           effectPrompts,
           painterPrompt,
-          criticalRules: isPro ? stateRules['rules.paint']?.pro : stateRules['rules.paint']?.default,
-          scene,
-          keepExistingPaint,
+          criticalRules: isPro ? stateRules['rules.paint']?.pro : stateRules['rules.paint']?.default
         };
 
-        const avecScene = sceneIsActive(scene);
         const metadata = {
           mode: 'paint',
           style_id: selectedStyle?.id,
           style_name: selectedStyle?.name,
-          effects: [isNMMEnabled && 'NMM', isOSLEnabled && 'OSL',
-                    isPhotoshootEnabled && !avecScene && 'Photoshoot'].filter(Boolean),
+          effects: [isNMMEnabled && 'NMM', isOSLEnabled && 'OSL', isPhotoshootEnabled && 'Photoshoot'].filter(Boolean),
           colors_count: selectedColors.length,
           is_pro: isPro,
           quality: isPro ? 'pro' : 'standard',
-          // Pour l'admin : distinguer les trois usages réels d'une génération.
-          scene: avecScene,
-          scene_preset: avecScene ? scene.presetId : null,
-          repaint: !keepExistingPaint,
         };
 
         // Generate single prompt with color filtering enabled for PoYo
@@ -791,20 +746,9 @@ export default function StudioScreen() {
 
         if (__DEV__) console.log(`\n--- GENERATION PROMPT ---\n${finalPrompt}\n----------------------------------\n`);
 
-        // `userText` est la surface de saisie que le serveur revalide. Les
-        // quatre champs de scène en font partie : ils sont tapés par
-        // l'utilisateur au même titre que la consigne libre, et les omettre
-        // reviendrait à faire échapper au contrôle serveur le texte le plus
-        // volumineux de la requête.
-        const texteUtilisateur = [
-          painterPrompt,
-          avecScene ? [scene.environment, scene.lighting, scene.atmosphere, scene.setting]
-            .filter(Boolean).join(' | ') : '',
-        ].filter(Boolean).join(' | ');
-
         images = await generatePaintedMiniature(
           preparedSources, finalPrompt, 1, undefined, metadata,
-          sanitizePrompt(texteUtilisateur, 2000), isPro ? 'pro' : 'standard');
+          sanitizePrompt(painterPrompt), isPro ? 'pro' : 'standard');
       } else if (activeMode === 'sketch' || activeMode === 'sculpt') {
         const characterDesc = sanitizePrompt(designerPrompt).trim() || 'character';
         
@@ -948,21 +892,21 @@ export default function StudioScreen() {
           // alors que le message par défaut est « Limit reached. ».
           else if (/insufficient tokens|limit reached/i.test(errorMessage)) {
               showModal(
-                  "Out of tokens",
-                  "You have used all your tokens. Get a pack or a subscription to keep creating.",
+                  "Plus de tokens",
+                  "Vous avez utilisé tous vos tokens. Prenez un pack ou un abonnement pour continuer.",
                   'default',
-                  { label: "See plans", onPress: () => setIsPaywallVisible(true) },
-                  { label: "Later", onPress: () => {} }
+                  { label: "Voir les offres", onPress: () => setIsPaywallVisible(true) },
+                  { label: "Plus tard", onPress: () => {} }
               );
           }
           // Device déjà servi : c'est la connexion qui débloque, pas un achat.
           else if (/free tokens are not available/i.test(errorMessage)) {
               showModal(
-                  "Sign in to continue",
-                  "The free tokens for this device have already been used. Sign in to get your balance back.",
+                  "Connectez-vous pour continuer",
+                  "Les tokens offerts ont déjà été utilisés sur cet appareil. Connectez-vous pour retrouver vos crédits.",
                   'default',
-                  { label: "Sign in", onPress: () => router.push('/signin') },
-                  { label: "Later", onPress: () => {} }
+                  { label: "Se connecter", onPress: () => router.push('/signin') },
+                  { label: "Plus tard", onPress: () => {} }
               );
           } else {
               showModal("Generation Failed", errorMessage, 'error');
@@ -971,7 +915,7 @@ export default function StudioScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [sourceImages, activeMode, designerPrompt, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPhotoshootEnabled, isPaletteEnabled, selectedColors, selectedBrands, loadedPaints, sketchStyle, creativityLevel, entitlements.remaining_total, isAnonymous, scene, keepExistingPaint]);
+  }, [sourceImages, activeMode, designerPrompt, isPro, painterPrompt, selectedStyle, isNMMEnabled, isOSLEnabled, isPhotoshootEnabled, isPaletteEnabled, selectedColors, selectedBrands, loadedPaints, sketchStyle, creativityLevel, entitlements.remaining_total, isAnonymous]);
 
   // Handle dynamic aspect ratio for the preview image
   useEffect(() => {
@@ -1285,18 +1229,6 @@ export default function StudioScreen() {
           <View style={styles.topNavTitle}>
             {/* App title removed per design */}
           </View>
-          <View style={styles.topNavActions}>
-            <TouchableOpacity
-              onPress={() => setIsPaywallVisible(true)}
-              style={styles.tokenBadge}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={`${entitlements.remaining_total ?? 0} tokens left`}
-              accessibilityHint="Opens the token shop"
-            >
-              <SparklesIcon size={15} color={colors.accent.yellow} />
-              <Text style={styles.tokenBadgeText}>{entitlements.remaining_total ?? 0}</Text>
-            </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push('/settings')} style={styles.topNavRight} activeOpacity={0.7}>
             <View style={styles.userAvatar}>
               {isAnonymous || !user ? (
@@ -1313,7 +1245,6 @@ export default function StudioScreen() {
               )}
             </View>
           </TouchableOpacity>
-          </View>
         </View>
 
         {/* Main Content Area */}
@@ -1422,22 +1353,14 @@ export default function StudioScreen() {
                   </View>
                 </>
               ) : (
-                <View style={styles.sectionStack}>
-                  {/* ---------------------------------------------------------
-                      PEINTURE — repliable, ouverte par défaut.
-
-                      « Garder ma peinture » ouvre la liste : c'est ce choix qui
-                      permet d'obtenir un décor seul sans seconde génération.
-                     --------------------------------------------------------- */}
-                  <CollapsibleSection
-                    title="PAINT"
-                    icon={<RiPaintFillIcon size={16} color="#32D278" />}
-                    summary={selectedStyle?.name}
-                    open={openSection === 'style'}
-                    onToggle={() => toggleSection('style')}
-                  >
+                <>
+                  <View style={styles.paintStepSection}>
+                    <SectionHeader 
+                      icon={<RiPaintFillIcon size={16} color="#32D278" />}
+                      title="CHOOSE A STYLE"
+                    />
                     <View style={styles.styleGrid}>
-                      {styleOptions.map((style) => (
+                      {paintStylesList.map((style) => (
                         <TouchableOpacity
                           key={style.id}
                           onPress={() => setSelectedStyleId(style.id)}
@@ -1452,53 +1375,13 @@ export default function StudioScreen() {
                         </TouchableOpacity>
                       ))}
                     </View>
-                    {keepExistingPaint && (
-                      <Text style={studio.hint}>
-                        Your paint stays exactly as it is. Describe a scene below to
-                        place the miniature in a setting.
-                      </Text>
-                    )}
-                  </CollapsibleSection>
+                  </View>
 
-                  {/* ---------------------------------------------------------
-                      SCÈNE — le décor, dans la MÊME génération que la peinture.
-
-                      Ce n'est volontairement pas un mode : forcer deux
-                      générations à trois tokens ferait payer six tokens ce
-                      qu'un seul appel produit.
-                     --------------------------------------------------------- */}
-                  <CollapsibleSection
-                    title="SCENE"
-                    icon={<SparklesIcon size={16} color="#C463D2" />}
-                    summary={sceneIsActive(scene)
-                      ? (SCENE_PRESETS.find(p => p.id === scene.presetId)?.name ?? 'Custom')
-                      : 'No scene'}
-                    open={openSection === 'scene'}
-                    onToggle={() => toggleSection('scene')}
-                    action={<ToggleButton value={scene.enabled} onToggle={toggleScene} />}
-                  >
-                    {scene.enabled ? (
-                      <SceneComposer scene={scene} onChange={patchScene} />
-                    ) : (
-                      <Text style={studio.hint}>
-                        Turn on Scene to place your miniature in a setting. It is the
-                        same generation — no extra token.
-                      </Text>
-                    )}
-                  </CollapsibleSection>
-
-                  {/* ---------------------------------------------------------
-                      EFFETS et PALETTE — sans objet quand on ne repeint pas.
-                     --------------------------------------------------------- */}
-                  {!keepExistingPaint && (
-                  <CollapsibleSection
-                    title="EFFECTS"
-                    icon={<AiFillFireIcon size={16} color="#E06948" />}
-                    summary={[isNMMEnabled && 'NMM', isOSLEnabled && 'OSL',
-                             isPhotoshootEnabled && 'Photoshoot'].filter(Boolean).join(' · ') || 'None'}
-                    open={openSection === 'effects'}
-                    onToggle={() => toggleSection('effects')}
-                  >
+                  <View style={styles.paintStepSection}>
+                    <SectionHeader 
+                      icon={<AiFillFireIcon size={16} color="#E06948" />}
+                      title="ADD EFFECTS"
+                    />
                     <TouchableOpacity style={styles.optionItem} onPress={handleNMMToggle} activeOpacity={0.7}>
                       <Text style={[styles.optionLabel, isNMMEnabled && styles.optionLabelActive]}>NNM - Non Metallic Metal</Text>
                       <ToggleButton value={isNMMEnabled} onToggle={handleNMMToggle} />
@@ -1507,19 +1390,12 @@ export default function StudioScreen() {
                       <Text style={[styles.optionLabel, isOSLEnabled && styles.optionLabelActive]}>OSL - Object Source Lighting</Text>
                       <ToggleButton value={isOSLEnabled} onToggle={handleOSLToggle} />
                     </TouchableOpacity>
-                  </CollapsibleSection>
-                  )}
 
-                  {!keepExistingPaint && (
-                  <CollapsibleSection
-                    title="PALETTE"
-                    icon={<ColorPaletteIcon size={16} color="#C463D2" />}
-                    summary={selectedColors.length > 0
-                      ? `${selectedColors.length} colour${selectedColors.length > 1 ? 's' : ''}`
-                      : selectedBrands.filter(b => b !== 'All Brands').join(', ') || 'All brands'}
-                    open={openSection === 'palette'}
-                    onToggle={() => toggleSection('palette')}
-                  >
+                    <SectionHeader 
+                      icon={<ColorPaletteIcon size={16} color="#C463D2" />}
+                      title="COLOR PALETTE"
+                    />
+
                     {/* Brand Selection Tabs */}
                     <View style={styles.brandTabs}>
                       {brandTabs.map((brand) => {
@@ -1574,9 +1450,8 @@ export default function StudioScreen() {
                         </Text>
                       </TouchableOpacity>
                     </View>
-                  </CollapsibleSection>
-                  )}
-                </View>
+                  </View>
+                </>
               )}
             </View>
 
@@ -1632,17 +1507,17 @@ export default function StudioScreen() {
                     <TouchableOpacity
                       key={opt.label}
                       onPress={() => handleQualityChange(opt.pro)}
-                      style={[studio.chip, styles.qualityOption, active && studio.chipActive]}
-                      activeOpacity={0.8}
+                      style={[styles.qualityOption, active && styles.qualityOptionActive]}
+                      activeOpacity={0.7}
                       accessibilityRole="radio"
                       accessibilityState={{ selected: active }}
                       accessibilityLabel={`${opt.label} quality, ${opt.cost} token${opt.cost > 1 ? 's' : ''} per render`}
                     >
-                      <Text style={active ? studio.chipTextActive : studio.chipText}>
+                      <Text style={[styles.qualityLabel, active && styles.qualityLabelActive]}>
                         {opt.label}
                       </Text>
                       <Text style={[styles.qualityCost, active && styles.qualityCostActive]}>
-                        {opt.cost}
+                        {opt.cost} {opt.cost > 1 ? 'tokens' : 'token'}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -1704,29 +1579,19 @@ export default function StudioScreen() {
                             </BreathingGradientButton>
                           ) : (
                             <TouchableOpacity
-                              style={[styles.createButton, styles.createButtonBasic,
-                                      (!hasImageLoaded || rienADemander) && styles.buttonDisabled]}
+                              style={[styles.createButton, styles.createButtonBasic, !hasImageLoaded && styles.buttonDisabled]}
                               onPress={handleGenerate}
                               activeOpacity={0.8}
-                              disabled={!hasImageLoaded || rienADemander}
-                              accessibilityLabel={rienADemander
-                                ? 'Describe a scene or pick a style'
-                                : canAffordRender ? 'Create image' : 'Get more tokens'}
+                              disabled={!hasImageLoaded}
+                              accessibilityLabel={canAffordRender ? 'Create image' : 'Get more tokens'}
                               accessibilityRole="button"
-                              accessibilityHint={rienADemander
-                                ? 'Nothing to generate: the paint is kept and no scene is described'
-                                : canAffordRender ? 'Generates an image from your settings' : 'Opens the token shop'}
+                              accessibilityHint={canAffordRender ? 'Generates a new image based on your settings' : 'Opens the token shop'}
                             >
                               <View style={styles.createButtonContent}>
-                                  {/* Trois états, pas deux. « Garder ma peinture » sans scène
-                                      ne demande rien au modèle : générer facturerait un token
-                                      pour rendre l'image d'entrée à l'identique. Et le solde
-                                      est comparé au prix du mode choisi, pas à zéro — avec
-                                      2 tokens et le mode Pro à 3, promettre « Créer » pour
-                                      ensuite refuser côté serveur serait un mensonge. */}
-                                  {rienADemander ? (
-                                    <Text style={styles.createButtonText}>Describe a scene</Text>
-                                  ) : canAffordRender ? (
+                                  {/* Le solde est comparé au prix du mode choisi, pas à zéro :
+                                      avec 2 tokens et le mode Pro à 3, promettre « Create »
+                                      pour ensuite refuser côté serveur serait un mensonge. */}
+                                  {canAffordRender ? (
                                     <>
                                         <MagicWandIcon color={colors.text.primary} />
                                         <Text style={styles.createButtonText}>Create</Text>
@@ -1993,41 +1858,15 @@ const styles = StyleSheet.create({
   footerInner: { gap: 16, justifyContent: 'space-between', alignItems: 'center' },
   footerPromptInput: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto', fontWeight: '400', fontStyle: 'italic', fontSize: 14, lineHeight: LINE_HEIGHT, color: colors.text.secondary, alignSelf: 'stretch', paddingTop: INPUT_VERTICAL_PADDING, paddingBottom: INPUT_VERTICAL_PADDING, paddingHorizontal: 16, textAlignVertical: 'top', backgroundColor: colors.background.primary, borderRadius: 16 },
   bottomButtonsRow: { flexDirection: 'row', alignSelf: 'stretch', gap: 8 },
-  // Pile des sections repliables du mode Peinture. Aucun écart : chaque
-  // en-tête porte sa propre marge, comme SectionHeader dans le reste de l'écran.
-  sectionStack: { gap: 0 },
-  // Solde de tokens dans la barre haute. Il n'apparaissait nulle part dans le
-  // studio ; depuis qu'un rendu coûte 1 ou 3 tokens, il doit être lisible à
-  // l'endroit où l'on choisit. Rayon 4 et fond tertiaire, comme toute surface
-  // cliquable de l'écran.
-  tokenBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 10, paddingVertical: 8, borderRadius: 4,
-    backgroundColor: colors.background.tertiary,
-  },
-  tokenBadgeText: {
-    fontFamily: fontFamily.primary, fontWeight: '600', fontSize: 14,
-    color: colors.text.primary,
-  },
-  topNavActions: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingRight: 0 },
   // Sélecteur Standard / Pro. Segmenté plutôt qu'un interrupteur : deux
   // rendus distincts à deux prix distincts, pas une option qu'on active.
-  // Standard / Pro : la meme chip que les styles de peinture et les onglets de
-  // marque. Le prix se lit dans une pastille a droite du libelle, plutot que
-  // sur une deuxieme ligne qui epaississait le pied de page.
-  qualityRow: { flexDirection: 'row', alignSelf: 'stretch', gap: 4 },
-  qualityOption: { flex: 1, paddingVertical: 10 },
-  // La pastille de prix doit rester lisible sur les DEUX fonds de la chip :
-  // ardoise quand l'option est au repos, blanc cassé quand elle est choisie.
-  // Elle inverse donc son fond en même temps que la chip.
-  qualityCost: {
-    fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto',
-    fontWeight: '600', fontSize: 12, color: colors.text.primary,
-    minWidth: 18, textAlign: 'center',
-    paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4,
-    backgroundColor: colors.background.primary, overflow: 'hidden',
-  },
-  qualityCostActive: { color: colors.palette.white, backgroundColor: colors.background.tertiary },
+  qualityRow: { flexDirection: 'row', alignSelf: 'stretch', gap: 4, padding: 4, backgroundColor: colors.background.primary, borderRadius: 32 },
+  qualityOption: { flex: 1, paddingVertical: 8, borderRadius: 28, alignItems: 'center', justifyContent: 'center', gap: 1 },
+  qualityOptionActive: { backgroundColor: colors.background.tertiary },
+  qualityLabel: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '500', fontSize: 14, color: colors.text.secondary },
+  qualityLabelActive: { color: colors.text.primary, fontWeight: '600' },
+  qualityCost: { fontFamily: Platform.OS === 'ios' ? 'SF Pro' : 'Roboto', fontSize: 11, color: colors.text.secondary, opacity: 0.7 },
+  qualityCostActive: { color: colors.accent.yellow, opacity: 1 },
   galleryButton: { height: 56, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 6, paddingRight: 16, backgroundColor: colors.background.primary, borderRadius: 32, justifyContent: 'center' },
   galleryButtonText: { fontFamily: Platform.OS === 'ios' ? 'SF Pro Display' : 'Roboto', fontWeight: '500', fontSize: 16, color: colors.text.primary, letterSpacing: -0.41 },
   sourceButtonThumbnail: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },

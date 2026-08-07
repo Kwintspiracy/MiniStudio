@@ -2,6 +2,46 @@ import type { StyleOption } from '@/types';
 import type { PaletteColor } from '@/services/paintService';
 import { sanitizePrompt } from '@/utils/sanitization';
 import { METALLIC_PAINT_INSTRUCTIONS } from '@/constants';
+import {
+    type SceneState,
+    SCENE_LIMITS,
+    LIGHT_FRAGMENTS,
+    GROUND_FRAGMENTS,
+    DOF_FRAGMENTS,
+    SCENE_INVARIANTS,
+    PRESERVE_SUBJECT,
+    sceneIsActive,
+} from '@/constants/scenes';
+
+/**
+ * Bloc [SCENE] — le décor, assemblé à partir des quatre champs et des trois
+ * réglages de rendu.
+ *
+ * Chaque champ est passé par `sanitizePrompt` avec son propre plafond : la
+ * validation ne peut pas être laissée à l'interface, qui n'est qu'une des
+ * portes d'entrée.
+ */
+const buildSceneBlock = (scene: SceneState): string => {
+    const env = sanitizePrompt(scene.environment, SCENE_LIMITS.environment);
+    const lum = sanitizePrompt(scene.lighting, SCENE_LIMITS.lighting);
+    const amb = sanitizePrompt(scene.atmosphere, SCENE_LIMITS.atmosphere);
+    const uni = sanitizePrompt(scene.setting, SCENE_LIMITS.setting);
+
+    const lignes: string[] = [
+        'Place the miniature in the environment described below. Invent the surroundings; the subject itself is defined by the sections above.',
+    ];
+    if (env) lignes.push(`Environment: ${env}`);
+    if (lum) lignes.push(`Lighting: ${lum}`);
+    if (amb) lignes.push(`Atmosphere: ${amb}`);
+    if (uni) lignes.push(`Setting: ${uni}`);
+
+    lignes.push(LIGHT_FRAGMENTS[scene.light]);
+    lignes.push(GROUND_FRAGMENTS[scene.ground]);
+    lignes.push(DOF_FRAGMENTS[scene.dof]);
+    lignes.push(SCENE_INVARIANTS);
+
+    return lignes.join('\n');
+};
 
 export interface PromptEffect {
     default: string;
@@ -24,6 +64,14 @@ export interface PromptParams {
     painterPrompt: string;
     skipColorFiltering?: boolean;
     criticalRules?: string; // New field
+    /** Décor optionnel, assemblé dans la MÊME génération que la peinture. */
+    scene?: SceneState;
+    /**
+     * L'utilisateur a choisi « Garder ma peinture » : ne rien repeindre, ne
+     * produire que le décor. C'est cette option qui permet de servir en une
+     * seule génération aussi bien la peinture seule que le décor seul.
+     */
+    keepExistingPaint?: boolean;
 }
 
 export const generatePaintPrompt = (params: PromptParams): string => {
@@ -39,8 +87,31 @@ export const generatePaintPrompt = (params: PromptParams): string => {
         isPhotoshootEnabled,
         effectPrompts,
         painterPrompt,
-        criticalRules
+        criticalRules,
+        scene,
+        keepExistingPaint,
     } = params;
+
+    const withScene = Boolean(scene && sceneIsActive(scene));
+
+    // ------------------------------------------------------------------
+    // Chemin « garder la peinture » : on ne repeint rien.
+    //
+    // Tout ce que le générateur produit d'ordinaire — style, palette, effets —
+    // demande au modèle de modifier la surface de la figurine. Le réémettre ici
+    // reviendrait à repeindre en prétendant préserver. On sort donc tôt, avec
+    // le seul bloc de préservation et la scène.
+    // ------------------------------------------------------------------
+    if (keepExistingPaint) {
+        const parts = ['[GOAL]', PRESERVE_SUBJECT];
+        const libre = sanitizePrompt(painterPrompt);
+        if (libre) parts.push(libre);
+        if (withScene) {
+            parts.push('[SCENE]');
+            parts.push(buildSceneBlock(scene as SceneState));
+        }
+        return parts.join('\n\n');
+    }
 
     // 1. GOAL SECTION (Style Prompt)
     let finalStylePrompt = isPro ? (selectedStyle.promptPro || selectedStyle.prompt) : selectedStyle.prompt;
@@ -134,7 +205,11 @@ export const generatePaintPrompt = (params: PromptParams): string => {
         }
     }
 
-    if (isPhotoshootEnabled) {
+    // L'effet Photoshoot demande un fond de studio neutre et sans raccord ; une
+    // scène demande l'inverse. Les émettre ensemble donnerait au modèle deux
+    // consignes contradictoires sur le même arrière-plan. La scène gagne, parce
+    // qu'elle est le choix explicite le plus récent de l'utilisateur.
+    if (isPhotoshootEnabled && !withScene) {
          const photoEffect = effectPrompts['effect.photoshoot'];
          if (photoEffect) {
              effectsParts.push(isPro ? photoEffect.pro : photoEffect.default);
@@ -220,6 +295,12 @@ export const generatePaintPrompt = (params: PromptParams): string => {
     if (effectsParts.length > 0) {
         promptParts.push("[EFFECTS]");
         promptParts.push(effectsParts.join('\n'));
+    }
+
+    // [Scene] — peinture et décor dans le même appel, pas deux générations.
+    if (withScene) {
+        promptParts.push("[SCENE]");
+        promptParts.push(buildSceneBlock(scene as SceneState));
     }
 
     // [Rules]
