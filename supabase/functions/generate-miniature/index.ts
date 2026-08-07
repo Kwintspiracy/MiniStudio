@@ -173,7 +173,8 @@ async function submitPoyoTask(
     prompt: string,
     imageUrl?: string,
     callbackUrl?: string,
-    model: string = 'nano-banana-2-edit'
+    model: string = 'nano-banana-2-edit',
+    resolution?: string
 ): Promise<{ taskId: string; raw: any }> {
     // Use the exact admin-selected model slug (normal vs -edit are distinct models).
     log.info('POYO', `GENERATE: Submitting to PoYo (${model})...`);
@@ -184,10 +185,20 @@ async function submitPoyoTask(
     const payload: any = {
         model,
         input: {
+            // `size` est le RAPPORT D'ASPECT, `resolution` le PALIER DE
+            // DEFINITION. Nous n'envoyions que le premier : PoYo retombait donc
+            // sur son defaut, 1K, y compris pour le rendu Pro vendu trois
+            // tokens. Verifie en telechargeant les rendus de production —
+            // 1024x1024 des deux cotes.
             prompt,
             size: '1:1',
+            ...(resolution ? { resolution } : {}),
+            // Format explicite : certains modeles renvoient du JPEG par defaut,
+            // ce qui degrade un rendu que l'utilisateur a paye.
+            output_format: 'png',
         },
     };
+    log.info('POYO', `GENERATE: ${model} @ ${resolution ?? 'defaut fournisseur'}`);
 
     if (imageUrl) {
         payload.input.image_urls = [imageUrl];
@@ -245,7 +256,8 @@ async function submitPoyoWithWebhook(
     baseImage?: ImagePayload,
     model?: string,
     baseImageUrl?: string,
-    callbackToken?: string
+    callbackToken?: string,
+    resolution?: string
 ): Promise<{ taskId: string }> {
     // Get available API key with rotation
     const { data: keyData, error: keyError } = await supabaseClient.rpc('get_available_poyo_key');
@@ -275,7 +287,7 @@ async function submitPoyoWithWebhook(
     const callbackUrl = callbackToken
         ? `${CONFIG.POYO_WEBHOOK_URL}?t=${encodeURIComponent(callbackToken)}`
         : CONFIG.POYO_WEBHOOK_URL;
-    const { taskId, raw } = await submitPoyoTask(apiKey, prompt, imageUrl, callbackUrl, model);
+    const { taskId, raw } = await submitPoyoTask(apiKey, prompt, imageUrl, callbackUrl, model, resolution);
 
     // model_used est pose par reserve_generation, en meme temps que le prix en
     // tokens : le reecrire ici rouvrirait la possibilite d'une divergence entre
@@ -404,7 +416,7 @@ async function reserveCredits(
     clientIp?: string,
 ): Promise<{
     success: boolean; jobId?: string; callbackToken?: string; model?: string;
-    cost?: number; error?: string; required?: number;
+    cost?: number; error?: string; required?: number; resolution?: string;
 }> {
     const { data, error } = await supabaseAdminClient.rpc('reserve_generation', {
         p_user_id: userId,
@@ -427,7 +439,7 @@ async function reserveCredits(
     // retour de PoYo sans dependre d'un secret partage cote fournisseur.
     return {
         success: true, jobId: data.job_id, callbackToken: data.callback_token,
-        model: data.model, cost: data.cost,
+        model: data.model, cost: data.cost, resolution: data.resolution,
     };
 }
 
@@ -725,6 +737,10 @@ Deno.serve(async (req) => {
             } else if (reservation.error === 'anon_ip_rate_limited') {
                 errorMessage = "Rate limit exceeded. Please sign in to continue generating images.";
                 status = 429;
+            } else if (reservation.error === 'resolution_above_budget') {
+                // Mauvaise configuration cote admin, pas une faute de l'utilisateur.
+                errorMessage = "Service temporarily unavailable. Please try again later.";
+                status = 503;
             } else if (reservation.error === 'daily_spend_cap_reached') {
                 errorMessage = "Service temporarily paused. Please try again tomorrow.";
                 status = 503;
@@ -743,7 +759,10 @@ Deno.serve(async (req) => {
         // Modele resolu par la base a partir de la qualite. On soumet exactement
         // ce qui a ete facture : les deux ne peuvent pas diverger.
         const poyoModel = reservation.model || 'nano-banana-2-edit';
-        log.info('POYO', `QUALITY: ${requestedQuality} → ${poyoModel} (${reservation.cost} token(s))`);
+        // La definition vient de la meme reservation que le modele et le prix :
+        // les trois ne peuvent pas diverger.
+        const poyoResolution = reservation.resolution;
+        log.info('POYO', `QUALITY: ${requestedQuality} → ${poyoModel} @ ${poyoResolution ?? '?'} (${reservation.cost} token(s))`);
         log.divider('POYO');
 
         // Prepare image payload
@@ -799,7 +818,8 @@ Deno.serve(async (req) => {
                     imagePayload,
                     poyoModel,
                     baseImageUrl,
-                    reservation.callbackToken
+                    reservation.callbackToken,
+                    poyoResolution
                 );
 
                 log.divider('POYO');
