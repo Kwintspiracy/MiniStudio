@@ -1,4 +1,15 @@
 -- ============================================================================
+-- Ce fichier a ete recupere de l'historique de production le 2026-08-07
+-- (`supabase migration fetch`). Il remplace 20260629000000_poyo_log_model_used.sql,
+-- qui portait exactement la meme migration sous un horodatage choisi a la
+-- main : le SQL etait applique par MCP, donc enregistre en base sous SON
+-- horodatage, et les deux historiques ne se rejoignaient jamais. C'est cette
+-- version-ci qui figure dans supabase_migrations.schema_migrations.
+--
+-- Le commentaire d'origine est conserve ci-dessous.
+-- ============================================================================
+
+-- ============================================================================
 -- Migration: Log the actual PoYo model in generation history
 -- Date: 2026-06-29
 -- Adds generation_jobs.model_used and makes complete_poyo_job log the real
@@ -68,4 +79,4 @@ BEGIN
     RETURN jsonb_build_object('success', true, 'job_id', v_job.id, 'status', 'failed');
   END IF;
 END;
-$function$;
+$function$;;
