@@ -244,12 +244,15 @@ export interface Generation {
   metadata: Record<string, unknown>;
   user_short: string;
   duration_s: number | null;
-  /** Crédits réellement débités par PoYo. Preuve tierce du modèle qui a tourné :
-   *  18 pour nano-banana-pro-edit, 5 pour nano-banana-2-edit. NULL avant le
-   *  2026-08-07, la réponse du fournisseur n'étant pas conservée jusque-là. */
-  provider_credits: number | null;
-  /** Modèle tel que le fournisseur le renvoie, s'il le renvoie. */
-  provider_model: string | null;
+  /**
+   * Identifiant de la tâche chez PoYo.
+   *
+   * Leur API de génération ne renvoie ni les crédits débités ni le modèle
+   * exécuté — vérifié dans leur documentation le 2026-08-07. La facture par
+   * tâche n'est lisible que dans leur console, et cet identifiant y mène.
+   * C'est le seul moyen de confirmer de l'extérieur quel modèle a tourné.
+   */
+  poyo_task_id: string | null;
 }
 
 /**
@@ -268,7 +271,6 @@ export async function chargerHistoriqueGenerations(limite = 100): Promise<Genera
     ...e,
     provider_cost_usd: e.provider_cost_usd == null ? null : Number(e.provider_cost_usd),
     duration_s: e.duration_s == null ? null : Number(e.duration_s),
-    provider_credits: e.provider_credits == null ? null : Number(e.provider_credits),
   }));
 }
 

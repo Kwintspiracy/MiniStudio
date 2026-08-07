@@ -86,7 +86,7 @@ export function PageGenerations() {
                 <th>Modèle</th>
                 <th className="num">Tokens</th>
                 <th className="num">Coût</th>
-                <th className="num">Facturé</th>
+                <th>Tâche PoYo</th>
                 <th className="num">Durée</th>
                 <th>Compte</th>
               </tr>
@@ -118,13 +118,14 @@ export function PageGenerations() {
                       <td className="mono" style={{ fontSize: 12 }}>{l.model_used ?? '—'}</td>
                       <td className="num">{l.cost_units}</td>
                       <td className="num">{l.provider_cost_usd == null ? '—' : usd(l.provider_cost_usd, 3)}</td>
-                      {/* Ce que PoYo dit avoir débité. Seule preuve tierce que la
-                          qualité choisie atteint bien deux modèles distincts —
-                          18 crédits en Pro, 5 en Standard. */}
-                      <td className="num">
-                        {l.provider_credits == null
-                          ? <span style={{ color: 'var(--ink-3)' }}>—</span>
-                          : <span className="mono">{l.provider_credits} cr.</span>}
+                      {/* L'identifiant de tâche chez PoYo. Leur API de génération
+                          ne renvoie NI les crédits débités NI le modèle exécuté —
+                          vérifié dans leur documentation le 2026-08-07, ces champs
+                          n'existent ni dans la réponse de statut ni dans le rappel.
+                          Le seul endroit où la facture par tâche est lisible est
+                          leur console : cet identifiant y mène. */}
+                      <td className="mono" style={{ fontSize: 11 }}>
+                        {l.poyo_task_id ?? <span style={{ color: 'var(--ink-3)' }}>—</span>}
                       </td>
                       <td className="num">{l.duration_s == null ? '—' : `${l.duration_s} s`}</td>
                       <td className="mono" style={{ color: 'var(--ink-3)' }}>{l.user_short}</td>
