@@ -19,7 +19,7 @@ const POYO_BASE = 'https://api.poyo.ai';
 const CREDIT_USD = 0.005;
 
 /** Contraintes par modèle, transposées du banc local. */
-const MODELES: Record<string, { maxPrompt?: number; size?: string; resolution?: string }> = {
+const MODELES: Record<string, { maxPrompt?: number; size?: string; resolution?: string; output_format?: string }> = {
     'z-image': { maxPrompt: 1000 },
     'wan-2.7-image': { size: '1024x1024' },
     'nano-banana-edit': {},
@@ -45,7 +45,10 @@ const MODELES: Record<string, { maxPrompt?: number; size?: string; resolution?: 
     // par PoYo (new / new-edit / official / official-edit) — c'est
     // vraisemblablement un alias herite. Cout non mesure : il sera releve au
     // premier passage via credits_amount.
-    'nano-banana-2-new-edit': { size: '1:1', resolution: '2K' },
+    // `output_format` force le PNG : ce modele renvoyait du JPEG par defaut,
+    // ce qui le desavantageait dans une comparaison de nettete contre deux PNG.
+    // Le champ est documente pour cette famille, valeurs png/jpg/jpeg/webp.
+    'nano-banana-2-new-edit': { size: '1:1', resolution: '2K', output_format: 'png' },
     'seedream-4-edit': {},
     'seedream-4.5-edit': {},
     'flux-kontext-pro-edit': {},
@@ -268,6 +271,7 @@ Deno.serve(async (req) => {
                                 // inconnu suffit a faire refuser la soumission,
                                 // comme on vient de le constater.
                                 ...(cfg.resolution ? { resolution: cfg.resolution } : {}),
+                                ...(cfg.output_format ? { output_format: cfg.output_format } : {}),
                             },
                         }),
                     });
@@ -329,9 +333,18 @@ Deno.serve(async (req) => {
                             // La variante entre dans le chemin : sans elle, deux
                             // versions du même modèle s'écraseraient l'une l'autre.
                             const dossier = ligne.variant_id ? `${runId}/${ligne.variant_id}` : runId;
-                            chemin = `${dossier}/${ligne.model}.png`;
+                            // L'extension etait figee a .png alors que certains
+                            // modeles renvoient du JPEG — nano-banana-2-new-edit
+                            // notamment. Un fichier dont le nom ment complique
+                            // toute inspection ulterieure, et masquait ici une
+                            // difference de format qui n'est pas neutre : on ne
+                            // juge pas une nettete sur un JPEG comme sur un PNG.
+                            const typeMime = img.headers.get('content-type') ?? 'image/png';
+                            const ext = typeMime.includes('jpeg') || typeMime.includes('jpg') ? 'jpg'
+                                      : typeMime.includes('webp') ? 'webp' : 'png';
+                            chemin = `${dossier}/${ligne.model}.${ext}`;
                             await admin.storage.from('bench').upload(chemin, blob, {
-                                contentType: img.headers.get('content-type') ?? 'image/png',
+                                contentType: typeMime,
                                 upsert: true,
                             });
                         }
