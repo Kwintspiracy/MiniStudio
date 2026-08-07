@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { chargerUtilisateurs } from '../lib/api';
+import { chargerUtilisateurs, octroyerTokens } from '../lib/api';
 import { Squelette, Vide, useMessage, nombre, dateCourte } from '../components/ui';
 
 /**
@@ -62,6 +62,7 @@ export function PageComptes() {
                 <th className="num">Solde</th>
                 <th>Statut</th>
                 <th className="num">Inscription</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -94,6 +95,14 @@ export function PageComptes() {
                           : <span className="pill mute">gratuit</span>}
                     </td>
                     <td className="num">{dateCourte(lire(u, 'created_at', 'signup_at') as string | null)}</td>
+                    {/* Un compte à court de tokens n'avait aucune voie de crédit :
+                        ni le titulaire pour tester, ni un client à dédommager. */}
+                    <td>
+                      <Octroi
+                        userId={String(lire(u, 'user_id', 'id') ?? '')}
+                        onFait={() => chargerUtilisateurs(200).then(setLignes).catch(() => {})}
+                      />
+                    </td>
                   </tr>
                 );
               })}
@@ -119,5 +128,48 @@ function Ecart({ ligne }: { ligne: Record<string, unknown> }) {
           title={`Registre : ${registre}. Le solde a changé sans écriture correspondante.`}>
       ≠ {String(registre)}
     </span>
+  );
+}
+
+/** Octroi de tokens sur une ligne. Se déplie au clic pour éviter une colonne
+ *  de champs de saisie sur toutes les lignes. */
+function Octroi({ userId, onFait }: { userId: string; onFait: () => void }) {
+  const signaler = useMessage();
+  const [ouvert, setOuvert] = useState(false);
+  const [montant, setMontant] = useState('60');
+  const [note, setNote] = useState('');
+  const [envoi, setEnvoi] = useState(false);
+
+  if (!ouvert) {
+    return (
+      <button className="btn sm ghost" onClick={() => setOuvert(true)}
+              disabled={!userId} title="Créditer ce compte">+ tokens</button>
+    );
+  }
+
+  const envoyer = async () => {
+    setEnvoi(true);
+    try {
+      const r = await octroyerTokens(userId, Number(montant), note);
+      signaler('Tokens crédités', `Nouveau solde : ${r.balance_after}`, 'good');
+      setOuvert(false); setNote('');
+      onFait();
+    } catch (e) {
+      signaler('Octroi refusé', (e as Error).message, 'bad');
+    } finally {
+      setEnvoi(false);
+    }
+  };
+
+  return (
+    <div className="row" style={{ gap: 4, alignItems: 'center' }}>
+      <input type="number" min="1" max="1000" value={montant} style={{ width: 66 }}
+             onChange={(e) => setMontant(e.target.value)} aria-label="Nombre de tokens" />
+      <input type="text" value={note} placeholder="motif…" style={{ width: 150 }}
+             onChange={(e) => setNote(e.target.value)} aria-label="Motif de l'octroi" />
+      <button className="btn sm" onClick={() => void envoyer()}
+              disabled={envoi || !note.trim()}>OK</button>
+      <button className="btn sm ghost" onClick={() => setOuvert(false)}>×</button>
+    </div>
   );
 }

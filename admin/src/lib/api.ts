@@ -274,6 +274,21 @@ export async function chargerHistoriqueGenerations(limite = 100): Promise<Genera
   }));
 }
 
+/**
+ * Octroi manuel de tokens. Réservé à l'administration côté base : `__DEV__` du
+ * client ne peut pas servir de frontière d'autorisation sur un chemin qui crée
+ * de la valeur.
+ */
+export async function octroyerTokens(userId: string, montant: number, note: string) {
+  const { data, error } = await supabase.rpc('admin_grant_tokens', {
+    p_user_id: userId, p_amount: montant, p_note: note,
+  });
+  if (error) throw error;
+  const r = data as { success: boolean; error?: string; message?: string; balance_after?: number };
+  if (!r?.success) throw new Error(r?.message ?? r?.error ?? 'octroi refusé');
+  return r;
+}
+
 export async function chargerUtilisateurs(limite = 100) {
   const { data, error } = await supabase.rpc('get_admin_users_list', {
     p_limit: limite, p_offset: 0,

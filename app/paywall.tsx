@@ -94,8 +94,11 @@ export default function PaywallScreen() {
              setPurchasing(false);
              setPurchasing(false);
              showModal(
-                "Simulated Purchase Successful",
-                "You successfully simulated a purchase in Mock Mode. \n\n(No real money was charged. No backend update performed).",
+                // Voir PaywallDrawer : la simulation ne crédite rien, et le
+                // taire faisait passer un solde inchangé pour un bug.
+                "Simulated — no tokens added",
+                "The store flow ran, but nothing was purchased and no tokens were credited."
+                + "\n\nTo top up a test account, use Accounts in the admin panel.",
                 'default',
                 {
                     label: "Continue",

@@ -228,9 +228,15 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
         if (__DEV__ && pack.product.title.includes("(Mock)")) {
             setTimeout(() => {
                 setPurchasing(false);
+                // La simulation ne crédite AUCUN token, et ne le disait pas.
+                // Un « Purchase Successful » suivi d'un solde inchangé se lit
+                // comme un bug de l'application. Créditer depuis ici serait pire :
+                // `__DEV__` est un drapeau du client, donc une fontaine à tokens
+                // pour qui sait recompiler. L'octroi passe par l'administration.
                 showModal(
-                    "Simulated Purchase Successful",
-                    "You successfully simulated a purchase. (No real money was charged).",
+                    "Simulated — no tokens added",
+                    "The store flow ran, but nothing was purchased and no tokens were credited. "
+                    + "To top up a test account, use Accounts in the admin panel.",
                     'default',
                     {
                         label: "Continue",
