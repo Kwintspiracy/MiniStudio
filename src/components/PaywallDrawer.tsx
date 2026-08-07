@@ -83,12 +83,17 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
         setModalConfig(prev => ({ ...prev, visible: false }));
     };
 
-    // Plan options based on Figma design
+    // Libelles alignes sur SUBSCRIPTION_TOKENS_BY_PRODUCT / TOKEN_PACK_MAP de
+    // l'edge function revenuecat-webhook, qui est ce qui verse reellement. Les
+    // trois ecrans d'achat annoncaient jusqu'ici trois chiffres differents, et
+    // aucun ne correspondait au versement : le mensuel promettait 60 pour 40
+    // verses, le pack « 200 » en versait 150, et l'annuel promettait 60 par mois
+    // pour 40 par AN. Toute modification de ces nombres doit repartir du webhook.
     const plans: PlanOption[] = [
         {
             id: 'annual',
             title: '12 Months',
-            subtitle: '60 Monthly Tokens',
+            subtitle: '720 tokens, credited upfront',
             price: '$4.49 / Month',
             originalPrice: '$5.99',
             badge: 'Best Value!',
@@ -97,16 +102,16 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
         {
             id: 'monthly',
             title: 'Monthly',
-            subtitle: '60 Monthly Tokens',
+            subtitle: '60 tokens every month',
             price: '$5.99 / Month',
             packageIdentifier: '$rc_monthly',
         },
         {
             id: 'tokens',
-            title: '200 Tokens Pack',
-            subtitle: 'Cumulative tokens packs',
-            price: '$17.99',
-            packageIdentifier: 'Tokens_200',
+            title: '100 Tokens Pack',
+            subtitle: 'One-off, never expires',
+            price: '$14.99',
+            packageIdentifier: 'Tokens_100',
         },
     ];
 
@@ -129,7 +134,7 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
             packageType: 'MONTHLY',
             product: {
                 identifier: 'pro_monthly',
-                description: '60 Monthly Tokens',
+                description: '60 tokens every month',
                 title: 'Monthly',
                 price: 5.99,
                 priceString: '$5.99',
@@ -142,7 +147,7 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
             packageType: 'ANNUAL',
             product: {
                 identifier: 'pro_annual',
-                description: '60 Monthly Tokens',
+                description: '720 tokens, credited upfront',
                 title: 'Annual',
                 price: 53.88,
                 priceString: '$53.88',
@@ -151,14 +156,14 @@ export function PaywallDrawer({ visible, onClose }: PaywallDrawerProps) {
             },
         },
         {
-            identifier: 'Tokens_200',
+            identifier: 'Tokens_100',
             packageType: 'CUSTOM',
             product: {
-                identifier: 'tokens_200',
-                description: '200 Tokens',
+                identifier: 'tokens_100',
+                description: '100 Tokens',
                 title: 'Pack of Tokens',
-                price: 17.99,
-                priceString: '$17.99',
+                price: 14.99,
+                priceString: '$14.99',
                 currencyCode: 'USD',
                 productType: 'CONSUMABLE',
             },

@@ -142,7 +142,7 @@ class PurchaseService {
                 packageType: 'MONTHLY',
                 product: {
                     identifier: 'pro_monthly',
-                    description: '40 Monthly Tokens',
+                    description: '60 tokens every month',
                     title: 'Monthly (Mock)',
                     price: 5.99,
                     priceString: '$5.99',
@@ -156,7 +156,10 @@ class PurchaseService {
                 packageType: 'ANNUAL',
                 product: {
                     identifier: 'pro_annual',
-                    description: '40 Monthly Tokens',
+                    // 720 d'un coup : RENEWAL ne se declenche qu'une fois par an
+                    // sur un abonnement annuel, les tokens sont donc verses en
+                    // une seule fois. Bareme dans revenuecat-webhook.
+                    description: '720 tokens, credited upfront',
                     title: 'Annual (Mock)',
                     price: 53.88,
                     priceString: '$53.88',
@@ -166,14 +169,14 @@ class PurchaseService {
                 offeringIdentifier: 'default'
             },
             {
-                identifier: 'Tokens_200',
+                identifier: 'Tokens_100',
                 packageType: 'CUSTOM',
                 product: {
-                    identifier: 'tokens_150',
-                    description: '150 Tokens',
+                    identifier: 'tokens_100',
+                    description: '100 Tokens',
                     title: 'Pack of Tokens (Mock)',
-                    price: 17.99,
-                    priceString: '$17.99',
+                    price: 14.99,
+                    priceString: '$14.99',
                     currencyCode: 'USD',
                     productType: 'CONSUMABLE',
                 },

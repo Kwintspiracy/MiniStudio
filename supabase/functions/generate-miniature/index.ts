@@ -14,8 +14,9 @@ const CONFIG = {
     // Webhook URL for async PoYo callbacks
     POYO_WEBHOOK_URL: Deno.env.get('POYO_WEBHOOK_URL') ||
         `${Deno.env.get('SUPABASE_URL')}/functions/v1/poyo-webhook`,
-    // Anonymous IP rate limit: max generations per IP per hour
-    ANON_IP_HOURLY_LIMIT: parseInt(Deno.env.get('ANON_IP_HOURLY_LIMIT') || '5'),
+    // La limite horaire par IP des comptes anonymes vit desormais dans
+    // app_config.anon_ip_hourly_limit et s'applique dans reserve_generation
+    // (ECON-009). Elle se regle depuis l'admin, sans redeploiement.
     // SSRF guard: hostnames a client-supplied baseImageUrl is allowed to point to.
     // These are the CDN hosts where our own generated results live, so a source
     // image reused from history can be passed by URL instead of base64.
@@ -58,8 +59,14 @@ const MODEL_COSTS: Record<string, number> = {
 };
 // DoS guard on total assembled prompt (system template + colors + effects + user text)
 const MAX_PROMPT_LENGTH = 15000;
-// Limit on user-typed free-text fields (painterPrompt / designerPrompt)
-const MAX_USER_TEXT_LENGTH = 1000;
+// Limit on user-typed free-text fields.
+//
+// Portee de 1000 a 2000 le 2026-08-07 : le mode Scene ajoute quatre champs de
+// description (400 + 250 + 250 + 100) a la consigne libre de peinture, tous
+// tapes par l'utilisateur. Les laisser hors de `userText` les aurait fait
+// echapper a la revalidation serveur — c'est-a-dire exclure du controle
+// precisement le texte le plus volumineux de la requete.
+const MAX_USER_TEXT_LENGTH = 2000;
 
 // ============================================================================
 // LOGGING HELPERS
@@ -267,11 +274,13 @@ async function submitPoyoWithWebhook(
         : CONFIG.POYO_WEBHOOK_URL;
     const taskId = await submitPoyoTask(apiKey, prompt, imageUrl, callbackUrl, model);
 
-    // Store task_id + the actual model on the job so the webhook can log the real
-    // model name (not just the 'poyo' provider) into generation_logs.
+    // Seul le task_id est ecrit ici. model_used est pose par reserve_generation,
+    // en meme temps que le prix en tokens : les reecrire depuis le code
+    // rouvrirait la possibilite d'une divergence entre modele facture et modele
+    // soumis, qui est precisement ce que la migration ferme.
     await supabaseClient
         .from('generation_jobs')
-        .update({ poyo_task_id: taskId, provider_used: 'poyo', model_used: model || 'nano-banana-2-edit' })
+        .update({ poyo_task_id: taskId, provider_used: 'poyo' })
         .eq('id', jobId);
 
     log.success('POYO', `ASYNC: Task submitted, webhook will handle completion`);
@@ -373,18 +382,30 @@ async function recordProviderFailure(supabaseClient: any, provider: string): Pro
 // CREDIT MANAGEMENT FUNCTIONS
 // ============================================================================
 
+// ECON-007 : la reservation ne prend plus de cout. On nomme une qualite, la
+// base en deduit le modele, le prix en tokens et le cout fournisseur. Il n'y a
+// plus de champ ou un appelant pourrait se donner un tarif.
+//
+// L'appel se fait avec le client service_role : reserve_generation a ete
+// revoquee pour anon et authenticated (migration 20260807120000). Un client qui
+// tenterait l'appel en direct recoit desormais un refus.
 async function reserveCredits(
-    supabaseClient: any, 
-    userId: string, 
-    cost: number,
+    supabaseAdminClient: any,
+    userId: string,
+    quality: 'standard' | 'pro',
     deviceId?: string,
-    metadata?: any
-): Promise<{ success: boolean; jobId?: string; callbackToken?: string; error?: string; balance?: number }> {
-    const { data, error } = await supabaseClient.rpc('reserve_generation', {
+    metadata?: any,
+    clientIp?: string,
+): Promise<{
+    success: boolean; jobId?: string; callbackToken?: string; model?: string;
+    cost?: number; error?: string; required?: number;
+}> {
+    const { data, error } = await supabaseAdminClient.rpc('reserve_generation', {
         p_user_id: userId,
-        p_cost: cost,
+        p_quality: quality,
         p_device_id: deviceId || null,
-        p_metadata: metadata || {}
+        p_metadata: metadata || {},
+        p_client_ip: clientIp || null,
     });
 
     if (error) {
@@ -392,13 +413,16 @@ async function reserveCredits(
     }
 
     if (!data?.success) {
-        return { success: false, error: data?.error, balance: data?.balance };
+        return { success: false, error: data?.error, required: data?.required };
     }
 
-    log.info('POYO', `CREDITS: Reserved ${cost} token(s) | Unreserved balance: ${data.remaining_balance}`);
+    log.info('POYO', `CREDITS: Reserved ${data.cost} token(s) for ${data.quality} (${data.model}) | Unreserved balance: ${data.remaining_balance}`);
     // SEC-001 : jeton de callback, propre a cette tache. Il authentifie le
     // retour de PoYo sans dependre d'un secret partage cote fournisseur.
-    return { success: true, jobId: data.job_id, callbackToken: data.callback_token };
+    return {
+        success: true, jobId: data.job_id, callbackToken: data.callback_token,
+        model: data.model, cost: data.cost,
+    };
 }
 
 async function countTokensForPrompt(prompt: string, model: string): Promise<number | undefined> {
@@ -419,21 +443,21 @@ async function countTokensForPrompt(prompt: string, model: string): Promise<numb
     }
 }
 
+// DATA-002 : plus de p_client_ip. L'IP est ecrite sur le job a la reservation,
+// par le serveur ; la passer ici revenait a laisser l'appelant la choisir.
 async function confirmGeneration(
-    supabaseClient: any,
+    supabaseAdminClient: any,
     jobId: string,
     provider: string,
     model: string,
-    clientIp?: string,
     inputTokens?: number,
     outputTokens?: number,
     prompt?: string
 ): Promise<void> {
-    const { data, error } = await supabaseClient.rpc('confirm_generation', {
+    const { data, error } = await supabaseAdminClient.rpc('confirm_generation', {
         p_job_id: jobId,
         p_provider: provider,
         p_model: model,
-        p_client_ip: clientIp || null,
         p_input_tokens: inputTokens || null,
         p_output_tokens: outputTokens || null,
         p_prompt: prompt || null,
@@ -447,11 +471,11 @@ async function confirmGeneration(
 }
 
 async function releaseCredits(
-    supabaseClient: any,
+    supabaseAdminClient: any,
     jobId: string,
     errorMessage?: string
 ): Promise<void> {
-    const { data, error } = await supabaseClient.rpc('release_generation', {
+    const { data, error } = await supabaseAdminClient.rpc('release_generation', {
         p_job_id: jobId,
         p_error_message: errorMessage,
     });
@@ -464,7 +488,7 @@ async function releaseCredits(
 }
 
 // ============================================================================
-// ANONYMOUS IP RATE LIMITING
+// CLIENT IP
 // ============================================================================
 
 /**
@@ -480,40 +504,16 @@ function getClientIp(req: Request): string {
     return req.headers.get('x-real-ip') || 'unknown';
 }
 
-/**
- * Checks whether an anonymous user has exceeded the per-IP hourly generation limit.
- * Uses the generation_logs table to count recent anonymous generations from the same IP.
- * Returns true if the request should be blocked.
- */
-async function isAnonymousIpRateLimited(
-    supabaseClient: any,
-    ip: string,
-    userId: string,
-): Promise<boolean> {
-    if (ip === 'unknown') {
-        // Cannot determine IP — allow through but log warning
-        log.info('RATE', `Cannot determine client IP for anonymous user ${userId.substring(0, 8)}`);
-        return false;
-    }
-
-    const windowStart = new Date(Date.now() - 60 * 60 * 1000).toISOString(); // 1 hour ago
-
-    const { count, error } = await supabaseClient
-        .from('generation_logs')
-        .select('*', { count: 'exact', head: true })
-        .eq('client_ip', ip)
-        .gte('created_at', windowStart);
-
-    if (error) {
-        log.error('RATE', `IP rate-limit check error: ${error.message}`);
-        // Fail open — don't block on DB errors
-        return false;
-    }
-
-    const requestCount = count ?? 0;
-    log.info('RATE', `Anonymous IP ${ip}: ${requestCount}/${CONFIG.ANON_IP_HOURLY_LIMIT} requests this hour`);
-    return requestCount >= CONFIG.ANON_IP_HOURLY_LIMIT;
-}
+// ECON-009 : la limitation par IP vivait ici et ne pouvait pas fonctionner.
+// Elle comptait des lignes generation_logs.client_ip, or complete_poyo_job — le
+// seul chemin de production — n'ecrit jamais cette colonne. Verifie en base le
+// 2026-08-07 : 0 des 385 lignes en portait une, le compteur lisait donc
+// toujours zero et la limite n'a jamais bloque personne.
+//
+// Le controle est desormais dans reserve_generation : il compte les
+// generation_jobs, ecrits des la reservation donc avant toute depense
+// fournisseur, et il s'execute sous le meme verrou que l'autorisation — deux
+// requetes simultanees ne peuvent plus passer ensemble.
 
 // ============================================================================
 // SANITIZATION HELPERS
@@ -564,7 +564,6 @@ Deno.serve(async (req) => {
         );
         let dbPrimaryProvider: string | undefined;
         let dbFallbackEnabled: boolean | undefined;
-        let dbPoyoModel: string | undefined;
 
         // Kick off the provider-config RPC before awaiting auth below — these are two
         // independent network round-trips, so start both and only then await each in turn.
@@ -582,7 +581,6 @@ Deno.serve(async (req) => {
             const { data: provCfg } = await providerConfigPromise;
             if (provCfg) {
                 dbPrimaryProvider = provCfg['primary_provider'] || undefined;
-                dbPoyoModel = provCfg['poyo_model'] || undefined;
                 if (provCfg['fallback_enabled'] != null) {
                     dbFallbackEnabled = provCfg['fallback_enabled'] !== 'false';
                 }
@@ -592,7 +590,9 @@ Deno.serve(async (req) => {
         }
         const primaryProvider = dbPrimaryProvider || CONFIG.PRIMARY_PROVIDER;
         const fallbackEnabled = dbFallbackEnabled ?? CONFIG.FALLBACK_ENABLED;
-        const poyoModel = dbPoyoModel || 'nano-banana-2-edit';
+        // Le modele n'est plus lu ici : reserve_generation le resout a partir de
+        // la qualite demandee et le renvoie, de sorte que le modele facture et
+        // le modele soumis ne puissent pas diverger.
 
         if (!user) {
             return new Response(JSON.stringify({ error: `Unauthorized: ${authError?.message}` }), {
@@ -625,22 +625,23 @@ Deno.serve(async (req) => {
                 }), { status: 403, headers: corsHeaders });
             }
 
-            // IP rate limiting: prevents bypassing device_id tracking by spoofing a new
-            // device_id for every request from the same IP address.
-            const rateLimited = await isAnonymousIpRateLimited(supabaseClient, clientIp, user.id);
-            if (rateLimited) {
-                log.info('RATE', `Anonymous IP ${clientIp} exceeded hourly limit, blocking`);
-                return new Response(JSON.stringify({
-                    error: 'Rate limit exceeded. Please sign in to continue generating images.',
-                    reservation_error: 'anon_ip_rate_limited',
-                }), { status: 429, headers: corsHeaders });
-            }
+            // La limitation par IP est appliquee par reserve_generation, sous le
+            // meme verrou que l'autorisation de depense (voir le commentaire
+            // ECON-009 plus haut). Le refus revient comme reservation_error.
         }
 
         // ================================================================
         // 2. PARSE REQUEST
         // ================================================================
-        const { prompt, baseImage, baseImageUrl: rawBaseImageUrl, model, action, temperature, device_id, metadata, userText } = await req.json();
+        const { prompt, baseImage, baseImageUrl: rawBaseImageUrl, model, action, temperature, device_id, metadata, userText, quality } = await req.json();
+
+        // Standard / Pro. Le client nomme une qualite, jamais un modele ni un
+        // prix : la base fait la traduction (app_config.poyo_model_* puis
+        // provider_model_costs.token_cost). Une valeur inconnue — ou absente,
+        // cas des binaires mobiles anterieurs a ce deploiement — retombe en
+        // Standard, jamais sur le modele cher.
+        const requestedQuality: 'standard' | 'pro' =
+            typeof quality === 'string' && quality.toLowerCase() === 'pro' ? 'pro' : 'standard';
 
         log.section('POYO');
         log.info('POYO', `REQUEST START | User: ${user.id.substring(0, 8)}...`);
@@ -686,8 +687,6 @@ Deno.serve(async (req) => {
         // ================================================================
         // 3. RESERVE CREDITS
         // ================================================================
-        const tokenCost = MODEL_COSTS[targetModel];
-
         // Kick off the provider health check concurrently with credit reservation.
         // Both are independent DB round-trips gated by the same auth/rate-limit
         // checks above, so overlapping them shaves one round-trip off every
@@ -695,31 +694,50 @@ Deno.serve(async (req) => {
         // boolean), so this promise never rejects even if reservation fails first.
         const primaryHealthyPromise = isProviderHealthy(supabaseAdminClient, primaryProvider);
 
-        const reservation = await reserveCredits(supabaseClient, user.id, tokenCost, device_id, metadata);
+        const reservation = await reserveCredits(
+            supabaseAdminClient, user.id, requestedQuality, device_id,
+            { ...(metadata ?? {}), quality: requestedQuality }, clientIp,
+        );
 
         if (!reservation.success) {
             // Log detailed info server-side only — never expose balance or device tracking details to client
-            log.error('CREDITS', `Reservation failed: ${reservation.error}, Balance: ${reservation.balance}`);
+            log.error('CREDITS', `Reservation failed: ${reservation.error}`);
 
             let errorMessage = "Limit reached.";
+            let status = 403;
 
             if (reservation.error === 'insufficient_balance') {
-                errorMessage = "Insufficient tokens. Please purchase more to continue.";
+                // Le nombre requis est utile a l'utilisateur : un rendu Pro coute
+                // plus qu'un Standard, et sans ce chiffre le refus est incomprehensible.
+                errorMessage = reservation.required && reservation.required > 1
+                    ? `Insufficient tokens. This ${requestedQuality} render costs ${reservation.required} tokens.`
+                    : "Insufficient tokens. Please purchase more to continue.";
             } else if (reservation.error === 'user_not_found') {
                 errorMessage = "User account not found.";
             } else if (reservation.error === 'device_already_used') {
                 errorMessage = "Free tokens are not available. Please sign in to continue.";
+            } else if (reservation.error === 'anon_ip_rate_limited') {
+                errorMessage = "Rate limit exceeded. Please sign in to continue generating images.";
+                status = 429;
+            } else if (reservation.error === 'daily_spend_cap_reached') {
+                errorMessage = "Service temporarily paused. Please try again tomorrow.";
+                status = 503;
             }
 
             return new Response(JSON.stringify({
                 error: errorMessage,
                 reservation_error: reservation.error,
+                required_tokens: reservation.required,
             }), {
-                status: 403, headers: corsHeaders
+                status, headers: corsHeaders
             });
         }
 
         jobId = reservation.jobId;
+        // Modele resolu par la base a partir de la qualite. On soumet exactement
+        // ce qui a ete facture : les deux ne peuvent pas diverger.
+        const poyoModel = reservation.model || 'nano-banana-2-edit';
+        log.info('POYO', `QUALITY: ${requestedQuality} → ${poyoModel} (${reservation.cost} token(s))`);
         log.divider('POYO');
 
         // Prepare image payload
@@ -811,7 +829,7 @@ Deno.serve(async (req) => {
                 
                 // Fall through to Gemini fallback if enabled
                 if (!fallbackEnabled) {
-                    await releaseCredits(supabaseClient, jobId!, errorMessage);
+                    await releaseCredits(supabaseAdminClient, jobId!, errorMessage);
                     return new Response(JSON.stringify({ error: errorMessage }), { 
                         status: 200, headers: corsHeaders 
                     });
@@ -836,12 +854,12 @@ Deno.serve(async (req) => {
 
             // Check for cancellation
             if (isAborted || req.signal.aborted) {
-                await releaseCredits(supabaseClient, jobId!, 'Request cancelled');
+                await releaseCredits(supabaseAdminClient, jobId!, 'Request cancelled');
                 throw new Error("Request cancelled by user.");
             }
 
             // Confirm the generation (pass clientIp for IP rate-limit tracking, prompt for history)
-            await confirmGeneration(supabaseClient, jobId!, 'google', targetModel, clientIp, inputTokens, outputTokens, sanitizedPrompt);
+            await confirmGeneration(supabaseAdminClient, jobId!, 'google', targetModel, inputTokens, outputTokens, sanitizedPrompt);
 
             log.divider('GOOGLE');
             const duration = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -862,7 +880,7 @@ Deno.serve(async (req) => {
             const errorMessage = googleError instanceof Error ? googleError.message : String(googleError);
             log.error('GOOGLE', `Generation failed: ${errorMessage}`);
             
-            await releaseCredits(supabaseClient, jobId!, errorMessage);
+            await releaseCredits(supabaseAdminClient, jobId!, errorMessage);
             
             return new Response(JSON.stringify({ 
                 error: `Generation failed: ${errorMessage}` 
@@ -880,7 +898,7 @@ Deno.serve(async (req) => {
         // Try to release credits if we have a job
         if (jobId && supabaseClient) {
             try {
-                await releaseCredits(supabaseClient, jobId, error.message);
+                await releaseCredits(supabaseAdminClient, jobId, error.message);
             } catch (releaseError) {
                 log.error('CREDITS', `Failed to release credits: ${releaseError}`);
             }

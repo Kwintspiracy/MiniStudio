@@ -170,13 +170,19 @@ const prepareImagePayload = (image: ImageFile) => {
     };
 };
 
+export type RenderQuality = 'standard' | 'pro';
+
 export async function generatePaintedMiniature(
     baseImages: ImageFile | ImageFile[] | null,
     prompt: string,
     numberOfImages: number,
     temperature?: number,
     metadata?: any,
-    userText?: string
+    userText?: string,
+    // Standard ou Pro. On envoie une intention, pas un modèle ni un prix : le
+    // serveur traduit et facture. Ce que le client dit ici ne peut donc pas
+    // faire tourner un modèle plus cher que ce qui sera débité.
+    quality: RenderQuality = 'standard',
 ): Promise<string[]> {
     const imagesToProcess = Array.isArray(baseImages) ? baseImages : (baseImages ? [baseImages] : []);
     const firstImage = imagesToProcess.length > 0 ? imagesToProcess[0] : undefined;
@@ -253,7 +259,8 @@ export async function generatePaintedMiniature(
                 temperature,
                 device_id: deviceId,
                 metadata: metadata,
-                userText: userText ?? ''
+                userText: userText ?? '',
+                quality,
             }),
             signal: abortController.signal
         });
@@ -514,7 +521,8 @@ export async function generateImageFromImage(
     baseImages: ImageFile | ImageFile[],
     prompt: string,
     temperature?: number,
-    userText?: string
+    userText?: string,
+    quality: RenderQuality = 'standard',
 ): Promise<string[]> {
-    return generatePaintedMiniature(baseImages, prompt, 1, temperature, undefined, userText);
+    return generatePaintedMiniature(baseImages, prompt, 1, temperature, undefined, userText, quality);
 }

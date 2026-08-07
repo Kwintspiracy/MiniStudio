@@ -13,6 +13,12 @@ export interface Entitlements {
   monthly_limit: number;
   remaining_total: number;
   is_onboarded: boolean;
+  /**
+   * Prix en tokens des deux modes de rendu, tel que le serveur le facturera.
+   * Renvoyé par get_user_status plutôt que codé ici : l'interface ne doit pas
+   * pouvoir annoncer un prix différent de celui qui sera débité.
+   */
+  render_costs: { standard: number; pro: number };
   /** True when the last fetch failed and data may be outdated */
   isStale: boolean;
   /** The error from the last failed fetch, or null if last fetch succeeded */
@@ -35,6 +41,9 @@ const defaultEntitlements: Entitlements = {
   monthly_limit: 10,
   remaining_total: 0,
   is_onboarded: false,
+  // Repli si le statut n'a pas encore été lu. Aligné sur le barème en base ;
+  // il ne sert qu'à l'affichage avant la première réponse.
+  render_costs: { standard: 1, pro: 3 },
   isStale: false,
   fetchError: null,
 };
@@ -92,6 +101,10 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
         monthly_limit: data.monthly_limit || 10,
         remaining_total: data.remaining_total || 0,
         is_onboarded: data.is_onboarded || false,
+        render_costs: {
+          standard: data.render_costs?.standard ?? 1,
+          pro: data.render_costs?.pro ?? 3,
+        },
         isStale: false,
         fetchError: null,
       });

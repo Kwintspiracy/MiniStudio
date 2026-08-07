@@ -163,9 +163,20 @@ export async function chargerCoutsModeles(): Promise<CoutModele[]> {
 }
 
 export interface ConfigFournisseur {
+  /** Modèle du rendu Standard — le mode par défaut, 1 token. */
+  poyo_model_standard: string;
+  /** Modèle du rendu Pro — facturé au token_cost de provider_model_costs. */
+  poyo_model_pro: string;
+  /**
+   * Réglage hérité. Ne dirige plus aucune génération depuis la migration
+   * 20260807120000 ; il ne subsiste que pour le banc d'essais. Ne pas le
+   * proposer à la modification : on croirait changer la production.
+   */
   poyo_model: string;
   primary_provider: string;
   fallback_enabled: string;
+  daily_spend_cap_usd?: string;
+  anon_ip_hourly_limit?: string;
 }
 
 /**
@@ -214,10 +225,44 @@ export async function chargerSyntheseCouts(): Promise<SyntheseCouts> {
   return data as SyntheseCouts;
 }
 
-export async function chargerHistoriquePrompts(limite = 50) {
-  const { data, error } = await supabase.rpc('get_admin_prompt_history', { p_limit: limite });
+export interface Generation {
+  id: string;
+  created_at: string;
+  completed_at: string | null;
+  status: 'reserved' | 'completed' | 'failed';
+  quality: 'standard' | 'pro';
+  model_used: string | null;
+  cost_units: number;
+  provider_cost_usd: number | null;
+  provider_used: string | null;
+  result_image_url: string | null;
+  error_message: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  prompt: string | null;
+  prompt_length: number | null;
+  metadata: Record<string, unknown>;
+  user_short: string;
+  duration_s: number | null;
+}
+
+/**
+ * Historique des générations.
+ *
+ * Lit `generation_jobs` et non `generation_logs` : le journal ne conserve que
+ * les succès, sans l'image produite ni la qualité demandée. Or ce qu'on vient
+ * chercher dans un historique, ce sont d'abord les échecs et le rendu.
+ */
+export async function chargerHistoriqueGenerations(limite = 100): Promise<Generation[]> {
+  const { data, error } = await supabase.rpc('get_admin_generation_history', { p_limit: limite });
   if (error) throw error;
-  return data as unknown;
+  const r = data as { success: boolean; error?: string; entries?: Generation[] };
+  if (!r?.success) throw new Error(r?.error ?? 'unauthorized');
+  return (r.entries ?? []).map((e) => ({
+    ...e,
+    provider_cost_usd: e.provider_cost_usd == null ? null : Number(e.provider_cost_usd),
+    duration_s: e.duration_s == null ? null : Number(e.duration_s),
+  }));
 }
 
 export async function chargerUtilisateurs(limite = 100) {

@@ -7,7 +7,11 @@ import { Squelette, usd, nombre, useMessage, Indicateur } from '../components/ui
  * 17,99 × 0,708 (TVA 20 % puis commission 15 %) ÷ 150. C'est le palier le moins
  * favorable de la gamme, donc l'hypothèse prudente.
  */
-const NET_PAR_TOKEN = 0.0849;
+// Revenu net d'un token au tarif le plus bas de la grille — le pack de 100 à
+// 14,99 $, soit 0,1499 $ brut, moins 20 % de TVA puis 15 % de commission
+// Apple. On juge la marge sur l'offre la moins rentable : ce qui tient ici
+// tient partout. Grille arrêtée le 2026-08-07, voir revenuecat-webhook.
+const NET_PAR_TOKEN = 0.1062;
 
 export function PageCouts() {
   const signaler = useMessage();

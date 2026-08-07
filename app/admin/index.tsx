@@ -910,7 +910,7 @@ export default function AdminDashboard() {
     const ModalRegistryView = () => {
         const MODAL_LIST = [
             { id: 'app_modal', name: 'Global AppModal', title: 'Varies', text: 'Base component for alerts. Content is passed dynamically via showModal() props.', buttons: ['OK', 'Cancel'], file: 'src/components/AppModal.tsx' },
-            { id: 'paywall', name: 'Paywall Drawer', title: 'Keep building your perfect paint plan.', text: 'Displays subscription options: 12 Months ($4.49/mo), Monthly ($5.99/mo), and 200 Tokens Pack ($17.99).', buttons: ['Subscribe', 'Restore'], file: 'src/components/PaywallDrawer.tsx' },
+            { id: 'paywall', name: 'Paywall Drawer', title: 'Keep building your perfect paint plan.', text: 'Displays subscription options: 12 Months ($4.49/mo, 720 tokens upfront), Monthly ($5.99/mo, 60 tokens/month), and 100 Tokens Pack ($14.99).', buttons: ['Subscribe', 'Restore'], file: 'src/components/PaywallDrawer.tsx' },
             { id: 'feedback', name: 'Feedback Drawer', title: 'Send Feedback', text: 'We’d love to hear from you! Send us your thoughts, bug reports, or feature requests.', buttons: ['Send Feedback', 'Cancel'], file: 'src/components/FeedbackDrawer.tsx' },
             { id: 'paint_explorer', name: 'Paint Explorer', title: 'Paint Explorer', text: 'Browse and select paints from major brands like Vallejo, Citadel, and Army Painter.', buttons: ['Done'], file: 'src/components/PaintExplorerModal.tsx' },
             { id: 'welcome_onboarding', name: 'Welcome Onboarding', title: 'Welcome to MiniPainter Studio', text: 'Everything you need to plan a great paint job before you pick up a brush.', buttons: ['Start the tour', 'Next', 'Finish'], file: 'src/components/WelcomeOnboarding.tsx' },

@@ -42,21 +42,27 @@ export default function PaywallScreen() {
     loadOfferings();
   }, []);
 
+  // « Unlimited Access » n'a jamais rien recouvert : le webhook RevenueCat ne
+  // pose jamais is_unlimited, et aucun compte en base ne porte ce drapeau. Les
+  // libelles disent maintenant ce qui est reellement verse — 60 tokens par mois,
+  // 720 d'un coup sur l'annuel, puisque RENEWAL n'y passe qu'une fois par an.
+  // Ces nombres viennent de SUBSCRIPTION_TOKENS_BY_PRODUCT / TOKEN_PACK_MAP,
+  // dans supabase/functions/revenuecat-webhook. Ne pas les modifier ici seul.
   const mockOfferings: any[] = __DEV__ ? [
     {
       identifier: 'Monthly',
       packageType: 'MONTHLY',
-      product: { identifier: 'pro_monthly', description: 'Unlimited Access + 40 Tokens/mo', title: 'Pro Monthly (Mock)', price: 5.99, priceString: '$5.99', currencyCode: 'USD', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
+      product: { identifier: 'pro_monthly', description: '60 tokens every month', title: 'Pro Monthly (Mock)', price: 5.99, priceString: '$5.99', currencyCode: 'USD', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
     },
     {
       identifier: 'Annual',
       packageType: 'ANNUAL',
-      product: { identifier: 'pro_annual', description: 'Unlimited Access + 40 Tokens/mo', title: 'Pro Annual (Mock)', price: 53.88, priceString: '$53.88', currencyCode: 'USD', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
+      product: { identifier: 'pro_annual', description: '720 tokens, credited upfront', title: 'Pro Annual (Mock)', price: 53.88, priceString: '$53.88', currencyCode: 'USD', productType: 'AUTO_RENEWABLE_SUBSCRIPTION' }
     },
     {
-      identifier: 'Tokens_150',
+      identifier: 'Tokens_100',
       packageType: 'CUSTOM',
-      product: { identifier: 'tokens_150', description: '150 Tokens (Consumable)', title: '150 Tokens (Mock)', price: 17.99, priceString: '$17.99', currencyCode: 'USD', productType: 'CONSUMABLE' }
+      product: { identifier: 'tokens_100', description: '100 Tokens (Consumable)', title: '100 Tokens (Mock)', price: 14.99, priceString: '$14.99', currencyCode: 'USD', productType: 'CONSUMABLE' }
     }
   ] : [];
 
@@ -203,13 +209,25 @@ export default function PaywallScreen() {
             <View style={styles.hero}>
             <Ionicons name="star" size={50} color={colors.accent.yellow} />
             <Text style={styles.heroTitle}>Upgrade to Pro</Text>
-            <Text style={styles.heroSubtitle}>Unlock faster generations, higher limits, and all styles.</Text>
+            <Text style={styles.heroSubtitle}>A monthly allowance of tokens, for Standard and Pro renders alike.</Text>
             </View>
 
+            {/*
+              Les trois arguments precedents etaient invendables et, pour deux
+              d'entre eux, faux :
+                « 10x Faster Generations »  — l'abonnement ne change pas le
+                  temps de rendu ; le modele Pro est meme le plus lent des deux
+                  (76 s contre 60 s en moyenne mesuree).
+                « Higher Monthly Limits »   — la limite est le solde de tokens,
+                  identique quelle que soit la facon dont on l'obtient.
+                « All Styles Unlocked »     — aucun style n'est verrouille.
+              Un motif de rejet en revue App Store, et un motif de remboursement.
+              Ne sont annoncees ici que des choses que le code fait reellement.
+            */}
             <View style={styles.features}>
-                <FeatureRow icon="flash" text="10x Faster Generations" />
-                <FeatureRow icon="infinite" text="Higher Monthly Limits" />
-                <FeatureRow icon="color-palette" text="All Styles Unlocked" />
+                <FeatureRow icon="server" text="60 tokens every month" />
+                <FeatureRow icon="sparkles" text="Pro renders: 3 tokens, best quality" />
+                <FeatureRow icon="image" text="Standard renders: 1 token each" />
             </View>
 
             {loading ? (

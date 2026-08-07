@@ -5,7 +5,11 @@ import {
 } from '../lib/api';
 import { Squelette, usd, useMessage, useConfirmation } from '../components/ui';
 
-const NET_PAR_TOKEN = 0.0849;
+// Revenu net d'un token au tarif le plus bas de la grille — le pack de 100 à
+// 14,99 $, soit 0,1499 $ brut, moins 20 % de TVA puis 15 % de commission
+// Apple. On juge la marge sur l'offre la moins rentable : ce qui tient ici
+// tient partout. Grille arrêtée le 2026-08-07, voir revenuecat-webhook.
+const NET_PAR_TOKEN = 0.1062;
 
 export function PageFournisseur() {
   const signaler = useMessage();
@@ -42,44 +46,71 @@ export function PageFournisseur() {
 
   if (chargement) return <div className="pad"><Squelette lignes={6} /></div>;
 
-  const actif = config?.poyo_model;
   const autorises = modeles.filter((m) => m.allowed);
+
+  // Deux modes, deux clés. `poyo_model` ne dirige plus aucune génération depuis
+  // la migration 20260807120000 : elle ne sert qu'au banc d'essais. La laisser
+  // pilotable ici ferait croire qu'on change la production sans rien changer.
+  const emplacements = [
+    {
+      cle: 'poyo_model_standard',
+      titre: 'Rendu Standard',
+      aide: 'Le mode par défaut. Son coût fournisseur définit la valeur du token : tout le barème en découle.',
+      actif: config?.poyo_model_standard,
+    },
+    {
+      cle: 'poyo_model_pro',
+      titre: 'Rendu Pro',
+      aide: 'Facturé au token_cost de la table des coûts, soit ceil(coût / 0,025). Le client ne choisit qu’une qualité, jamais un modèle.',
+      actif: config?.poyo_model_pro,
+    },
+  ];
 
   return (
     <div className="pad">
-      <h1 className="page">Modèle et plafonds</h1>
+      <h1 className="page">Modèles et plafonds</h1>
       <p className="page-sub">
         Ces réglages agissent immédiatement sur la production. Chaque modification est
         inscrite au journal d'audit avec son auteur et la valeur précédente.
       </p>
 
-      <h2 className="sec">Modèle de génération</h2>
-      <div className="modeles">
-        {autorises.map((m) => {
-          const marge = NET_PAR_TOKEN - m.usd;
-          const estActif = m.model === actif;
-          return (
-            <button
-              key={m.model}
-              className={`modele${estActif ? ' actif' : ''}`}
-              disabled={estActif || envoi === 'poyo_model'}
-              onClick={() => void appliquer('poyo_model', m.model,
-                `Toutes les générations passeront par ${m.model}, à ${usd(m.usd, 4)} l'unité.`)}
-            >
-              <div className="modele-tete">
-                <code>{m.model}</code>
-                {estActif && <span className="pill good"><i />en production</span>}
-              </div>
-              <div className="modele-chiffres">
-                <span className="num">{usd(m.usd, 4)}</span>
-                <span className={`pill ${marge < 0 ? 'bad' : marge < NET_PAR_TOKEN * 0.4 ? 'warn' : 'good'}`}>
-                  {marge >= 0 ? '+' : ''}{usd(marge, 4)} à 1 token
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      {emplacements.map((emp) => (
+        <div key={emp.cle}>
+          <h2 className="sec">{emp.titre}</h2>
+          <p className="aide" style={{ marginTop: -8, marginBottom: 12 }}>{emp.aide}</p>
+          <div className="modeles">
+            {autorises.map((m) => {
+              // Le token vaut un rendu Standard ; un modèle coûtant k fois plus
+              // est facturé k tokens. La marge se juge donc sur le prix ramené
+              // au token, pas sur le coût brut du rendu.
+              const tokens = Math.max(1, Math.ceil(m.usd / 0.025));
+              const margeParToken = NET_PAR_TOKEN - m.usd / tokens;
+              const estActif = m.model === emp.actif;
+              return (
+                <button
+                  key={m.model}
+                  className={`modele${estActif ? ' actif' : ''}`}
+                  disabled={estActif || envoi === emp.cle}
+                  onClick={() => void appliquer(emp.cle, m.model,
+                    `Le ${emp.titre.toLowerCase()} passera par ${m.model}, à ${usd(m.usd, 4)} l'unité, facturé ${tokens} token${tokens > 1 ? 's' : ''}.`)}
+                >
+                  <div className="modele-tete">
+                    <code>{m.model}</code>
+                    {estActif && <span className="pill good"><i />en production</span>}
+                  </div>
+                  <div className="modele-chiffres">
+                    <span className="num">{usd(m.usd, 4)}</span>
+                    <span className="pill mute">{tokens} token{tokens > 1 ? 's' : ''}</span>
+                    <span className={`pill ${margeParToken < 0 ? 'bad' : margeParToken < NET_PAR_TOKEN * 0.4 ? 'warn' : 'good'}`}>
+                      {margeParToken >= 0 ? '+' : ''}{usd(margeParToken, 4)} / token
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
 
       <div className="note">
         Les modèles retirés du choix — <b>{modeles.filter((m) => !m.allowed).map((m) => m.model).join(', ') || 'aucun'}</b> —

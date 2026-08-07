@@ -4,7 +4,11 @@ import { Indicateur, Squelette, usd, nombre, useMessage } from '../components/ui
 import type { IdVue } from '../lib/nav';
 
 /** Coût sous lequel une génération est rentable au tarif du pack de 150 tokens. */
-const NET_PAR_TOKEN = 0.0849;
+// Revenu net d'un token au tarif le plus bas de la grille — le pack de 100 à
+// 14,99 $, soit 0,1499 $ brut, moins 20 % de TVA puis 15 % de commission
+// Apple. On juge la marge sur l'offre la moins rentable : ce qui tient ici
+// tient partout. Grille arrêtée le 2026-08-07, voir revenuecat-webhook.
+const NET_PAR_TOKEN = 0.1062;
 
 export function PagePilotage({ aller }: { aller: (v: IdVue) => void }) {
   const signaler = useMessage();
@@ -29,8 +33,15 @@ export function PagePilotage({ aller }: { aller: (v: IdVue) => void }) {
   const depense = couts?.today.spend_usd ?? 0;
   const part = plafond ? depense / plafond : undefined;
 
-  const modeleActif = config?.poyo_model ?? '—';
-  const coutModele = couts?.by_model.find((m) => m.model === modeleActif);
+  // Deux modèles tournent en production depuis la migration 20260807120000.
+  // `poyo_model`, l'ancienne clé unique, ne dirige plus rien : elle ne sert
+  // qu'au banc d'essais. L'afficher ici laisserait croire le contraire.
+  const modeleStandard = config?.poyo_model_standard ?? '—';
+  const modelePro = config?.poyo_model_pro ?? '—';
+  const coutModele = couts?.by_model.find((m) => m.model === modeleStandard);
+  // La marge se juge au token, pas au rendu : un rendu Pro coûte trois fois
+  // plus cher mais se facture trois tokens, donc la marge par token est ce qui
+  // décide si l'offre tient.
   const margeParGen = coutModele ? (NET_PAR_TOKEN - (coutModele.spend_usd / Math.max(1, coutModele.generations))) : null;
 
   return (
@@ -68,8 +79,10 @@ export function PagePilotage({ aller }: { aller: (v: IdVue) => void }) {
       <h2 className="sec">Modèle en production</h2>
       <div className="cards">
         <Indicateur
-          libelle="Modèle actif"
-          valeur={<span style={{ fontSize: 15 }}>{modeleActif}</span>}
+          libelle="Modèles actifs"
+          valeur={<span style={{ fontSize: 13, lineHeight: 1.5, display: 'block' }}>
+            Standard&nbsp;: {modeleStandard}<br />Pro&nbsp;: {modelePro}
+          </span>}
           pied={config ? `fournisseur ${config.primary_provider}, repli ${config.fallback_enabled === 'true' ? 'actif' : 'coupé'}` : undefined}
         />
         <Indicateur
@@ -80,7 +93,7 @@ export function PagePilotage({ aller }: { aller: (v: IdVue) => void }) {
         <Indicateur
           libelle="Marge par génération"
           valeur={margeParGen == null ? '—' : usd(margeParGen, 3)}
-          pied={`revenu net ${usd(NET_PAR_TOKEN, 4)} au tarif du pack de 150`}
+          pied={`revenu net ${usd(NET_PAR_TOKEN, 4)} par token, au tarif du pack de 100`}
         />
         <Indicateur
           libelle="Durée moyenne"
@@ -91,8 +104,8 @@ export function PagePilotage({ aller }: { aller: (v: IdVue) => void }) {
 
       {margeParGen != null && margeParGen < 0 && (
         <div className="note bad">
-          Le modèle actif <b>{modeleActif}</b> coûte plus cher que ce que rapporte un token.
-          Chaque génération vendue au tarif du pack de 150 creuse la perte de{' '}
+          Le modèle Standard <b>{modeleStandard}</b> coûte plus cher que ce que rapporte un token.
+          Chaque génération vendue au tarif du pack de 100 creuse la perte de{' '}
           <b>{usd(Math.abs(margeParGen), 3)}</b>.{' '}
           <button className="btn sm" onClick={() => aller('couts')}>Voir les coûts</button>
         </div>
