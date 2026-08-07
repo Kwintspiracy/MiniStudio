@@ -19,12 +19,26 @@ const POYO_BASE = 'https://api.poyo.ai';
 const CREDIT_USD = 0.005;
 
 /** Contraintes par modèle, transposées du banc local. */
-const MODELES: Record<string, { maxPrompt?: number; size?: string }> = {
+const MODELES: Record<string, { maxPrompt?: number; size?: string; resolution?: string }> = {
     'z-image': { maxPrompt: 1000 },
     'wan-2.7-image': { size: '1024x1024' },
     'nano-banana-edit': {},
-    'nano-banana-2-edit': {},
-    'nano-banana-pro-edit': {},
+    // `size` porte le RAPPORT D'ASPECT, `resolution` le PALIER DE DEFINITION.
+    // Ce sont deux champs distincts, et nous n'envoyions jamais le second :
+    // PoYo retombait donc sur son defaut, « 1K ».
+    //
+    // C'est ce qui explique l'observation. nano-banana-pro-edit rendait du
+    // 1024x1024 dans 9 cas sur 9. Une premiere tentative avec
+    // `size: '2048x2048'` a echoue des deux cotes, chacun a sa maniere : le pro
+    // l'a accepte puis ignore en silence (toujours 1024, 18 credits), le
+    // standard l'a refuse sans task_id. Une dimension n'est pas une valeur
+    // valide pour `size`, qui n'attend qu'un rapport.
+    //
+    // Valeurs admises pour `resolution` : 0.5K, 1K, 2K, 4K. Defaut 1K.
+    // Le 2K est annonce au meme tarif que le 1K ; seul le 4K coute davantage.
+    // A confirmer sur credits_amount : s'il bouge, la grille change avec lui.
+    'nano-banana-2-edit': { size: '1:1', resolution: '2K' },
+    'nano-banana-pro-edit': { size: '1:1', resolution: '2K' },
     'seedream-4-edit': {},
     'seedream-4.5-edit': {},
     'flux-kontext-pro-edit': {},
@@ -239,11 +253,25 @@ Deno.serve(async (req) => {
                         method: 'POST',
                         body: JSON.stringify({
                             model: modele,
-                            input: { prompt: texte, size: cfg.size ?? '1:1', image_urls: [urlSource] },
+                            input: {
+                                prompt: texte,
+                                size: cfg.size ?? '1:1',
+                                image_urls: [urlSource],
+                                // Omis quand le modele n'en declare pas : un champ
+                                // inconnu suffit a faire refuser la soumission,
+                                // comme on vient de le constater.
+                                ...(cfg.resolution ? { resolution: cfg.resolution } : {}),
+                            },
                         }),
                     });
                     const taskId = r?.data?.task_id ?? r?.task_id;
-                    if (!taskId) throw new Error('aucun task_id renvoyé');
+                    if (!taskId) {
+                        // PoYo repond parfois 200 avec un corps d'erreur. Le
+                        // message generique d'avant jetait ce corps, ce qui
+                        // obligeait a deviner la cause d'un refus — par exemple
+                        // une valeur de `size` non supportee par le modele.
+                        throw new Error('refus PoYo : ' + JSON.stringify(r).slice(0, 300));
+                    }
                     return { ...base, task_id: taskId, status: 'running' };
                 } catch (e) {
                     return { ...base, status: 'failed', error: String((e as Error).message).slice(0, 400) };
