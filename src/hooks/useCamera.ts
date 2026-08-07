@@ -3,7 +3,7 @@ import { useState, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { preparerImageSource } from '@/utils/sourceImage';
 import type { ImageFile } from '../types';
 
 interface UseCameraResult {
@@ -45,7 +45,9 @@ export function useCamera(): UseCameraResult {
     try {
       const photo = await cameraRef.current.takePictureAsync({
         base64: true,
-        quality: 0.8,
+        // Pas de compression ici : l'image est de toute façon ré-encodée juste
+        // après. Compresser deux fois ne fait que détruire du détail.
+        quality: 1,
       });
 
       if (!photo) {
@@ -53,10 +55,9 @@ export function useCamera(): UseCameraResult {
         return null;
       }
 
-      const image = await ImageManipulator.manipulate(photo.uri)
-        .resize({ width: 1024 })
-        .renderAsync();
-      const resized = await image.saveAsync({ compress: 0.7, format: SaveFormat.JPEG });
+      // Même préparation que le sélecteur d'images : un seul endroit décide de
+      // ce que le modèle reçoit réellement.
+      const resized = { uri: await preparerImageSource(photo.uri) };
 
       if (Platform.OS === 'web') {
         // Native readAsStringAsync is unavailable on web; read the blob:/data:

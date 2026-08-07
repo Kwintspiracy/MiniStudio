@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { preparerImageSource } from '@/utils/sourceImage';
 import type { ImageFile } from '../types';
 
 interface UseImagePickerResult {
@@ -18,13 +18,11 @@ export function useImagePicker(): UseImagePickerResult {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const resizeImage = useCallback(async (uri: string): Promise<string> => {
-    const image = await ImageManipulator.manipulate(uri)
-      .resize({ width: 1024 })
-      .renderAsync();
-    const result = await image.saveAsync({ compress: 0.7, format: SaveFormat.JPEG });
-    return result.uri;
-  }, []);
+  // La préparation vit dans `@/utils/sourceImage`, partagée avec la caméra.
+  // Elle plafonnait ici à 1024 px et JPEG 70 %, ce qui ne laissait au modèle Pro
+  // rien de plus à exploiter qu'au modèle Standard — voir le commentaire de tête
+  // de ce module.
+  const resizeImage = useCallback(preparerImageSource, []);
 
   const convertToImageFile = useCallback(async (uri: string): Promise<ImageFile> => {
     try {
@@ -93,7 +91,7 @@ export function useImagePicker(): UseImagePickerResult {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 1,
         // No base64 here: the asset is downscaled by resizeImage() and the final
         // base64 is produced from the resized file in convertToImageFile().
         // Requesting base64 of the full-res original just wastes memory/CPU.
@@ -131,7 +129,7 @@ export function useImagePicker(): UseImagePickerResult {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsMultipleSelection: false,
-        quality: 0.8,
+        quality: 1,
         // base64 omitted on purpose — see pickImage(): resizeImage() +
         // convertToImageFile() produce the base64 from the downscaled file.
       });
